@@ -1,0 +1,113 @@
+import * as fs from 'node:fs'
+import * as os from 'node:os'
+import * as path from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import * as XLSX from 'xlsx'
+import { extractGoogleLinks, mapHeader, readExcel } from './excelReader'
+
+describe('extractGoogleLinks', () => {
+  it('extrae links de Google Docs', () => {
+    const links = extractGoogleLinks('ver https://docs.google.com/document/d/abc_123-XY/edit ahí')
+    expect(links).toEqual(['https://docs.google.com/document/d/abc_123-XY/edit'])
+  })
+
+  it('extrae links de Google Drive (file/d y open?id)', () => {
+    expect(extractGoogleLinks('https://drive.google.com/file/d/XyZ123/view')).toHaveLength(1)
+    expect(extractGoogleLinks('https://drive.google.com/open?id=XyZ123')).toHaveLength(1)
+  })
+
+  it('ignora URLs que no son de google', () => {
+    expect(extractGoogleLinks('https://example.com/doc https://github.com/x')).toEqual([])
+  })
+
+  it('dedup: el mismo link dos veces aparece una sola vez', () => {
+    const u = 'https://docs.google.com/document/d/abc123/edit'
+    expect(extractGoogleLinks(`${u} y de nuevo ${u}`)).toEqual([u])
+  })
+
+  it('sin links → []', () => {
+    expect(extractGoogleLinks('texto sin urls')).toEqual([])
+  })
+})
+
+describe('mapHeader', () => {
+  it('mapea variaciones de título', () => {
+    for (const h of ['Título', 'TITLE', 'Summary', 'Resumen']) {
+      expect(mapHeader(h)).toBe('title')
+    }
+  })
+
+  it('mapea campos comunes ES/EN', () => {
+    expect(mapHeader('Descripción')).toBe('description')
+    expect(mapHeader('Pasos para reproducir')).toBe('stepsToReproduce')
+    expect(mapHeader('Resultado esperado')).toBe('expectedResult')
+    expect(mapHeader('Resultado actual')).toBe('actualResult')
+    expect(mapHeader('Entorno')).toBe('environment')
+    expect(mapHeader('Estado')).toBe('status')
+    expect(mapHeader('Prioridad')).toBe('priority')
+  })
+
+  it('es case-insensitive', () => {
+    expect(mapHeader('  DESCRIPCIÓN  ')).toBe('description')
+  })
+
+  it('cabeceras desconocidas → null', () => {
+    expect(mapHeader('Vista')).toBeNull()
+    expect(mapHeader('Foobar')).toBeNull()
+  })
+})
+
+describe('readExcel (integración con archivo real)', () => {
+  let dir: string
+  afterEach(() => {
+    if (dir) fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  function writeXlsx(rows: string[][]): string {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'buglens-xlsx-'))
+    const file = path.join(dir, 'bugs.xlsx')
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Hoja1')
+    XLSX.writeFile(wb, file)
+    return file
+  }
+
+  it('mapea columnas, genera ids y extrae links de docs', () => {
+    const file = writeXlsx([
+      ['Título', 'Descripción', 'Entorno', 'Notas'],
+      [
+        'Login roto',
+        'no anda el botón',
+        'prod',
+        'doc https://docs.google.com/document/d/abc123/edit',
+      ],
+      ['Otro bug', 'falla feo', 'dev', ''],
+    ])
+    const bugs = readExcel(file)
+
+    expect(bugs).toHaveLength(2)
+    expect(bugs[0].id).toBe('bug-0001')
+    expect(bugs[0].title).toBe('Login roto')
+    expect(bugs[0].description).toBe('no anda el botón')
+    expect(bugs[0].environment).toBe('prod')
+    expect(bugs[0].googleDocLinks).toContain('https://docs.google.com/document/d/abc123/edit')
+    expect(bugs[1].title).toBe('Otro bug')
+    expect(bugs[1].googleDocLinks).toEqual([])
+  })
+
+  it('filtra filas que son encabezados repetidos', () => {
+    const file = writeXlsx([
+      ['Título', 'Entorno'],
+      ['Título', 'Entorno'], // fila basura idéntica al header → debe filtrarse
+      ['Bug real', 'dev'],
+    ])
+    const bugs = readExcel(file)
+    expect(bugs).toHaveLength(1)
+    expect(bugs[0].title).toBe('Bug real')
+  })
+
+  it('hoja sin filas de datos lanza error', () => {
+    const file = writeXlsx([['Título', 'Entorno']]) // solo header
+    expect(() => readExcel(file)).toThrow()
+  })
+})
