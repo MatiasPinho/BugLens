@@ -355,6 +355,13 @@
     animation: fadeInUp 0.18s ease-out forwards;
   }
 
+  /* Reveal escalonado: `both` mantiene el estado inicial durante el delay (sin
+     flash). El delay se pasa inline. El corte global de prefers-reduced-motion
+     lo neutraliza. Usado en la pantalla inicial. */
+  .reveal-up {
+    animation: fadeInUp 0.32s ease-out both;
+  }
+
   /* ── Scan pulse ── */
   @keyframes scanPulse {
     0%,
