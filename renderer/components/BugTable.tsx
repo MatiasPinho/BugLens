@@ -349,30 +349,56 @@ export function DeleteControl({ onConfirm }: { onConfirm: () => void }) {
     )
   }
 
+  // Acento destructivo visible EN REPOSO (antes era gris tenue → pasaba
+  // desapercibido entre copy/cerrar) + ícono de tacho. El hover intensifica.
   return (
     <button
       ref={triggerRef}
       type="button"
       onClick={() => setConfirming(true)}
       title="borrar bug"
-      className="flex-shrink-0 cursor-pointer transition-colors"
+      className="flex flex-shrink-0 cursor-pointer items-center gap-1 transition-colors"
       style={{
-        color: col.muted,
-        border: `1px solid ${alpha(col.border, 0.25)}`,
+        color: col.red,
+        border: `1px solid ${alpha(col.red, 0.32)}`,
+        background: alpha(col.red, 0.07),
         borderRadius: '4px',
         padding: '0.2rem 0.5rem',
         fontSize: '0.65rem',
         fontFamily: 'inherit',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.color = col.red
-        e.currentTarget.style.borderColor = alpha(col.red, 0.4)
+        e.currentTarget.style.background = alpha(col.red, 0.16)
+        e.currentTarget.style.borderColor = alpha(col.red, 0.5)
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.color = col.muted
-        e.currentTarget.style.borderColor = alpha(col.border, 0.25)
+        e.currentTarget.style.background = alpha(col.red, 0.07)
+        e.currentTarget.style.borderColor = alpha(col.red, 0.32)
       }}
     >
+      <svg
+        aria-hidden="true"
+        width="11"
+        height="11"
+        viewBox="0 0 24 24"
+        fill="none"
+        style={{ flexShrink: 0 }}
+      >
+        <polyline
+          points="3 6 5 6 21 6"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
       borrar
     </button>
   )
