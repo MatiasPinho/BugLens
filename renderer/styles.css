@@ -362,6 +362,23 @@
     animation: fadeInUp 0.32s ease-out both;
   }
 
+  /* Balanceo idle muy sutil para los motivos decorativos (bichos): que parezcan
+     "vivos" sin distraer. Lento y de poca amplitud; el corte global de
+     prefers-reduced-motion lo desactiva. */
+  @keyframes motifSway {
+    0%,
+    100% {
+      transform: rotate(-2deg);
+    }
+    50% {
+      transform: rotate(2deg);
+    }
+  }
+  .motif-sway {
+    animation: motifSway 7s ease-in-out infinite;
+    transform-origin: 50% 88%;
+  }
+
   /* ── Scan pulse ── */
   @keyframes scanPulse {
     0%,

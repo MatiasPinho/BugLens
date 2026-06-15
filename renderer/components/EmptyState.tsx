@@ -11,6 +11,7 @@ import { alpha, col } from '../theme'
  */
 
 import React from 'react'
+import { BeetleMark, BugUnderLensMark } from './decor/BugMotifs'
 
 interface Props {
   hasExcel: boolean
@@ -18,8 +19,20 @@ interface Props {
 
 export default function EmptyState({ hasExcel }: Props) {
   return (
-    <div className="flex h-full flex-col items-center justify-center px-8">
-      <div className="w-full max-w-md space-y-6 text-center">
+    <div className="relative flex h-full flex-col items-center justify-center overflow-hidden px-8">
+      {/* Acento temático: un escarabajo asomando en la esquina (decorativo).
+          Wrapper = entrada (reveal-up); el svg interno hace el balanceo idle. */}
+      <div
+        aria-hidden="true"
+        className="reveal-up pointer-events-none absolute"
+        style={{ right: '-28px', bottom: '-24px', zIndex: 0, animationDelay: '260ms' }}
+      >
+        <BeetleMark
+          className="motif-sway"
+          style={{ width: '210px', color: col.fgDim, opacity: 0.13 }}
+        />
+      </div>
+      <div className="relative z-10 w-full max-w-md space-y-6 text-center">
         {/* Logo / icon principal, con un glow radial sutil para dar profundidad */}
         <div className="reveal-up flex justify-center">
           <div className="relative inline-flex items-center justify-center">
@@ -37,26 +50,7 @@ export default function EmptyState({ hasExcel }: Props) {
                 border: `1px solid ${alpha(col.cream, 0.18)}`,
               }}
             >
-              <svg
-                aria-hidden="true"
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                style={{ color: col.cream }}
-              >
-                <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="1.5" />
-                <line
-                  x1="21"
-                  y1="21"
-                  x2="16.65"
-                  y2="16.65"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-                <circle cx="11" cy="11" r="2" fill="currentColor" />
-              </svg>
+              <BugUnderLensMark style={{ width: 32, color: col.cream }} />
             </div>
           </div>
         </div>
