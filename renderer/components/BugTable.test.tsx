@@ -125,4 +125,28 @@ describe('BugTable — ciclo de vida (activos / históricos)', () => {
     await userEvent.click(screen.getByText('ver todos'))
     expect(screen.getByText('Resuelto')).toBeInTheDocument()
   })
+
+  it('roving tabindex: solo la pestaña activa es tabbable', () => {
+    render(<BugTable results={mixed()} />)
+    expect(screen.getByRole('tab', { name: /activos/ })).toHaveAttribute('tabindex', '0')
+    expect(screen.getByRole('tab', { name: /históricos/ })).toHaveAttribute('tabindex', '-1')
+  })
+
+  it('las flechas mueven la selección y el foco entre pestañas', async () => {
+    render(<BugTable results={mixed()} />)
+    const activos = screen.getByRole('tab', { name: /activos/ })
+    activos.focus()
+    await userEvent.keyboard('{ArrowRight}')
+
+    const historicos = screen.getByRole('tab', { name: /históricos/ })
+    expect(historicos).toHaveAttribute('aria-selected', 'true')
+    expect(historicos).toHaveFocus()
+    expect(screen.getByText('Resuelto')).toBeInTheDocument()
+  })
+
+  it('el nombre accesible de cada pestaña incluye el conteo', () => {
+    render(<BugTable results={mixed()} />)
+    expect(screen.getByRole('tab', { name: 'activos, 2 bugs' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'históricos, 2 bugs' })).toBeInTheDocument()
+  })
 })
