@@ -97,7 +97,7 @@ export default function ManualBugForm({ onSubmit, onClose }: Props) {
             onMouseLeave={(e) => (e.currentTarget.style.color = col.fgMuted)}
             aria-label="cerrar"
           >
-            <svg aria-hidden="true" width="11" height="11" viewBox="0 0 10 10" fill="none">
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 10 10" fill="none">
               <line
                 x1="1"
                 y1="1"

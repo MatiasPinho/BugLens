@@ -90,6 +90,10 @@ persisten como **sesión** y se restauran al reabrir.
   `.btn-mini` para micro-controles, `.input`/`.btn-*` que ya traen `min-height`) o vía `sz`/`radius`
   de `theme.ts` para `style` inline. **No hardcodear px/rem de tamaño** en componentes. El spacing
   usa la escala default de Tailwind (base 4px) — no inventar paddings fuera de grilla.
+- **Tamaño de íconos**: los SVG van sobre una escala de 4px → **8 / 12 / 16 / 20 / 24 / 28**px
+  (8 = carets/disclosure, 12 = acciones chicas, 16 = estándar, 20/24/28 = medios/marcas). No usar
+  valores fuera de esa escala. (Los atributos `width`/`height` del SVG no aceptan CSS vars; los
+  motivos decorativos de `decor/` se dimensionan aparte, por contexto.)
 - **Electron Linux**: `app.disableHardwareAcceleration()` evita un crash de GPU (SIGTRAP).
   No correr onnxruntime/embeddings en el proceso main (era la causa del crash del índice removido).
 

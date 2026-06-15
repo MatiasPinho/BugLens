@@ -140,8 +140,8 @@ export default function FileUpload({ excelPath, onFileSelected, disabled }: Prop
           <div className="flex flex-col items-center gap-2">
             <svg
               aria-hidden="true"
-              width="22"
-              height="22"
+              width="24"
+              height="24"
               viewBox="0 0 24 24"
               fill="none"
               style={{ color: dragOver ? col.fgDim : col.muted, transition: 'color 0.15s' }}

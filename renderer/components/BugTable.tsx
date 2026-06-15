@@ -357,8 +357,8 @@ export function DeleteControl({ onConfirm }: { onConfirm: () => void }) {
     >
       <svg
         aria-hidden="true"
-        width="11"
-        height="11"
+        width="12"
+        height="12"
         viewBox="0 0 24 24"
         fill="none"
         style={{ flexShrink: 0 }}
@@ -538,8 +538,8 @@ export default function BugTable({
           <svg
             aria-hidden="true"
             className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2"
-            width="11"
-            height="11"
+            width="12"
+            height="12"
             viewBox="0 0 24 24"
             fill="none"
             style={{ color: col.muted }}
@@ -1259,7 +1259,7 @@ export function DocImageGallery({ images }: { images: DocImage[] }) {
               }}
               aria-label="cerrar"
             >
-              <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 10 10" fill="none">
                 <line
                   x1="1"
                   y1="1"
