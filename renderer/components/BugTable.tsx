@@ -74,6 +74,75 @@ const STATUS_OPTIONS: BugStatus[] = [
   'no_replicado',
 ]
 
+// ─── Ciclo de vida ──────────────────────────────────────────────────────────
+// Separa lo ACCIONABLE (requiere trabajo) de lo ARCHIVADO (cerrado / no se pudo
+// reproducir). La pestaña 'activos' es la vista por defecto.
+const ACTIVE_STATUSES: BugStatus[] = ['nuevo', 'en_progreso']
+const HISTORIC_STATUSES: BugStatus[] = ['solucionado', 'cerrado', 'no_replicado']
+
+export function isActiveStatus(status: BugStatus): boolean {
+  return status === 'nuevo' || status === 'en_progreso'
+}
+
+export type LifecycleTab = 'activos' | 'historicos' | 'todos'
+
+const LIFECYCLE_TABS: { key: LifecycleTab; label: string }[] = [
+  { key: 'activos', label: 'activos' },
+  { key: 'historicos', label: 'históricos' },
+  { key: 'todos', label: 'todos' },
+]
+
+// Control segmentado para elegir el ciclo de vida. Accesible (role tablist/tab),
+// comunica con texto + contador (no solo color).
+export function LifecycleTabs({
+  value,
+  counts,
+  onChange,
+}: {
+  value: LifecycleTab
+  counts: Record<LifecycleTab, number>
+  onChange: (tab: LifecycleTab) => void
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="ciclo de vida"
+      className="inline-flex items-center gap-0.5 rounded p-0.5"
+      style={{ border: `1px solid ${alpha(col.border, 0.25)}`, background: alpha(col.muted, 0.12) }}
+    >
+      {LIFECYCLE_TABS.map((t) => {
+        const active = value === t.key
+        return (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(t.key)}
+            className="cursor-pointer rounded px-2.5 py-1 font-mono text-xs transition-colors"
+            style={
+              active
+                ? { background: alpha(col.cream, 0.12), color: col.cream }
+                : { background: 'transparent', color: col.fgMuted }
+            }
+            onMouseEnter={(e) => {
+              if (!active) e.currentTarget.style.color = col.fg
+            }}
+            onMouseLeave={(e) => {
+              if (!active) e.currentTarget.style.color = col.fgMuted
+            }}
+          >
+            {t.label}
+            <span className="ml-1.5" style={{ color: active ? alpha(col.cream, 0.7) : col.dim }}>
+              {counts[t.key]}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 // Selector inline: marca el estado sin abrir el detalle. stopPropagation para que
 // el click en el select no expanda/colapse la fila. Native select = accesible.
 export function StatusSelect({
@@ -243,6 +312,7 @@ export default function BugTable({
   }
   const focusedId = focusedIdProp
 
+  const [lifecycle, setLifecycle] = useState<LifecycleTab>('activos')
   const [filterCategory, setFilterCategory] = useState<BugCategory | 'all'>('all')
   const [filterSeverity, setFilterSeverity] = useState<Severity | 'all'>('all')
   const [filterStatus, setFilterStatus] = useState<BugStatus | 'all'>('all')
@@ -250,9 +320,31 @@ export default function BugTable({
   const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
+  // Cambiar de pestaña limpia el filtro de estado (evita un filtro fuera de la
+  // pestaña, ej. quedar en 'solucionado' al volver a 'activos').
+  const handleLifecycle = (tab: LifecycleTab) => {
+    setLifecycle(tab)
+    setFilterStatus('all')
+  }
+
+  // Estados que tiene sentido ofrecer en el dropdown según la pestaña.
+  const statusOptionsForTab =
+    lifecycle === 'activos'
+      ? ACTIVE_STATUSES
+      : lifecycle === 'historicos'
+        ? HISTORIC_STATUSES
+        : STATUS_OPTIONS
+
+  const lifecycleCounts = useMemo<Record<LifecycleTab, number>>(() => {
+    const activos = results.filter((r) => isActiveStatus(r.status)).length
+    return { activos, historicos: results.length - activos, todos: results.length }
+  }, [results])
+
   const filtered = useMemo(() => {
     return results
       .filter((r) => {
+        if (lifecycle === 'activos' && !isActiveStatus(r.status)) return false
+        if (lifecycle === 'historicos' && isActiveStatus(r.status)) return false
         if (filterCategory !== 'all' && r.analysis.category !== filterCategory) return false
         if (filterSeverity !== 'all' && r.analysis.severity !== filterSeverity) return false
         if (filterStatus !== 'all' && r.status !== filterStatus) return false
@@ -268,7 +360,7 @@ export default function BugTable({
         return true
       })
       .sort((a, b) => severityOrder[a.analysis.severity] - severityOrder[b.analysis.severity])
-  }, [results, filterCategory, filterSeverity, filterStatus, search])
+  }, [results, lifecycle, filterCategory, filterSeverity, filterStatus, search])
 
   const categories = useMemo(() => [...new Set(results.map((r) => r.analysis.category))], [results])
   const severities = useMemo(() => [...new Set(results.map((r) => r.analysis.severity))], [results])
@@ -307,6 +399,7 @@ export default function BugTable({
         className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2.5"
         style={{ borderColor: alpha(col.border, 0.2), background: col.base }}
       >
+        <LifecycleTabs value={lifecycle} counts={lifecycleCounts} onChange={handleLifecycle} />
         <div className="relative">
           <svg
             aria-hidden="true"
@@ -371,7 +464,7 @@ export default function BugTable({
           className="input w-32 cursor-pointer text-xs"
         >
           <option value="all">estado</option>
-          {STATUS_OPTIONS.map((s) => (
+          {statusOptionsForTab.map((s) => (
             <option key={s} value={s}>
               {statusStyle[s].label}
             </option>
@@ -646,7 +739,13 @@ export default function BugTable({
               />
             </svg>
             <span className="font-mono text-xs" style={{ color: col.muted }}>
-              {results.length > 0 ? 'sin resultados para estos filtros' : 'sin bugs analizados'}
+              {results.length === 0
+                ? 'sin bugs analizados'
+                : lifecycle === 'activos'
+                  ? 'no hay bugs activos'
+                  : lifecycle === 'historicos'
+                    ? 'no hay bugs en el histórico'
+                    : 'sin resultados para estos filtros'}
             </span>
             {results.length > 0 && (
               <button
@@ -655,13 +754,15 @@ export default function BugTable({
                   setSearch('')
                   setFilterCategory('all')
                   setFilterSeverity('all')
+                  setFilterStatus('all')
+                  setLifecycle('todos')
                 }}
                 className="cursor-pointer font-mono text-xs transition-colors"
                 style={{ color: col.border }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = col.fgMuted)}
                 onMouseLeave={(e) => (e.currentTarget.style.color = col.border)}
               >
-                limpiar filtros
+                {lifecycle !== 'todos' ? 'ver todos' : 'limpiar filtros'}
               </button>
             )}
           </div>
