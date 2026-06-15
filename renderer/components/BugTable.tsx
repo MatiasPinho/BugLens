@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { AnalyzedBug, BugCategory, BugStatus, DocImage, Severity } from '../../src/types/index'
 import { alpha, col } from '../theme'
+import { BugUnderLensMark } from './decor/BugMotifs'
 
 interface Props {
   results: AnalyzedBug[]
@@ -870,34 +871,8 @@ export default function BugTable({
 
         {filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-3 py-20">
-            <svg
-              aria-hidden="true"
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              style={{ color: col.dim }}
-            >
-              <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="1.2" />
-              <line
-                x1="21"
-                y1="21"
-                x2="16.65"
-                y2="16.65"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-              />
-              <line
-                x1="8"
-                y1="11"
-                x2="14"
-                y2="11"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-              />
-            </svg>
+            {/* Motivo temático (lupa + bicho): buscar y no encontrar nada */}
+            <BugUnderLensMark style={{ width: 44, color: col.dim }} />
             <span className="font-mono text-xs" style={{ color: col.muted }}>
               {results.length === 0
                 ? 'sin bugs analizados'

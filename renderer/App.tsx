@@ -10,6 +10,7 @@ import type {
   ProgressEvent,
 } from '../src/types/index'
 import BugTable from './components/BugTable'
+import { BeetleMark } from './components/decor/BugMotifs'
 import EmptyState from './components/EmptyState'
 import FileUpload from './components/FileUpload'
 import ManualBugForm from './components/ManualBugForm'
@@ -526,6 +527,11 @@ export default function App() {
                   <StatsGrid results={results} />
                 </div>
               )}
+
+              {/* Escarabajo ambiente al pie del panel (decorativo) */}
+              <div aria-hidden="true" className="mt-auto flex justify-center pt-6">
+                <BeetleMark style={{ width: 84, color: col.fgDim, opacity: 0.12 }} />
+              </div>
             </div>
 
             {/* Right panel */}
