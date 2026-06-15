@@ -32,6 +32,11 @@ interface ElectronAPI {
   // Estado de bugs (persistente)
   setBugStatus(key: string, status: string): Promise<{ ok: boolean }>
 
+  // Sesión (persistente)
+  loadSession(): Promise<{ excelPath: string | null; results: AnalyzedBug[] } | null>
+  saveSession(excelPath: string | null, results: AnalyzedBug[]): Promise<{ ok: boolean }>
+  clearSession(): Promise<{ ok: boolean }>
+
   // Cache
   cacheStats(): Promise<{ count: number; sizeKB: number }>
   clearCache(): Promise<{ ok: boolean }>

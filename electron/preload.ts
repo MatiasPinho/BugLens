@@ -27,6 +27,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setBugStatus: (key: string, status: string) =>
     ipcRenderer.invoke('bug:set-status', { key, status }),
 
+  // Sesión (persistente)
+  loadSession: () => ipcRenderer.invoke('session:load'),
+  saveSession: (excelPath: string | null, results: AnalyzedBug[]) =>
+    ipcRenderer.invoke('session:save', { excelPath, results }),
+  clearSession: () => ipcRenderer.invoke('session:clear'),
+
   // Cache
   cacheStats: () => ipcRenderer.invoke('cache:stats'),
   clearCache: () => ipcRenderer.invoke('cache:clear'),

@@ -20,6 +20,7 @@ import { bugRecordKey } from '../src/pipeline/bugStatusKey.js'
 import { readExcel, writeBugsExcel, writeEnrichedExcel } from '../src/pipeline/excelReader.js'
 import { GoogleDocsReader } from '../src/pipeline/googleDocsReader.js'
 import { buildManualBug, type ManualBugFields } from '../src/pipeline/manualBugBuilder.js'
+import { clearSession, readSession, writeSession } from '../src/pipeline/sessionStore.js'
 import type { AnalyzedBug, BugStatus, LLMConfig, RawBug } from '../src/types/index.js'
 
 function getCacheDir(): string {
@@ -28,6 +29,10 @@ function getCacheDir(): string {
 
 function getRecordsPath(): string {
   return path.join(app.getPath('userData'), 'bug-records.json')
+}
+
+function getSessionPath(): string {
+  return path.join(app.getPath('userData'), 'session.json')
 }
 
 // ─── Simple JSON config store ─────────────────────────────────────────────────
@@ -472,6 +477,34 @@ ipcMain.handle('analyze:manual-bug', async (_e, fields: ManualBugFields) => {
 
 ipcMain.handle('bug:set-status', (_e, { key, status }: { key: string; status: BugStatus }) => {
   setBugStatus(getRecordsPath(), key, status)
+  return { ok: true }
+})
+
+// ─── IPC: Sesión (persistente) ────────────────────────────────────────────────
+
+// Restaura la sesión guardada, reaplicando el estado CANÓNICO desde bug-records
+// (pudo cambiar fuera de esta sesión).
+ipcMain.handle('session:load', () => {
+  const session = readSession(getSessionPath())
+  if (!session) return null
+  const records = readRecords(getRecordsPath())
+  const results = session.results.map((r) => ({
+    ...r,
+    status: records[bugRecordKey(r.enriched.raw)]?.status ?? 'nuevo',
+  }))
+  return { excelPath: session.excelPath, results }
+})
+
+ipcMain.handle(
+  'session:save',
+  (_e, { excelPath, results }: { excelPath: string | null; results: AnalyzedBug[] }) => {
+    writeSession(getSessionPath(), { excelPath, results })
+    return { ok: true }
+  },
+)
+
+ipcMain.handle('session:clear', () => {
+  clearSession(getSessionPath())
   return { ok: true }
 })
 

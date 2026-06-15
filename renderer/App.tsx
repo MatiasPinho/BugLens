@@ -43,6 +43,9 @@ export default function App() {
   }>({ current: 0, total: 0, message: '' })
   const [showLogs, setShowLogs] = useState(false)
   const [showManualForm, setShowManualForm] = useState(false)
+  // Gate del auto-guardado: no persistir hasta intentar restaurar (evita pisar
+  // la sesión guardada con un estado vacío en el arranque).
+  const hydratedRef = React.useRef(false)
 
   const addLog = useCallback((level: LogLine['level'], message: string, timestamp?: string) => {
     setLogs((prev) => [
@@ -95,6 +98,32 @@ export default function App() {
       cleanComplete()
     }
   }, [addLog])
+
+  // Restaurar la última sesión al abrir (una sola vez).
+  useEffect(() => {
+    let cancelled = false
+    window.electronAPI.loadSession().then((session) => {
+      if (!cancelled && session && session.results.length > 0) {
+        setResults(session.results)
+        setExcelPath(session.excelPath)
+        setPhase('done')
+      }
+      hydratedRef.current = true
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Auto-guardar la sesión (debounced). Gateado a 'done' para no reescribir el
+  // JSON (con imágenes, varios MB) en cada 'bug-result' durante el análisis.
+  useEffect(() => {
+    if (!hydratedRef.current || phase !== 'done' || results.length === 0) return
+    const timer = setTimeout(() => {
+      window.electronAPI.saveSession(excelPath, results)
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [results, excelPath, phase])
 
   const handleAnalyze = useCallback(async () => {
     if (!excelPath) return
@@ -176,6 +205,7 @@ export default function App() {
     setResults([])
     setLogs([])
     setProgress({ current: 0, total: 0, message: '' })
+    window.electronAPI.clearSession()
   }, [])
 
   // ─── Keyboard shortcuts ────────────────────────────────────────────────────
