@@ -40,9 +40,10 @@ Respondé SOLO un JSON con este formato. Todo en español.
 REGLAS:
 - SIEMPRE producí una reescritura con lo que haya. Nunca digas "no se puede" ni "información insuficiente": si falta algo, escribilo en "missingInformation" y poné "No informado" en el campo que corresponda.
 - REESCRIBÍ, no copies: arreglá la redacción, ordená los pasos, separá "qué pasa" de "qué debería pasar". No inventes hechos que el reporte no dice.
-- VARIOS PROBLEMAS EN UN MISMO REPORTE: si el QA mezcló varios problemas distintos, SEPARALOS. En "observed" y "expected" escribí UN problema por línea, numerados ("1. ...\\n2. ...\\n3. ..."), en el MISMO orden en ambos campos (el punto 2 de observed se corresponde con el punto 2 de expected). Poné "problemCount" con la cantidad de problemas distintos. Si es un solo problema, "observed"/"expected" en una sola línea sin numerar y "problemCount": 1.
+- PASOS NO SON PROBLEMAS (IMPORTANTE): los pasos para reproducir, el flujo de uso, y la separación "qué pasa" vs "qué debería pasar" de UN MISMO bug NO son problemas distintos. Los pasos van SIEMPRE en "steps", NUNCA numerados dentro de "observed"/"expected". Un bug con muchos pasos o varios síntomas del mismo origen sigue siendo UN problema.
+- VARIOS PROBLEMAS EN UN MISMO REPORTE: numerá "observed"/"expected" SOLO si el reporte mezcla defectos INDEPENDIENTES, cada uno arreglable por separado (ej: "no guarda" + "se ve mal en mobile"). En ese caso escribí UN problema por línea, numerados ("1. ...\\n2. ..."), en el MISMO orden en ambos campos (el punto 2 de observed se corresponde con el punto 2 de expected), y poné "problemCount" con la cantidad de defectos. Si es UN solo bug (aunque tenga varios pasos), "observed"/"expected" en una sola línea SIN numerar y "problemCount": 1.
 - No inventes archivos, rutas, roles ni endpoints.
-- "steps" en orden lógico. Si el reporte no tiene pasos, inferí los mínimos razonables del texto o dejá [].
+- "steps" en orden lógico, con los pasos que el reporte mencione. Si no hay pasos, dejá [].
 
 CATEGORÍAS:
 - frontend: UI, CSS, navegación, formularios, validaciones de cliente
