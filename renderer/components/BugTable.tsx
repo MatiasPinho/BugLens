@@ -92,8 +92,10 @@ const LIFECYCLE_TABS: { key: LifecycleTab; label: string }[] = [
   { key: 'todos', label: 'todos' },
 ]
 
-// Control segmentado para elegir el ciclo de vida. Accesible (role tablist/tab),
-// comunica con texto + contador (no solo color).
+// Control segmentado para elegir el ciclo de vida. Sigue el patrón ARIA tablist:
+// una sola parada de tab (roving tabindex), flechas/Home/End mueven la selección
+// (activación automática). Comunica con texto + contador (no solo color); el nombre
+// accesible incluye el conteo y oculta el número visual para no leerlo dos veces.
 export function LifecycleTabs({
   value,
   counts,
@@ -103,21 +105,44 @@ export function LifecycleTabs({
   counts: Record<LifecycleTab, number>
   onChange: (tab: LifecycleTab) => void
 }) {
+  const tabRefs = React.useRef<(HTMLButtonElement | null)[]>([])
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const current = LIFECYCLE_TABS.findIndex((t) => t.key === value)
+    const last = LIFECYCLE_TABS.length - 1
+    let next = current
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = current >= last ? 0 : current + 1
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = current <= 0 ? last : current - 1
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = last
+    else return
+    e.preventDefault()
+    onChange(LIFECYCLE_TABS[next].key)
+    tabRefs.current[next]?.focus()
+  }
+
   return (
     <div
       role="tablist"
       aria-label="ciclo de vida"
+      onKeyDown={handleKeyDown}
       className="inline-flex items-center gap-0.5 rounded p-0.5"
       style={{ border: `1px solid ${alpha(col.border, 0.25)}`, background: alpha(col.muted, 0.12) }}
     >
-      {LIFECYCLE_TABS.map((t) => {
+      {LIFECYCLE_TABS.map((t, i) => {
         const active = value === t.key
+        const count = counts[t.key]
         return (
           <button
             key={t.key}
+            ref={(el) => {
+              tabRefs.current[i] = el
+            }}
             type="button"
             role="tab"
             aria-selected={active}
+            tabIndex={active ? 0 : -1}
+            aria-label={`${t.label}, ${count} bug${count === 1 ? '' : 's'}`}
             onClick={() => onChange(t.key)}
             className="cursor-pointer rounded px-2.5 py-1 font-mono text-xs transition-colors"
             style={
@@ -133,8 +158,12 @@ export function LifecycleTabs({
             }}
           >
             {t.label}
-            <span className="ml-1.5" style={{ color: active ? alpha(col.cream, 0.7) : col.dim }}>
-              {counts[t.key]}
+            <span
+              aria-hidden="true"
+              className="ml-1.5"
+              style={{ color: active ? alpha(col.cream, 0.7) : count === 0 ? col.muted : col.dim }}
+            >
+              {count}
             </span>
           </button>
         )
@@ -513,7 +542,8 @@ export default function BugTable({
               analizando
             </span>
           )}
-          <span>
+          {/* aria-live: al cambiar de pestaña/filtro, anuncia el nuevo total */}
+          <span aria-live="polite" aria-atomic="true">
             {filtered.length !== results.length ? (
               <>
                 <span style={{ color: col.fgMuted }}>{filtered.length}</span>
