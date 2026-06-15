@@ -3,10 +3,11 @@ import { alpha, col } from '../theme'
  * EmptyState.tsx
  *
  * Pantalla inicial cuando no hay análisis aún. Guía al usuario por los pasos:
- *  - sin Excel cargado → "cargá un Excel para empezar"
+ *  - sin nada cargado → "cargá un Excel o un bug a mano para empezar"
  *  - Excel cargado pero idle → "tocá 'analizar bugs'"
  *
- * Reemplaza al ProgressLog vacío que no daba contexto.
+ * Reemplaza al ProgressLog vacío que no daba contexto. La entrada se revela de
+ * forma escalonada (clase `.reveal-up` + delay), respetando prefers-reduced-motion.
  */
 
 import React from 'react'
@@ -19,39 +20,48 @@ export default function EmptyState({ hasExcel }: Props) {
   return (
     <div className="flex h-full flex-col items-center justify-center px-8">
       <div className="w-full max-w-md space-y-6 text-center">
-        {/* Logo / icon principal */}
-        <div className="flex justify-center">
-          <div
-            className="relative inline-flex h-16 w-16 items-center justify-center rounded-lg"
-            style={{
-              background: alpha(col.cream, 0.06),
-              border: `1px solid ${alpha(col.cream, 0.18)}`,
-            }}
-          >
-            <svg
+        {/* Logo / icon principal, con un glow radial sutil para dar profundidad */}
+        <div className="reveal-up flex justify-center">
+          <div className="relative inline-flex items-center justify-center">
+            <div
               aria-hidden="true"
-              width="28"
-              height="28"
-              viewBox="0 0 24 24"
-              fill="none"
-              style={{ color: col.cream }}
+              className="absolute inset-0 -m-6"
+              style={{
+                background: `radial-gradient(circle, ${alpha(col.cream, 0.1)}, transparent 70%)`,
+              }}
+            />
+            <div
+              className="relative inline-flex h-16 w-16 items-center justify-center rounded-lg"
+              style={{
+                background: alpha(col.cream, 0.06),
+                border: `1px solid ${alpha(col.cream, 0.18)}`,
+              }}
             >
-              <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="1.5" />
-              <line
-                x1="21"
-                y1="21"
-                x2="16.65"
-                y2="16.65"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-              <circle cx="11" cy="11" r="2" fill="currentColor" />
-            </svg>
+              <svg
+                aria-hidden="true"
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                style={{ color: col.cream }}
+              >
+                <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="1.5" />
+                <line
+                  x1="21"
+                  y1="21"
+                  x2="16.65"
+                  y2="16.65"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+                <circle cx="11" cy="11" r="2" fill="currentColor" />
+              </svg>
+            </div>
           </div>
         </div>
 
-        <div>
+        <div className="reveal-up" style={{ animationDelay: '60ms' }}>
           <div
             className="mb-1 font-mono text-sm uppercase tracking-wider"
             style={{ color: col.cream }}
@@ -64,17 +74,17 @@ export default function EmptyState({ hasExcel }: Props) {
         </div>
 
         {/* Pasos visuales del flujo */}
-        <div className="space-y-2 text-left">
+        <div className="reveal-up space-y-2 text-left" style={{ animationDelay: '120ms' }}>
           <Step
             number={1}
-            label="cargar el Excel con los bugs"
+            label="cargar un Excel — o un bug a mano"
             done={hasExcel}
             active={!hasExcel}
             arrow="↖ panel izquierdo"
           />
           <Step
             number={2}
-            label="clasificar y reescribir el batch completo"
+            label="clasificar y reescribir automáticamente"
             done={false}
             active={hasExcel}
             arrow={hasExcel ? '↖ analizar bugs' : undefined}
@@ -89,7 +99,10 @@ export default function EmptyState({ hasExcel }: Props) {
         </div>
 
         {/* Atajos de teclado */}
-        <div className="pt-4" style={{ borderTop: `1px solid ${alpha(col.border, 0.18)}` }}>
+        <div
+          className="reveal-up pt-4"
+          style={{ borderTop: `1px solid ${alpha(col.border, 0.18)}`, animationDelay: '200ms' }}
+        >
           <div
             className="mb-2 font-mono text-xs uppercase tracking-wider"
             style={{ color: col.border }}
