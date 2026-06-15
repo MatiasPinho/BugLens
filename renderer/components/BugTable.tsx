@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { AnalyzedBug, BugCategory, BugStatus, DocImage, Severity } from '../../src/types/index'
 import { alpha, col } from '../theme'
 
@@ -280,18 +280,41 @@ export function CopyButton({ text }: { text: string }) {
   )
 }
 
-// Borrado con confirmación inline (dos pasos: "borrar" → "¿seguro? sí / no").
-// Evita borrados accidentales sin recurrir a un confirm() nativo.
+// Borrado con confirmación inline (dos pasos: "borrar" → "¿borrar? sí / no").
+// Evita borrados accidentales sin recurrir a un confirm() nativo. Maneja el foco:
+// al confirmar lleva el foco al botón de confirmación (el disparador se desmonta,
+// si no el foco se perdería); al cancelar lo devuelve al disparador. Esc cancela.
 export function DeleteControl({ onConfirm }: { onConfirm: () => void }) {
   const [confirming, setConfirming] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const confirmRef = useRef<HTMLButtonElement>(null)
+  const wasConfirming = useRef(false)
+
+  useEffect(() => {
+    if (confirming) confirmRef.current?.focus()
+    else if (wasConfirming.current) triggerRef.current?.focus()
+    wasConfirming.current = confirming
+  }, [confirming])
+
+  // Esc cancela; stopPropagation evita que el atajo global de la app (Esc cierra
+  // el detalle) también dispare. Se ata a los botones (interactivos) porque el
+  // foco siempre está en uno de ellos mientras se confirma.
+  const cancelOnEscape = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation()
+      setConfirming(false)
+    }
+  }
 
   if (confirming) {
     return (
       <span className="flex flex-shrink-0 items-center gap-1.5 font-mono text-xs">
         <span style={{ color: col.fgMuted }}>¿borrar?</span>
         <button
+          ref={confirmRef}
           type="button"
           onClick={onConfirm}
+          onKeyDown={cancelOnEscape}
           className="cursor-pointer transition-colors"
           style={{
             color: col.red,
@@ -308,6 +331,7 @@ export function DeleteControl({ onConfirm }: { onConfirm: () => void }) {
         <button
           type="button"
           onClick={() => setConfirming(false)}
+          onKeyDown={cancelOnEscape}
           className="cursor-pointer transition-colors"
           style={{
             color: col.muted,
@@ -325,29 +349,56 @@ export function DeleteControl({ onConfirm }: { onConfirm: () => void }) {
     )
   }
 
+  // Acento destructivo visible EN REPOSO (antes era gris tenue → pasaba
+  // desapercibido entre copy/cerrar) + ícono de tacho. El hover intensifica.
   return (
     <button
+      ref={triggerRef}
       type="button"
       onClick={() => setConfirming(true)}
       title="borrar bug"
-      className="flex-shrink-0 cursor-pointer transition-colors"
+      className="flex flex-shrink-0 cursor-pointer items-center gap-1 transition-colors"
       style={{
-        color: col.muted,
-        border: `1px solid ${alpha(col.border, 0.25)}`,
+        color: col.red,
+        border: `1px solid ${alpha(col.red, 0.32)}`,
+        background: alpha(col.red, 0.07),
         borderRadius: '4px',
         padding: '0.2rem 0.5rem',
         fontSize: '0.65rem',
         fontFamily: 'inherit',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.color = col.red
-        e.currentTarget.style.borderColor = alpha(col.red, 0.4)
+        e.currentTarget.style.background = alpha(col.red, 0.16)
+        e.currentTarget.style.borderColor = alpha(col.red, 0.5)
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.color = col.muted
-        e.currentTarget.style.borderColor = alpha(col.border, 0.25)
+        e.currentTarget.style.background = alpha(col.red, 0.07)
+        e.currentTarget.style.borderColor = alpha(col.red, 0.32)
       }}
     >
+      <svg
+        aria-hidden="true"
+        width="11"
+        height="11"
+        viewBox="0 0 24 24"
+        fill="none"
+        style={{ flexShrink: 0 }}
+      >
+        <polyline
+          points="3 6 5 6 21 6"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
       borrar
     </button>
   )
@@ -1016,8 +1067,18 @@ export function ExpandedDetail({
           </div>
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
+          {/* Acción destructiva apartada de las seguras (copy/cerrar) con un
+              divisor, y lejos de "cerrar" para evitar clicks accidentales. */}
+          {onDelete && (
+            <>
+              <DeleteControl onConfirm={onDelete} />
+              <span
+                aria-hidden="true"
+                style={{ width: '1px', height: '1.1rem', background: alpha(col.border, 0.3) }}
+              />
+            </>
+          )}
           <CopyButton text={copyText} />
-          {onDelete && <DeleteControl onConfirm={onDelete} />}
           {onClose && (
             <button
               type="button"
