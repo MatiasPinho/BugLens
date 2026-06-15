@@ -24,14 +24,23 @@ reescribe el reporte en texto claro y estructurado, y lleva un **estado** por bu
 ## Flujo / arquitectura
 
 ```
-Excel → bugEnricher (trae Google Docs) → fastTriage.analyzeBug (1 llamada LLM:
-        clasifica + reescribe + lista faltantes) → tabla con estados → exportar
+Excel  ─┐
+        ├→ bugEnricher (trae Google Docs) → fastTriage.analyzeBug (1 llamada LLM:
+manual ─┘   clasifica + reescribe + lista faltantes) → tabla (activos/históricos) → exportar
 ```
 
-- `src/pipeline/` — `excelReader`, doc readers (`googleDocsReader`/`browserDocsReader`),
-  `bugEnricher`, estados (`bugStatusKey`, `bugRecordsStore`)
+Dos entradas, mismo pipeline: el Excel (`analyze:run`) y la carga manual
+(`analyze:manual-bug`, que appendea sin reemplazar). La tabla y los bugs cargados se
+persisten como **sesión** y se restauran al reabrir.
+
+- `src/pipeline/` — `excelReader` (lee + exporta; `writeBugsExcel` exporta desde cero),
+  `manualBugBuilder` (RawBug desde el form), doc readers
+  (`googleDocsReader`/`browserDocsReader`), `bugEnricher`, estados (`bugStatusKey`,
+  `bugRecordsStore`), sesión (`sessionStore`)
 - `src/llm/` — `fastTriage` (el pipeline real), `client` (config de LLM), `analysisCache`
-- `electron/main.ts` — IPC + orquestación del batch · `renderer/` — UI (`App`, `BugTable`, …)
+- `electron/main.ts` — IPC (`analyze:run`/`analyze:manual-bug`, `export:excel`/`export:bugs`,
+  `session:*`, `bug:set-status`) + orquestación del batch · `renderer/` — UI (`App`,
+  `BugTable`, `ManualBugForm`, …)
 
 ## Convenciones y constraints
 
@@ -47,6 +56,13 @@ Excel → bugEnricher (trae Google Docs) → fastTriage.analyzeBug (1 llamada LL
 - **Estados persistentes**: identidad por **contenido** (`bugRecordKey` = hash de
   título+descripción), no por posición de fila. Persisten en `bug-records.json` (userData);
   solo se guardan los ≠ `nuevo`.
+- **Sesión persistente**: los bugs cargados + su análisis se guardan en `session.json`
+  (userData) con **escritura atómica** (temp + rename) y se restauran al reabrir. Una sola
+  sesión, auto-guardada (debounced, gateada a fase `done`); al restaurar se reaplica el estado
+  canónico desde `bug-records.json`. `bug-records.json` sigue siendo la fuente de verdad del estado.
+- **Activos vs históricos**: la tabla separa por **estado** (`isActiveStatus` en `BugTable`):
+  activos = `nuevo`/`en_progreso`; históricos = `solucionado`/`cerrado`/`no_replicado`.
+  Es derivado, no un campo aparte.
 - **TS configs (3)**: `tsconfig.json` (typecheck; incluye `vitest.setup.ts` para los matchers
   de jest-dom), `tsconfig.electron.json` (build del main; **excluye `*.test.ts`**),
   `vitest.config.ts` (tests, root en la raíz para cubrir `src/` y `renderer/`).
@@ -107,10 +123,11 @@ Excel → bugEnricher (trae Google Docs) → fastTriage.analyzeBug (1 llamada LL
 
 ## Tests
 
-Vitest + React Testing Library (jsdom). Cubre **lógica pura** (excelReader, parseo del LLM,
-caché, estados, dedup del enricher) + la interacción de estados en `BugTable`. La
-**integración** (LLM real, IPC de Electron, doc readers con red/auth) **no** se testea por
-unit — se verifica corriendo. CI corre `typecheck → test → build` en cada push.
+Vitest + React Testing Library (jsdom). Cubre **lógica pura** (excelReader, `buildManualBug`,
+`sessionStore`, parseo del LLM, caché, estados, dedup del enricher) + las interacciones de
+`BugTable` (estados + pestañas activos/históricos) y `ManualBugForm`. La **integración** (LLM
+real, IPC de Electron, doc readers con red/auth, restore/auto-save de sesión) **no** se testea
+por unit — se verifica corriendo. CI corre `typecheck → test → build` en cada push.
 
 ## Git
 

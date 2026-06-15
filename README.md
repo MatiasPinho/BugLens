@@ -1,25 +1,31 @@
 # buglens
 
 App de escritorio (Electron + React) que **ordena y reescribe** reportes de bugs.
-Cargás un Excel de bugs (típicamente escritos por QA, a veces incoherentes), y la
-app los clasifica, los reescribe en texto claro y estructurado, y te deja llevar un
-**estado** por bug (nuevo / en progreso / solucionado / cerrado / no replicado).
+Cargás bugs **desde un Excel** o **a mano** (típicamente escritos por QA, a veces
+incoherentes), y la app los clasifica, los reescribe en texto claro y estructurado, y
+te deja llevar un **estado** por bug (nuevo / en progreso / solucionado / cerrado /
+no replicado). La sesión de trabajo se **guarda y restaura** al reabrir la app.
 
 > No analiza el código fuente: su trabajo es de **intake + clasificación + reescritura**.
 > Corre 100% local con Ollama (gratis, sin API key), o con un proveedor cloud opcional.
 
 ## Qué hace
 
-1. Cargás un Excel con bugs (con links a Google Docs en cualquier celda, opcional).
+1. Cargás bugs **desde un Excel** (con links a Google Docs en cualquier celda, opcional)
+   o **uno a uno a mano** (botón "cargar bug manual"), que se appendea a la tabla.
 2. La app lee los documentos de evidencia de Google Docs (texto + capturas).
 3. Por cada bug, **una sola llamada al LLM** produce:
    - **Clasificación**: categoría, severidad, tipo, área/pantalla afectada, confianza.
    - **Reescritura**: qué pasa / qué debería pasar / pasos / ambiente, en texto claro.
-     Si el reporte junta varios problemas, los **separa numerados**.
+     Si el reporte junta **problemas independientes**, los **separa numerados** (los pasos
+     de un mismo bug no cuentan como problemas distintos).
    - **Datos que faltan**: lo que el QA no informó (para pedírselo) — nunca rechaza con
      "información insuficiente".
 4. Marcás el **estado** de cada bug; persiste entre corridas (incluso si reordenás el Excel).
-5. Filtrás/agrupás/buscás, y exportás un Excel enriquecido.
+   La tabla separa **activos** (nuevo / en progreso) de **históricos** (solucionado /
+   cerrado / no replicado) con un control de pestañas.
+5. Filtrás/agrupás/buscás, y exportás un Excel enriquecido (incluso sin Excel original).
+6. Al reabrir la app, la **sesión** (bugs cargados + análisis) se restaura sola.
 
 ---
 
@@ -125,6 +131,32 @@ Cada bug tiene un estado del ciclo de vida, **persistente entre corridas**:
   así sobrevive aunque reordenes o re-exportes el Excel.
 - Los bugs `solucionado`/`cerrado` se atenúan; el resumen muestra el conteo por estado.
 
+### Activos vs históricos
+
+La tabla separa lo accionable de lo archivado con un control de pestañas
+(**activos | históricos | todos**), derivado del estado de cada bug:
+
+- **activos** (vista por defecto): `nuevo`, `en progreso`.
+- **históricos**: `solucionado`, `cerrado`, `no replicado`.
+- **todos**: ambos.
+
+Mover un bug a un estado resuelto lo manda al histórico automáticamente; el filtro de
+estado refina dentro de la pestaña activa.
+
+## Carga manual de bugs
+
+Además del Excel, podés cargar un bug **a mano** con el botón **"cargar bug manual"**: un
+formulario con título, descripción, pasos, esperado, actual y ambiente (basta con título
+**o** descripción). Se analiza con el mismo pipeline y se **agrega** a la tabla sin
+reemplazar lo ya cargado.
+
+## Persistencia de sesión
+
+La sesión de trabajo (bugs cargados —de Excel o manuales— con su análisis) se guarda en
+`session.json` (userData) con **escritura atómica** y se **restaura al reabrir** la app.
+Es una sola sesión, auto-guardada; "nuevo análisis" la limpia. El estado de cada bug se
+reaplica desde `bug-records.json` (la fuente canónica) al restaurar.
+
 ## Atajos de teclado
 
 | Tecla | Acción |
@@ -148,10 +180,13 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 |---|---|
 | `excelReader.readExcel(path)` | Parsea el Excel → `RawBug[]`: mapea columnas, extrae links a docs, filtra filas que son headers repetidos. |
 | `excelReader.writeEnrichedExcel(...)` | Exporta el Excel original + columnas del análisis (reescritura, estado, etc.). |
+| `excelReader.writeBugsExcel(...)` | Exporta un `.xlsx` **desde cero** (sin Excel original): para bugs manuales o mezclados. |
 | `excelReader.mapHeader(h)` / `extractGoogleLinks(t)` | Helpers puros: mapeo de cabeceras ES/EN y detección de links Docs/Drive. |
+| `manualBugBuilder.buildManualBug(fields, seq)` | Arma un `RawBug` válido desde los campos del formulario manual (sin Excel). |
 | `bugEnricher.BugEnricher.enrich(bug)` | Trae los Google Docs del bug. **Cachea por URL** para no re-descargar el mismo doc (un doc suele documentar varios bugs). |
 | `bugStatusKey.bugRecordKey(raw)` | Clave de identidad **estable por contenido** (título+descripción). Permite que el estado reencuentre al bug aunque cambie de posición. |
 | `bugRecordsStore.readRecords / setBugStatus` | Persistencia del estado de cada bug en `bug-records.json` (solo guarda los ≠ `nuevo`). |
+| `sessionStore.read / write / clearSession` | Persistencia de la **sesión** (bugs + análisis) en `session.json`, con escritura atómica (temp + rename). |
 | `googleDocsReader` / `browserDocsReader` | Lectura de Google Docs vía OAuth (texto) o sesión de navegador (texto + capturas). |
 
 ### `src/llm/` — análisis
@@ -169,6 +204,9 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | Handler | Qué hace |
 |---|---|
 | `analyze:run` | Orquesta el batch: lee Excel → enricher → `analyzeBug` por bug (con concurrencia) → adjunta el estado persistido. Emite resultados al renderer en streaming. |
+| `analyze:manual-bug` | Arma un bug desde los campos del formulario y lo analiza, streameándolo a la tabla **sin reemplazar** lo ya cargado. |
+| `export:excel` / `export:bugs` | Exporta el Excel enriquecido (con original) o un `.xlsx` nuevo desde cero (manual / mezclado). |
+| `session:load / save / clear` | Restaura / guarda / borra la sesión persistida (`session.json`). |
 | `bug:set-status` | Persiste el cambio de estado de un bug. |
 | `ensureOllamaRunning(baseUrl)` | Levanta Ollama si no corre (con el override de GPU AMD y paralelismo). |
 
@@ -176,8 +214,9 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 
 | Pieza | Qué hace |
 |---|---|
-| `App.tsx` | Estado global, eventos IPC, atajos de teclado, handler de cambio de estado. |
-| `BugTable.tsx` | Tabla con filtros (categoría/severidad/estado), búsqueda, agrupación por pantalla, detalle con el reporte reescrito, y selector de estado inline. |
+| `App.tsx` | Estado global, eventos IPC, atajos de teclado, handler de cambio de estado, restore/auto-save de la sesión. |
+| `BugTable.tsx` | Tabla con pestañas **activos/históricos/todos**, filtros (categoría/severidad/estado), búsqueda, agrupación por pantalla, detalle con el reporte reescrito, y selector de estado inline. |
+| `ManualBugForm.tsx` | Modal para cargar un bug a mano (Esc/Tab-trap/autofocus, ⌘/Ctrl+Enter). |
 | `Settings.tsx` | Modelo LLM, acceso a Google, caché. |
 
 ---
@@ -191,19 +230,21 @@ buglens/
 │   └── preload.ts         # Expone electronAPI al renderer (contextBridge)
 ├── src/
 │   ├── pipeline/
-│   │   ├── excelReader.ts        # Lee/escribe Excel (SheetJS)
+│   │   ├── excelReader.ts        # Lee/escribe Excel (SheetJS) + export desde cero
+│   │   ├── manualBugBuilder.ts   # Arma un RawBug desde el formulario manual
 │   │   ├── googleDocsReader.ts   # Google Docs vía OAuth2
 │   │   ├── browserDocsReader.ts  # Google Docs vía sesión de navegador (+ capturas)
 │   │   ├── bugEnricher.ts        # Trae los docs del bug (con dedup por URL)
 │   │   ├── bugStatusKey.ts       # Clave de identidad estable por contenido
-│   │   └── bugRecordsStore.ts    # Persistencia del estado de los bugs
+│   │   ├── bugRecordsStore.ts    # Persistencia del estado de los bugs
+│   │   └── sessionStore.ts       # Persistencia de la sesión (bugs + análisis)
 │   ├── llm/
 │   │   ├── fastTriage.ts         # Pipeline de análisis (clasificar + reescribir)
 │   │   ├── client.ts             # Config de LLM (ollama / anthropic / gemini / openai)
 │   │   └── analysisCache.ts      # Caché de análisis por contenido
 │   └── types/index.ts            # Tipos TypeScript compartidos
 ├── renderer/
-│   ├── components/        # BugTable, Settings, FileUpload, ProgressLog, EmptyState
+│   ├── components/        # BugTable, ManualBugForm, Settings, FileUpload, ProgressLog, EmptyState
 │   ├── App.tsx            # Root component + estado + atajos
 │   ├── main.tsx           # Entry point React
 │   ├── styles.css         # Tailwind
@@ -223,9 +264,10 @@ npm run test:watch  # modo watch
 ```
 
 La suite (Vitest + React Testing Library) cubre la **lógica de negocio**: identidad y
-persistencia de estados, parsing del Excel, parseo robusto del LLM, caché, selección de
-sección de doc, dedup de docs, y la interacción de estados en la tabla. La integración
-(LLM real, IPC, lectores de docs) se verifica corriendo la app.
+persistencia de estados, parsing del Excel, construcción del bug manual, persistencia de
+sesión, parseo robusto del LLM, caché, selección de sección de doc, dedup de docs, y las
+interacciones de la tabla (estados + pestañas activos/históricos). La integración
+(LLM real, IPC, lectores de docs, restore/auto-save de sesión) se verifica corriendo la app.
 
 El **CI** (`.github/workflows/ci.yml`) corre `typecheck → test → build` en cada push y PR.
 
