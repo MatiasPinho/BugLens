@@ -16,7 +16,7 @@ import * as path from 'node:path'
 import type { BugAnalysis, EnrichedBug, LLMConfig } from '../types/index.js'
 
 // Bump cuando cambia el prompt — invalida cache vieja para forzar recálculo.
-const PROMPT_VERSION = 'v9-2026-06-problemcount-derived'
+const PROMPT_VERSION = 'v10-2026-06-steps-vs-problems'
 
 const SUBDIR = 'analysis'
 
