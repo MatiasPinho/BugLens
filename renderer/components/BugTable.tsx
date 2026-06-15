@@ -1067,8 +1067,18 @@ export function ExpandedDetail({
           </div>
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
+          {/* Acción destructiva apartada de las seguras (copy/cerrar) con un
+              divisor, y lejos de "cerrar" para evitar clicks accidentales. */}
+          {onDelete && (
+            <>
+              <DeleteControl onConfirm={onDelete} />
+              <span
+                aria-hidden="true"
+                style={{ width: '1px', height: '1.1rem', background: alpha(col.border, 0.3) }}
+              />
+            </>
+          )}
           <CopyButton text={copyText} />
-          {onDelete && <DeleteControl onConfirm={onDelete} />}
           {onClose && (
             <button
               type="button"
