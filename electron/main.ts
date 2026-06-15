@@ -17,9 +17,10 @@ import { BrowserDocsReader } from '../src/pipeline/browserDocsReader.js'
 import { BugEnricher } from '../src/pipeline/bugEnricher.js'
 import { readRecords, setBugStatus } from '../src/pipeline/bugRecordsStore.js'
 import { bugRecordKey } from '../src/pipeline/bugStatusKey.js'
-import { readExcel, writeEnrichedExcel } from '../src/pipeline/excelReader.js'
+import { readExcel, writeBugsExcel, writeEnrichedExcel } from '../src/pipeline/excelReader.js'
 import { GoogleDocsReader } from '../src/pipeline/googleDocsReader.js'
-import type { AnalyzedBug, BugStatus, LLMConfig } from '../src/types/index.js'
+import { buildManualBug, type ManualBugFields } from '../src/pipeline/manualBugBuilder.js'
+import type { AnalyzedBug, BugStatus, LLMConfig, RawBug } from '../src/types/index.js'
 
 function getCacheDir(): string {
   return path.join(app.getPath('userData'), 'analysis-cache')
@@ -210,21 +211,26 @@ ipcMain.handle('browser-auth:revoke', () => {
 
 // ─── IPC: Main analysis pipeline ─────────────────────────────────────────────
 
-ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
+// Secuencia para ids de bugs manuales dentro de la sesión. La identidad real
+// para el estado persistente es por contenido (bugRecordKey), no por este id.
+let manualBugCounter = 0
+
+/**
+ * Analiza una lista de bugs crudos (vengan de Excel o cargados a mano):
+ * enriquece con Google Docs, clasifica + reescribe con el LLM, y streamea cada
+ * resultado al renderer a medida que termina.
+ *
+ * @param emitComplete cuando es true emite `analysis-complete` con TODOS los
+ *   resultados (el renderer reemplaza la tabla — corrida desde Excel). Cuando es
+ *   false solo streamea por `bug-result` (el renderer appendea — bug manual).
+ */
+async function analyzeBugs(
+  bugs: RawBug[],
+  { emitComplete }: { emitComplete: boolean },
+): Promise<{ ok: boolean; count?: number; error?: string }> {
   const start = Date.now()
 
   try {
-    sendToRenderer('progress', {
-      type: 'progress',
-      phase: 'reading_excel',
-      message: 'leyendo Excel...',
-      current: 0,
-      total: 0,
-    })
-    log('info', `Leyendo Excel: ${excelPath}`)
-    const bugs = readExcel(excelPath)
-    log('info', `Encontrados ${bugs.length} bugs`)
-
     const s = loadSettings()
     const llmConfig: LLMConfig = getLLMConfig({
       provider: s.llmProvider as LLMConfig['provider'],
@@ -408,7 +414,9 @@ ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
       current: bugs.length,
       total: bugs.length,
     })
-    sendToRenderer('analysis-complete', { type: 'complete', results: results.filter(Boolean) })
+    if (emitComplete) {
+      sendToRenderer('analysis-complete', { type: 'complete', results: results.filter(Boolean) })
+    }
 
     // Cerrar el contexto headless del browser reader para liberar recursos
     if (browserReader instanceof BrowserDocsReader) {
@@ -419,6 +427,41 @@ ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log('error', `Error general: ${message}`)
+    return { ok: false, error: message }
+  }
+}
+
+// Corrida desde Excel: lee el archivo y analiza todos los bugs (reemplaza la tabla).
+ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
+  try {
+    sendToRenderer('progress', {
+      type: 'progress',
+      phase: 'reading_excel',
+      message: 'leyendo Excel...',
+      current: 0,
+      total: 0,
+    })
+    log('info', `Leyendo Excel: ${excelPath}`)
+    const bugs = readExcel(excelPath)
+    log('info', `Encontrados ${bugs.length} bugs`)
+    return await analyzeBugs(bugs, { emitComplete: true })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    log('error', `Error leyendo Excel: ${message}`)
+    return { ok: false, error: message }
+  }
+})
+
+// Carga manual: arma un RawBug desde los campos del formulario y lo analiza,
+// streameándolo a la tabla sin reemplazar lo ya cargado.
+ipcMain.handle('analyze:manual-bug', async (_e, fields: ManualBugFields) => {
+  try {
+    const bug = buildManualBug(fields, ++manualBugCounter)
+    log('info', `Bug manual cargado: ${bug.title}`)
+    return await analyzeBugs([bug], { emitComplete: false })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    log('error', `Error en bug manual: ${message}`)
     return { ok: false, error: message }
   }
 })
@@ -482,6 +525,43 @@ ipcMain.handle(
     }
   },
 )
+
+// Export desde cero (sin Excel original): para bugs cargados a mano o mezclados.
+ipcMain.handle('export:bugs', async (_e, { results }: { results: AnalyzedBug[] }) => {
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow!, {
+    defaultPath: 'bugs_analizados.xlsx',
+    filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+  })
+
+  if (canceled || !filePath) return { ok: false }
+
+  try {
+    writeBugsExcel(
+      filePath,
+      results.map((r) => ({
+        title: r.enriched.raw.title,
+        rowIndex: r.enriched.raw.rowIndex,
+        category: r.analysis.category,
+        severity: r.analysis.severity,
+        bugType: r.analysis.bugType ?? '',
+        confidence: r.analysis.confidence,
+        summary: r.analysis.summary,
+        observed: r.analysis.rewritten.observed,
+        expected: r.analysis.rewritten.expected,
+        steps: r.analysis.rewritten.steps,
+        environment: r.analysis.rewritten.environment,
+        missingInformation: r.analysis.missingInformation,
+        error: r.error,
+      })),
+    )
+    log('info', `Excel exportado: ${filePath}`)
+    return { ok: true, filePath }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    log('error', `Error exportando: ${message}`)
+    return { ok: false, error: message }
+  }
+})
 
 // ─── IPC: Dialogs & misc ─────────────────────────────────────────────────────
 

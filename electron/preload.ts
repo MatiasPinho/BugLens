@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Analysis
   runAnalysis: (excelPath: string) => ipcRenderer.invoke('analyze:run', excelPath),
+  analyzeManualBug: (fields: Record<string, string>) =>
+    ipcRenderer.invoke('analyze:manual-bug', fields),
 
   // Estado de bugs (persistente)
   setBugStatus: (key: string, status: string) =>
@@ -30,6 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearCache: () => ipcRenderer.invoke('cache:clear'),
   exportExcel: (originalPath: string, results: AnalyzedBug[]) =>
     ipcRenderer.invoke('export:excel', { originalPath, results }),
+  exportBugs: (results: AnalyzedBug[]) => ipcRenderer.invoke('export:bugs', { results }),
 
   // Dialogs
   openExcelDialog: () => ipcRenderer.invoke('dialog:open-excel'),

@@ -1,3 +1,4 @@
+import type { ManualBugFields } from '../src/pipeline/manualBugBuilder'
 import type { AnalyzedBug, IPCEvent } from '../src/types/index'
 
 interface ElectronAPI {
@@ -24,6 +25,9 @@ interface ElectronAPI {
 
   // Analysis
   runAnalysis(excelPath: string): Promise<{ ok: boolean; count?: number; error?: string }>
+  analyzeManualBug(
+    fields: ManualBugFields,
+  ): Promise<{ ok: boolean; count?: number; error?: string }>
 
   // Estado de bugs (persistente)
   setBugStatus(key: string, status: string): Promise<{ ok: boolean }>
@@ -35,6 +39,7 @@ interface ElectronAPI {
     originalPath: string,
     results: AnalyzedBug[],
   ): Promise<{ ok: boolean; filePath?: string; error?: string }>
+  exportBugs(results: AnalyzedBug[]): Promise<{ ok: boolean; filePath?: string; error?: string }>
 
   // Dialogs
   openExcelDialog(): Promise<string | null>
