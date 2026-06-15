@@ -84,6 +84,12 @@ persisten como **sesión** y se restauran al reabrir.
   y las reglas de `styles.css`. **No hardcodear hex/rgba** en componentes — usar `col`/`alpha`.
   **Color nuevo**: definir el valor en `:root`, y exponerlo en `theme.ts` y/o `tailwind.config.ts`
   solo donde se vaya a usar.
+- **Tamaños — origen único** (igual que el color): la escala vive en `styles.css :root`:
+  tipografía `--text-2xs|xs|sm` (11/12/14px), radios `--radius-sm|md` (4/6px), altura de
+  controles `--ctl-h-sm|md` (28/32px). Se consume vía **clases** (`text-2xs`, `rounded`/`rounded-md`,
+  `.btn-mini` para micro-controles, `.input`/`.btn-*` que ya traen `min-height`) o vía `sz`/`radius`
+  de `theme.ts` para `style` inline. **No hardcodear px/rem de tamaño** en componentes. El spacing
+  usa la escala default de Tailwind (base 4px) — no inventar paddings fuera de grilla.
 - **Electron Linux**: `app.disableHardwareAcceleration()` evita un crash de GPU (SIGTRAP).
   No correr onnxruntime/embeddings en el proceso main (era la causa del crash del índice removido).
 
