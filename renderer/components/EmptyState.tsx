@@ -147,7 +147,7 @@ function Step({
         }}
       >
         {done ? (
-          <svg aria-hidden="true" width="9" height="9" viewBox="0 0 12 12" fill="none">
+          <svg aria-hidden="true" width="8" height="8" viewBox="0 0 12 12" fill="none">
             <path
               d="M2 6l3 3 5-6"
               stroke="currentColor"

@@ -73,8 +73,8 @@ export default function ProgressLog({ logs }: Props) {
               <rect
                 x="3"
                 y="3"
-                width="18"
-                height="18"
+                width="20"
+                height="20"
                 rx="2"
                 stroke="currentColor"
                 strokeWidth="1.2"

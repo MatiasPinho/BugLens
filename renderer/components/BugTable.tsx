@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { AnalyzedBug, BugCategory, BugStatus, DocImage, Severity } from '../../src/types/index'
-import { alpha, col } from '../theme'
+import { alpha, col, sz } from '../theme'
 import { BugUnderLensMark } from './decor/BugMotifs'
 
 interface Props {
@@ -258,16 +258,11 @@ export function CopyButton({ text }: { text: string }) {
         setCopied(true)
         setTimeout(() => setCopied(false), 1500)
       }}
-      className="flex-shrink-0 cursor-pointer transition-colors"
+      className="btn-mini flex-shrink-0"
       title="copiar"
       style={{
         color: copied ? col.fgDim : col.muted,
-        border: `1px solid ${copied ? alpha(col.fgDim, 0.35) : alpha(col.border, 0.25)}`,
-        background: 'transparent',
-        borderRadius: '4px',
-        padding: '0.2rem 0.4rem',
-        fontSize: '0.65rem',
-        fontFamily: 'inherit',
+        borderColor: copied ? alpha(col.fgDim, 0.35) : undefined,
       }}
       onMouseEnter={(e) => {
         if (!copied) e.currentTarget.style.color = col.fgMuted
@@ -316,14 +311,8 @@ export function DeleteControl({ onConfirm }: { onConfirm: () => void }) {
           type="button"
           onClick={onConfirm}
           onKeyDown={cancelOnEscape}
-          className="cursor-pointer transition-colors"
-          style={{
-            color: col.red,
-            border: `1px solid ${alpha(col.red, 0.4)}`,
-            borderRadius: '4px',
-            padding: '0.2rem 0.5rem',
-            fontSize: '0.65rem',
-          }}
+          className="btn-mini"
+          style={{ color: col.red, borderColor: alpha(col.red, 0.4) }}
           onMouseEnter={(e) => (e.currentTarget.style.background = alpha(col.red, 0.1))}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
         >
@@ -333,14 +322,7 @@ export function DeleteControl({ onConfirm }: { onConfirm: () => void }) {
           type="button"
           onClick={() => setConfirming(false)}
           onKeyDown={cancelOnEscape}
-          className="cursor-pointer transition-colors"
-          style={{
-            color: col.muted,
-            border: `1px solid ${alpha(col.border, 0.25)}`,
-            borderRadius: '4px',
-            padding: '0.2rem 0.5rem',
-            fontSize: '0.65rem',
-          }}
+          className="btn-mini"
           onMouseEnter={(e) => (e.currentTarget.style.color = col.fgMuted)}
           onMouseLeave={(e) => (e.currentTarget.style.color = col.muted)}
         >
@@ -358,15 +340,11 @@ export function DeleteControl({ onConfirm }: { onConfirm: () => void }) {
       type="button"
       onClick={() => setConfirming(true)}
       title="borrar bug"
-      className="flex flex-shrink-0 cursor-pointer items-center gap-1 transition-colors"
+      className="btn-mini flex-shrink-0"
       style={{
         color: col.red,
-        border: `1px solid ${alpha(col.red, 0.32)}`,
+        borderColor: alpha(col.red, 0.32),
         background: alpha(col.red, 0.07),
-        borderRadius: '4px',
-        padding: '0.2rem 0.5rem',
-        fontSize: '0.65rem',
-        fontFamily: 'inherit',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.background = alpha(col.red, 0.16)
@@ -379,8 +357,8 @@ export function DeleteControl({ onConfirm }: { onConfirm: () => void }) {
     >
       <svg
         aria-hidden="true"
-        width="11"
-        height="11"
+        width="12"
+        height="12"
         viewBox="0 0 24 24"
         fill="none"
         style={{ flexShrink: 0 }}
@@ -560,8 +538,8 @@ export default function BugTable({
           <svg
             aria-hidden="true"
             className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2"
-            width="11"
-            height="11"
+            width="12"
+            height="12"
             viewBox="0 0 24 24"
             fill="none"
             style={{ color: col.muted }}
@@ -692,7 +670,7 @@ export default function BugTable({
             <tr
               className="text-left font-mono"
               style={{
-                fontSize: '0.60rem',
+                fontSize: sz.text2xs,
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: '0.11em',
@@ -943,7 +921,7 @@ export function GroupHeaderRow({
       onMouseEnter={(e) => (e.currentTarget.style.background = col.raised)}
       onMouseLeave={(e) => (e.currentTarget.style.background = col.surface)}
     >
-      <td colSpan={8} style={{ padding: '0.45rem 0.75rem' }}>
+      <td colSpan={8} style={{ padding: '0.5rem 0.75rem' }}>
         <div className="flex items-center gap-2.5">
           <svg
             aria-hidden="true"
@@ -1058,14 +1036,7 @@ export function ExpandedDetail({
             <button
               type="button"
               onClick={onClose}
-              className="cursor-pointer transition-colors"
-              style={{
-                color: col.muted,
-                border: `1px solid ${alpha(col.border, 0.25)}`,
-                borderRadius: '4px',
-                padding: '0.2rem 0.5rem',
-                fontSize: '0.65rem',
-              }}
+              className="btn-mini"
               onMouseEnter={(e) => (e.currentTarget.style.color = col.fgMuted)}
               onMouseLeave={(e) => (e.currentTarget.style.color = col.muted)}
             >
@@ -1288,7 +1259,7 @@ export function DocImageGallery({ images }: { images: DocImage[] }) {
               }}
               aria-label="cerrar"
             >
-              <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <svg aria-hidden="true" width="12" height="12" viewBox="0 0 10 10" fill="none">
                 <line
                   x1="1"
                   y1="1"

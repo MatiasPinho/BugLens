@@ -200,8 +200,8 @@ export default function Settings({ addLog }: Props) {
           >
             <svg
               aria-hidden="true"
-              width="7"
-              height="7"
+              width="8"
+              height="8"
               viewBox="0 0 8 8"
               fill="currentColor"
               style={{

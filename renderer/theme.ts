@@ -35,3 +35,19 @@ export const col = {
 export function alpha(color: string, a: number): string {
   return color.replace(/\)\s*$/, ` / ${a})`)
 }
+
+// Tokens de tamaño para estilos inline (mismo origen único que `col`: las CSS
+// vars de styles.css :root). Preferir clases (text-2xs, rounded, btn-mini, .input);
+// usar `sz`/`radius` solo donde haga falta tamaño en `style`.
+export const sz = {
+  text2xs: 'var(--text-2xs)',
+  textXs: 'var(--text-xs)',
+  textSm: 'var(--text-sm)',
+  ctlSm: 'var(--ctl-h-sm)',
+  ctlMd: 'var(--ctl-h-md)',
+} as const
+
+export const radius = {
+  sm: 'var(--radius-sm)',
+  md: 'var(--radius-md)',
+} as const

@@ -12,6 +12,10 @@ export default {
   theme: {
     extend: {
       fontFamily: { mono: font, sans: font },
+      // Tier micro de la escala tipográfica (origen único en styles.css :root).
+      // xs/sm ya vienen de Tailwind (12/14px); 2xs = 11px para badges, headers de
+      // tabla y micro-controles.
+      fontSize: { '2xs': ['var(--text-2xs)', { lineHeight: '1rem' }] },
       colors: {
         om: {
           base: tw('base'),
