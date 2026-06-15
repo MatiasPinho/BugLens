@@ -52,7 +52,9 @@ const meta: Meta<typeof BugTable> = {
 export default meta
 type Story = StoryObj<typeof BugTable>
 
-// Tabla con bugs en distintos estados/severidades. El selector de estado de cada
+// Tabla con bugs en distintos estados/severidades. Abre en la pestaña "activos"
+// (nuevo / en progreso); cambiá a "históricos" (solucionado / cerrado / no
+// replicado) o "todos" con el control segmentado. El selector de estado de cada
 // fila es interactivo; expandí un bug para ver el reporte reescrito.
 export const Default: Story = { args: { results: bugs, onSetStatus: () => {} } }
 
