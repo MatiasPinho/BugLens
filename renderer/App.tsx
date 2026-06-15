@@ -528,9 +528,12 @@ export default function App() {
                 </div>
               )}
 
-              {/* Escarabajo ambiente al pie del panel (decorativo) */}
+              {/* Escarabajo ambiente al pie del panel (decorativo, balanceo sutil) */}
               <div aria-hidden="true" className="mt-auto flex justify-center pt-6">
-                <BeetleMark style={{ width: 84, color: col.fgDim, opacity: 0.12 }} />
+                <BeetleMark
+                  className="motif-sway"
+                  style={{ width: 84, color: col.fgDim, opacity: 0.12 }}
+                />
               </div>
             </div>
 

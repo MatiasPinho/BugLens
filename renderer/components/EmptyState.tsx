@@ -20,19 +20,18 @@ interface Props {
 export default function EmptyState({ hasExcel }: Props) {
   return (
     <div className="relative flex h-full flex-col items-center justify-center overflow-hidden px-8">
-      {/* Acento temático: un escarabajo asomando en la esquina (decorativo) */}
-      <BeetleMark
+      {/* Acento temático: un escarabajo asomando en la esquina (decorativo).
+          Wrapper = entrada (reveal-up); el svg interno hace el balanceo idle. */}
+      <div
+        aria-hidden="true"
         className="reveal-up pointer-events-none absolute"
-        style={{
-          right: '-28px',
-          bottom: '-24px',
-          width: '210px',
-          color: col.fgDim,
-          opacity: 0.13,
-          zIndex: 0,
-          animationDelay: '260ms',
-        }}
-      />
+        style={{ right: '-28px', bottom: '-24px', zIndex: 0, animationDelay: '260ms' }}
+      >
+        <BeetleMark
+          className="motif-sway"
+          style={{ width: '210px', color: col.fgDim, opacity: 0.13 }}
+        />
+      </div>
       <div className="relative z-10 w-full max-w-md space-y-6 text-center">
         {/* Logo / icon principal, con un glow radial sutil para dar profundidad */}
         <div className="reveal-up flex justify-center">
