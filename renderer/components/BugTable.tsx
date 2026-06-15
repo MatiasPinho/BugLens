@@ -6,6 +6,7 @@ interface Props {
   results: AnalyzedBug[]
   analyzing?: boolean
   onSetStatus?: (bug: AnalyzedBug, status: BugStatus) => void
+  onDelete?: (bug: AnalyzedBug) => void
   focusedId?: string | null
   expandedId?: string | null
   onFocus?: (id: string | null) => void
@@ -250,6 +251,79 @@ export function CopyButton({ text }: { text: string }) {
   )
 }
 
+// Borrado con confirmación inline (dos pasos: "borrar" → "¿seguro? sí / no").
+// Evita borrados accidentales sin recurrir a un confirm() nativo.
+export function DeleteControl({ onConfirm }: { onConfirm: () => void }) {
+  const [confirming, setConfirming] = useState(false)
+
+  if (confirming) {
+    return (
+      <span className="flex flex-shrink-0 items-center gap-1.5 font-mono text-xs">
+        <span style={{ color: col.fgMuted }}>¿borrar?</span>
+        <button
+          type="button"
+          onClick={onConfirm}
+          className="cursor-pointer transition-colors"
+          style={{
+            color: col.red,
+            border: `1px solid ${alpha(col.red, 0.4)}`,
+            borderRadius: '4px',
+            padding: '0.2rem 0.5rem',
+            fontSize: '0.65rem',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = alpha(col.red, 0.1))}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+        >
+          sí, borrar
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirming(false)}
+          className="cursor-pointer transition-colors"
+          style={{
+            color: col.muted,
+            border: `1px solid ${alpha(col.border, 0.25)}`,
+            borderRadius: '4px',
+            padding: '0.2rem 0.5rem',
+            fontSize: '0.65rem',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = col.fgMuted)}
+          onMouseLeave={(e) => (e.currentTarget.style.color = col.muted)}
+        >
+          no
+        </button>
+      </span>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setConfirming(true)}
+      title="borrar bug"
+      className="flex-shrink-0 cursor-pointer transition-colors"
+      style={{
+        color: col.muted,
+        border: `1px solid ${alpha(col.border, 0.25)}`,
+        borderRadius: '4px',
+        padding: '0.2rem 0.5rem',
+        fontSize: '0.65rem',
+        fontFamily: 'inherit',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.color = col.red
+        e.currentTarget.style.borderColor = alpha(col.red, 0.4)
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.color = col.muted
+        e.currentTarget.style.borderColor = alpha(col.border, 0.25)
+      }}
+    >
+      borrar
+    </button>
+  )
+}
+
 export function SectionCard({
   title,
   children,
@@ -294,6 +368,7 @@ export default function BugTable({
   results,
   analyzing = false,
   onSetStatus,
+  onDelete,
   focusedId: focusedIdProp,
   expandedId: expandedIdProp,
   onFocus,
@@ -693,7 +768,11 @@ export default function BugTable({
                           background: col.code,
                         }}
                       >
-                        <ExpandedDetail result={r} onClose={() => setExpandedId(null)} />
+                        <ExpandedDetail
+                          result={r}
+                          onClose={() => setExpandedId(null)}
+                          onDelete={onDelete ? () => onDelete(r) : undefined}
+                        />
                       </td>
                     </tr>
                   )}
@@ -864,7 +943,15 @@ export function SeverityDot({ count, color }: { count: number; color: string }) 
 // ─── Expanded detail ──────────────────────────────────────────────────────────
 // El protagonista: la versión REESCRITA y clara del reporte + qué falta + capturas.
 
-export function ExpandedDetail({ result, onClose }: { result: AnalyzedBug; onClose?: () => void }) {
+export function ExpandedDetail({
+  result,
+  onClose,
+  onDelete,
+}: {
+  result: AnalyzedBug
+  onClose?: () => void
+  onDelete?: () => void
+}) {
   const { enriched, analysis } = result
   const raw = enriched.raw
   const rw = analysis.rewritten
@@ -900,6 +987,7 @@ export function ExpandedDetail({ result, onClose }: { result: AnalyzedBug; onClo
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
           <CopyButton text={copyText} />
+          {onDelete && <DeleteControl onConfirm={onDelete} />}
           {onClose && (
             <button
               type="button"

@@ -126,3 +126,37 @@ describe('BugTable — ciclo de vida (activos / históricos)', () => {
     expect(screen.getByText('Resuelto')).toBeInTheDocument()
   })
 })
+
+describe('BugTable — borrar bug', () => {
+  function renderWithDelete(onDelete = vi.fn()) {
+    render(
+      <BugTable
+        results={[makeBug({ id: 'a', title: 'Activo nuevo' })]}
+        onSetStatus={vi.fn()}
+        onDelete={onDelete}
+      />,
+    )
+    return onDelete
+  }
+
+  it('borra el bug solo después de confirmar', async () => {
+    const onDelete = renderWithDelete()
+    await userEvent.click(screen.getByText('Activo nuevo')) // expandir el detalle
+    await userEvent.click(screen.getByRole('button', { name: 'borrar' }))
+    expect(onDelete).not.toHaveBeenCalled() // hasta confirmar, no borra
+    await userEvent.click(screen.getByRole('button', { name: 'sí, borrar' }))
+
+    expect(onDelete).toHaveBeenCalledTimes(1)
+    expect(onDelete.mock.calls[0][0].enriched.raw.id).toBe('a')
+  })
+
+  it('cancelar no borra y vuelve al botón inicial', async () => {
+    const onDelete = renderWithDelete()
+    await userEvent.click(screen.getByText('Activo nuevo'))
+    await userEvent.click(screen.getByRole('button', { name: 'borrar' }))
+    await userEvent.click(screen.getByRole('button', { name: 'no' }))
+
+    expect(onDelete).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'borrar' })).toBeInTheDocument()
+  })
+})

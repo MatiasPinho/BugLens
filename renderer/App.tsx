@@ -115,15 +115,23 @@ export default function App() {
     }
   }, [])
 
-  // Auto-guardar la sesión (debounced). Gateado a 'done' para no reescribir el
-  // JSON (con imágenes, varios MB) en cada 'bug-result' durante el análisis.
+  // Auto-guardar la sesión (debounced). No persiste durante el análisis (resultados
+  // parciales + churn de MB con imágenes). Si la tabla queda vacía (ej. borraste el
+  // último bug), borra la sesión guardada para que no reaparezca al reabrir.
   useEffect(() => {
-    if (!hydratedRef.current || phase !== 'done' || results.length === 0) return
+    if (!hydratedRef.current || phase === 'analyzing') return
     const timer = setTimeout(() => {
-      window.electronAPI.saveSession(excelPath, results)
+      if (results.length > 0) window.electronAPI.saveSession(excelPath, results)
+      else window.electronAPI.clearSession()
     }, 800)
     return () => clearTimeout(timer)
   }, [results, excelPath, phase])
+
+  // Si la tabla queda vacía estando en 'done' (borraste el último bug), volver al
+  // inicio para mostrar la pantalla de carga.
+  useEffect(() => {
+    if (phase === 'done' && results.length === 0) setPhase('idle')
+  }, [phase, results.length])
 
   const handleAnalyze = useCallback(async () => {
     if (!excelPath) return
@@ -198,6 +206,22 @@ export default function App() {
     setResults((prev) => prev.map((r) => (r.enriched.raw.id === id ? { ...r, status } : r)))
     await window.electronAPI.setBugStatus(bugRecordKey(bug.enriched.raw), status)
   }, [])
+
+  // Borrar un bug: lo saca de la tabla/sesión y OLVIDA su estado guardado
+  // (setBugStatus→'nuevo' elimina el registro en bug-records). La caché de análisis
+  // (por contenido) se conserva. Si vino de un Excel, re-analizarlo lo trae de vuelta
+  // como 'nuevo' (no editamos el Excel original).
+  const handleDeleteBug = useCallback(
+    (bug: AnalyzedBug) => {
+      const id = bug.enriched.raw.id
+      setResults((prev) => prev.filter((r) => r.enriched.raw.id !== id))
+      setExpandedBugId((curr) => (curr === id ? null : curr))
+      setFocusedBugId((curr) => (curr === id ? null : curr))
+      window.electronAPI.setBugStatus(bugRecordKey(bug.enriched.raw), 'nuevo')
+      addLog('info', `bug borrado: ${bug.enriched.raw.title}`)
+    },
+    [addLog],
+  )
 
   const handleReset = useCallback(() => {
     setPhase('idle')
@@ -513,6 +537,7 @@ export default function App() {
                       results={results}
                       analyzing={phase === 'analyzing'}
                       onSetStatus={handleSetStatus}
+                      onDelete={handleDeleteBug}
                       focusedId={focusedBugId}
                       expandedId={expandedBugId}
                       onFocus={setFocusedBugId}
