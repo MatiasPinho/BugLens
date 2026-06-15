@@ -56,7 +56,9 @@ type Story = StoryObj<typeof BugTable>
 // (nuevo / en progreso); cambiá a "históricos" (solucionado / cerrado / no
 // replicado) o "todos" con el control segmentado. El selector de estado de cada
 // fila es interactivo; expandí un bug para ver el reporte reescrito.
-export const Default: Story = { args: { results: bugs, onSetStatus: () => {} } }
+export const Default: Story = {
+  args: { results: bugs, onSetStatus: () => {}, onDelete: () => {} },
+}
 
 // Un bug que junta varios problemas (observed numerado → badge "N problemas" al expandir).
 export const MultiProblema: Story = { args: { results: [bugs[1]], onSetStatus: () => {} } }
