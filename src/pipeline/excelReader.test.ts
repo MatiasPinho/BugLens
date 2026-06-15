@@ -3,7 +3,25 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
-import { extractGoogleLinks, mapHeader, readExcel } from './excelReader'
+import { extractGoogleLinks, mapHeader, readExcel, writeBugsExcel } from './excelReader'
+
+function makeExportRow(over: Partial<Parameters<typeof writeBugsExcel>[1][number]> = {}) {
+  return {
+    title: 'Login roto',
+    rowIndex: 0,
+    category: 'frontend',
+    severity: 'high',
+    bugType: 'ui',
+    confidence: 0.9,
+    summary: 'el botón no responde',
+    observed: 'no pasa nada al hacer click',
+    expected: 'debería iniciar sesión',
+    steps: ['abrir login', 'click en entrar'],
+    environment: 'prod',
+    missingInformation: ['versión del navegador'],
+    ...over,
+  }
+}
 
 describe('extractGoogleLinks', () => {
   it('extrae links de Google Docs', () => {
@@ -109,5 +127,46 @@ describe('readExcel (integración con archivo real)', () => {
   it('hoja sin filas de datos lanza error', () => {
     const file = writeXlsx([['Título', 'Entorno']]) // solo header
     expect(() => readExcel(file)).toThrow()
+  })
+})
+
+describe('writeBugsExcel (genera xlsx desde cero)', () => {
+  let dir: string
+  afterEach(() => {
+    if (dir) fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  function readBack(filePath: string): Record<string, string>[] {
+    const wb = XLSX.readFile(filePath, { type: 'file' })
+    const sheet = wb.Sheets[wb.SheetNames[0]]
+    return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false })
+  }
+
+  it('escribe una fila por bug con título y columnas del análisis', () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'buglens-export-'))
+    const file = path.join(dir, 'bugs.xlsx')
+
+    writeBugsExcel(file, [
+      makeExportRow({ title: 'Login roto' }),
+      makeExportRow({ title: 'Otro bug', category: 'backend', severity: 'low' }),
+    ])
+
+    const rows = readBack(file)
+    expect(rows).toHaveLength(2)
+    expect(rows[0]['Título']).toBe('Login roto')
+    expect(rows[0]['Categoría']).toBe('frontend')
+    expect(rows[0]['Severidad']).toBe('high')
+    expect(rows[0]['Confianza']).toBe('0.90')
+    expect(rows[0]['Pasos']).toBe('abrir login | click en entrar')
+    expect(rows[0]['Falta info']).toBe('versión del navegador')
+    expect(rows[1]['Título']).toBe('Otro bug')
+    expect(rows[1]['Categoría']).toBe('backend')
+  })
+
+  it('no requiere archivo original ni rowIndex válido', () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'buglens-export-'))
+    const file = path.join(dir, 'bugs.xlsx')
+    expect(() => writeBugsExcel(file, [makeExportRow()])).not.toThrow()
+    expect(fs.existsSync(file)).toBe(true)
   })
 })

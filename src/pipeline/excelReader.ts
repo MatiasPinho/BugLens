@@ -123,26 +123,62 @@ export function readExcel(filePath: string): RawBug[] {
   })
 }
 
+// Columnas del análisis que se agregan/exportan. Origen único para ambos exports.
+const ANALYSIS_HEADERS = [
+  'Categoría',
+  'Severidad',
+  'Tipo',
+  'Confianza',
+  'Resumen',
+  'Qué pasa (reescrito)',
+  'Qué debería pasar',
+  'Pasos',
+  'Ambiente',
+  'Falta info',
+  'Error análisis',
+] as const
+
+// Una fila de resultados del análisis, lista para serializar a Excel.
+export interface AnalysisExportRow {
+  rowIndex: number
+  category: string
+  severity: string
+  bugType: string
+  confidence: number
+  summary: string
+  observed: string
+  expected: string
+  steps: string[]
+  environment: string
+  missingInformation: string[]
+  error?: string
+}
+
+// Serializa una fila de análisis al mismo orden que ANALYSIS_HEADERS.
+function analysisRowValues(result: AnalysisExportRow): string[] {
+  return [
+    result.category,
+    result.severity,
+    result.bugType,
+    result.confidence.toFixed(2),
+    result.summary,
+    result.observed,
+    result.expected,
+    result.steps.join(' | '),
+    result.environment,
+    result.missingInformation.join(' | '),
+    result.error ?? '',
+  ]
+}
+
 /**
- * Escribe el Excel enriquecido con los resultados del análisis.
+ * Escribe el Excel enriquecido: reabre el original y agrega las columnas del
+ * análisis a la derecha, ubicando cada resultado en su fila por `rowIndex`.
  */
 export function writeEnrichedExcel(
   outputPath: string,
   originalPath: string,
-  results: Array<{
-    rowIndex: number
-    category: string
-    severity: string
-    bugType: string
-    confidence: number
-    summary: string
-    observed: string
-    expected: string
-    steps: string[]
-    environment: string
-    missingInformation: string[]
-    error?: string
-  }>,
+  results: AnalysisExportRow[],
 ): void {
   const workbook = XLSX.readFile(originalPath, { type: 'file', cellFormula: false })
   const sheetName = workbook.SheetNames[0]
@@ -152,51 +188,42 @@ export function writeEnrichedExcel(
   const range = XLSX.utils.decode_range(sheet['!ref'] ?? 'A1')
   const lastCol = range.e.c
 
-  const newHeaders = [
-    'Categoría',
-    'Severidad',
-    'Tipo',
-    'Confianza',
-    'Resumen',
-    'Qué pasa (reescrito)',
-    'Qué debería pasar',
-    'Pasos',
-    'Ambiente',
-    'Falta info',
-    'Error análisis',
-  ]
-
   // Escribe cabeceras en la fila 1
-  newHeaders.forEach((header, i) => {
+  ANALYSIS_HEADERS.forEach((header, i) => {
     const cellRef = XLSX.utils.encode_cell({ r: 0, c: lastCol + 1 + i })
     sheet[cellRef] = { v: header, t: 's' }
   })
 
   // Actualiza el rango
-  range.e.c = lastCol + newHeaders.length
+  range.e.c = lastCol + ANALYSIS_HEADERS.length
   sheet['!ref'] = XLSX.utils.encode_range(range)
 
   // Escribe los resultados por fila
   for (const result of results) {
     const r = result.rowIndex // rowIndex ya es 1-based para la fila de datos (fila 2 del sheet = index 1)
-    const vals = [
-      result.category,
-      result.severity,
-      result.bugType,
-      result.confidence.toFixed(2),
-      result.summary,
-      result.observed,
-      result.expected,
-      result.steps.join(' | '),
-      result.environment,
-      result.missingInformation.join(' | '),
-      result.error ?? '',
-    ]
-    vals.forEach((val, i) => {
+    analysisRowValues(result).forEach((val, i) => {
       const cellRef = XLSX.utils.encode_cell({ r, c: lastCol + 1 + i })
       sheet[cellRef] = { v: val, t: 's' }
     })
   }
 
+  XLSX.writeFile(workbook, outputPath)
+}
+
+/**
+ * Genera un Excel desde cero (sin original) con los resultados del análisis.
+ * Se usa cuando hay bugs cargados a mano: no existe una fila/archivo de origen
+ * al que anclarse, así que se arma una hoja autocontenida con el título por delante.
+ */
+export function writeBugsExcel(
+  outputPath: string,
+  results: Array<AnalysisExportRow & { title: string }>,
+): void {
+  const headers = ['Título', ...ANALYSIS_HEADERS]
+  const rows = results.map((r) => [r.title, ...analysisRowValues(r)])
+
+  const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Bugs')
   XLSX.writeFile(workbook, outputPath)
 }

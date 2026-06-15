@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { bugRecordKey } from '../src/pipeline/bugStatusKey'
+import type { ManualBugFields } from '../src/pipeline/manualBugBuilder'
 import type {
   AnalyzedBug,
   BugResultEvent,
@@ -11,6 +12,7 @@ import type {
 import BugTable from './components/BugTable'
 import EmptyState from './components/EmptyState'
 import FileUpload from './components/FileUpload'
+import ManualBugForm from './components/ManualBugForm'
 import ProgressLog from './components/ProgressLog'
 import Settings from './components/Settings'
 import { alpha, col } from './theme'
@@ -40,6 +42,7 @@ export default function App() {
     phase?: import('../src/types/index').AnalysisPhase
   }>({ current: 0, total: 0, message: '' })
   const [showLogs, setShowLogs] = useState(false)
+  const [showManualForm, setShowManualForm] = useState(false)
 
   const addLog = useCallback((level: LogLine['level'], message: string, timestamp?: string) => {
     setLogs((prev) => [
@@ -55,6 +58,11 @@ export default function App() {
       if (ev.type !== 'progress') return
       const e = ev as ProgressEvent
       setProgress({ current: e.current, total: e.total, message: e.message, phase: e.phase })
+      // El progreso 'done' llega ordenado DESPUÉS del último 'bug-result' (mismo
+      // canal), así que marca la fase final de forma confiable — sin depender de
+      // la carrera entre el evento y la respuesta del invoke (clave en el flujo
+      // manual, que no emite 'analysis-complete').
+      if (e.phase === 'done') setPhase('done')
     })
 
     const cleanLog = api.onLog((ev: IPCEvent) => {
@@ -104,9 +112,43 @@ export default function App() {
     }
   }, [excelPath, addLog])
 
+  // Analizar un bug cargado a mano: lo appendea a la tabla (no resetea).
+  const handleAddManualBug = useCallback(
+    async (fields: ManualBugFields) => {
+      setPhase('analyzing')
+      setShowLogs(false)
+      setProgress({ current: 0, total: 1, message: 'analizando bug manual...' })
+      addLog('info', 'analizando bug manual...')
+
+      try {
+        const result = await window.electronAPI.analyzeManualBug(fields)
+        if (result.ok) {
+          setPhase('done')
+          return
+        }
+        addLog('error', `error: ${result.error}`)
+      } catch (err) {
+        // Ej: handler IPC no registrado (main sin reiniciar tras cambios).
+        addLog('error', `error: ${err instanceof Error ? err.message : String(err)}`)
+      }
+      // Si ya había bugs en la tabla, no volver a idle (no perder la vista).
+      setResults((prev) => {
+        setPhase(prev.length > 0 ? 'done' : 'idle')
+        return prev
+      })
+    },
+    [addLog],
+  )
+
   const handleExport = useCallback(async () => {
-    if (!excelPath || results.length === 0) return
-    const result = await window.electronAPI.exportExcel(excelPath, results)
+    if (results.length === 0) return
+    // Sin Excel original (o con bugs manuales mezclados) no se puede anclar por
+    // fila: se exporta una hoja autocontenida desde cero.
+    const hasManualBug = results.some((r) => r.enriched.raw.id.startsWith('manual-'))
+    const result =
+      !excelPath || hasManualBug
+        ? await window.electronAPI.exportBugs(results)
+        : await window.electronAPI.exportExcel(excelPath, results)
     if (result.ok) {
       addLog('info', `exportado: ${result.filePath}`)
     } else if (result.error) {
@@ -322,6 +364,16 @@ export default function App() {
                 disabled={phase === 'analyzing'}
               />
 
+              {phase !== 'analyzing' && (
+                <button
+                  type="button"
+                  className="btn-secondary w-full"
+                  onClick={() => setShowManualForm(true)}
+                >
+                  + cargar bug manual
+                </button>
+              )}
+
               {phase === 'idle' && (
                 <button
                   type="button"
@@ -459,6 +511,9 @@ export default function App() {
       </main>
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+      {showManualForm && (
+        <ManualBugForm onSubmit={handleAddManualBug} onClose={() => setShowManualForm(false)} />
+      )}
     </div>
   )
 }
