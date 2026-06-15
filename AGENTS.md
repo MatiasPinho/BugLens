@@ -40,7 +40,7 @@ persisten como **sesión** y se restauran al reabrir.
 - `src/llm/` — `fastTriage` (el pipeline real), `client` (config de LLM), `analysisCache`
 - `electron/main.ts` — IPC (`analyze:run`/`analyze:manual-bug`, `export:excel`/`export:bugs`,
   `session:*`, `bug:set-status`) + orquestación del batch · `renderer/` — UI (`App`,
-  `BugTable`, `ManualBugForm`, …)
+  `BugTable`, `ManualBugForm`, `decor/BugMotifs`, …)
 
 ## Convenciones y constraints
 
@@ -62,7 +62,15 @@ persisten como **sesión** y se restauran al reabrir.
   canónico desde `bug-records.json`. `bug-records.json` sigue siendo la fuente de verdad del estado.
 - **Activos vs históricos**: la tabla separa por **estado** (`isActiveStatus` en `BugTable`):
   activos = `nuevo`/`en_progreso`; históricos = `solucionado`/`cerrado`/`no_replicado`.
-  Es derivado, no un campo aparte.
+  Es derivado, no un campo aparte. El control de pestañas sigue el patrón ARIA tablist
+  (roving tabindex + flechas/Home/End).
+- **Borrar bug**: saca de la tabla/sesión y **olvida el estado** (reusa `setBugStatus → 'nuevo'`,
+  que borra el registro); la caché por contenido se conserva. No se edita el Excel → un bug de
+  Excel reaparece al re-analizar. Confirmación inline (sin `confirm()` nativo).
+- **Decorados** (`decor/BugMotifs`): motivos temáticos line-art mono a un trazo (`currentColor`),
+  **decorativos** (`aria-hidden`, sin alt). Animaciones sutiles vía clases en `styles.css`
+  (`.motif-sway`) que el corte global de `prefers-reduced-motion` neutraliza. No decorar la
+  tabla densa (baja legibilidad): van en el chrome y los vacíos.
 - **TS configs (3)**: `tsconfig.json` (typecheck; incluye `vitest.setup.ts` para los matchers
   de jest-dom), `tsconfig.electron.json` (build del main; **excluye `*.test.ts`**),
   `vitest.config.ts` (tests, root en la raíz para cubrir `src/` y `renderer/`).
@@ -125,7 +133,7 @@ persisten como **sesión** y se restauran al reabrir.
 
 Vitest + React Testing Library (jsdom). Cubre **lógica pura** (excelReader, `buildManualBug`,
 `sessionStore`, parseo del LLM, caché, estados, dedup del enricher) + las interacciones de
-`BugTable` (estados + pestañas activos/históricos) y `ManualBugForm`. La **integración** (LLM
+`BugTable` (estados + pestañas activos/históricos + teclado + borrado) y `ManualBugForm`. La **integración** (LLM
 real, IPC de Electron, doc readers con red/auth, restore/auto-save de sesión) **no** se testea
 por unit — se verifica corriendo. CI corre `typecheck → test → build` en cada push.
 
