@@ -183,4 +183,23 @@ describe('BugTable — borrar bug', () => {
     expect(onDelete).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'borrar' })).toBeInTheDocument()
   })
+
+  it('al confirmar, el foco pasa al botón "sí, borrar"', async () => {
+    renderWithDelete()
+    await userEvent.click(screen.getByText('Activo nuevo'))
+    await userEvent.click(screen.getByRole('button', { name: 'borrar' }))
+    expect(screen.getByRole('button', { name: 'sí, borrar' })).toHaveFocus()
+  })
+
+  it('Escape cancela la confirmación y devuelve el foco al disparador', async () => {
+    const onDelete = renderWithDelete()
+    await userEvent.click(screen.getByText('Activo nuevo'))
+    await userEvent.click(screen.getByRole('button', { name: 'borrar' }))
+    await userEvent.keyboard('{Escape}')
+
+    expect(onDelete).not.toHaveBeenCalled()
+    const trigger = screen.getByRole('button', { name: 'borrar' })
+    expect(trigger).toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+  })
 })

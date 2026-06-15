@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { AnalyzedBug, BugCategory, BugStatus, DocImage, Severity } from '../../src/types/index'
 import { alpha, col } from '../theme'
 
@@ -280,18 +280,41 @@ export function CopyButton({ text }: { text: string }) {
   )
 }
 
-// Borrado con confirmación inline (dos pasos: "borrar" → "¿seguro? sí / no").
-// Evita borrados accidentales sin recurrir a un confirm() nativo.
+// Borrado con confirmación inline (dos pasos: "borrar" → "¿borrar? sí / no").
+// Evita borrados accidentales sin recurrir a un confirm() nativo. Maneja el foco:
+// al confirmar lleva el foco al botón de confirmación (el disparador se desmonta,
+// si no el foco se perdería); al cancelar lo devuelve al disparador. Esc cancela.
 export function DeleteControl({ onConfirm }: { onConfirm: () => void }) {
   const [confirming, setConfirming] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const confirmRef = useRef<HTMLButtonElement>(null)
+  const wasConfirming = useRef(false)
+
+  useEffect(() => {
+    if (confirming) confirmRef.current?.focus()
+    else if (wasConfirming.current) triggerRef.current?.focus()
+    wasConfirming.current = confirming
+  }, [confirming])
+
+  // Esc cancela; stopPropagation evita que el atajo global de la app (Esc cierra
+  // el detalle) también dispare. Se ata a los botones (interactivos) porque el
+  // foco siempre está en uno de ellos mientras se confirma.
+  const cancelOnEscape = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation()
+      setConfirming(false)
+    }
+  }
 
   if (confirming) {
     return (
       <span className="flex flex-shrink-0 items-center gap-1.5 font-mono text-xs">
         <span style={{ color: col.fgMuted }}>¿borrar?</span>
         <button
+          ref={confirmRef}
           type="button"
           onClick={onConfirm}
+          onKeyDown={cancelOnEscape}
           className="cursor-pointer transition-colors"
           style={{
             color: col.red,
@@ -308,6 +331,7 @@ export function DeleteControl({ onConfirm }: { onConfirm: () => void }) {
         <button
           type="button"
           onClick={() => setConfirming(false)}
+          onKeyDown={cancelOnEscape}
           className="cursor-pointer transition-colors"
           style={{
             color: col.muted,
@@ -327,6 +351,7 @@ export function DeleteControl({ onConfirm }: { onConfirm: () => void }) {
 
   return (
     <button
+      ref={triggerRef}
       type="button"
       onClick={() => setConfirming(true)}
       title="borrar bug"
