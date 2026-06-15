@@ -23,8 +23,8 @@ no replicado). La sesión de trabajo se **guarda y restaura** al reabrir la app.
      "información insuficiente".
 4. Marcás el **estado** de cada bug; persiste entre corridas (incluso si reordenás el Excel).
    La tabla separa **activos** (nuevo / en progreso) de **históricos** (solucionado /
-   cerrado / no replicado) con un control de pestañas.
-5. Filtrás/agrupás/buscás, y exportás un Excel enriquecido (incluso sin Excel original).
+   cerrado / no replicado) con un control de pestañas (navegable con flechas).
+5. Filtrás/agrupás/buscás/**borrás** bugs, y exportás un Excel enriquecido (incluso sin Excel original).
 6. Al reabrir la app, la **sesión** (bugs cargados + análisis) se restaura sola.
 
 ---
@@ -141,7 +141,16 @@ La tabla separa lo accionable de lo archivado con un control de pestañas
 - **todos**: ambos.
 
 Mover un bug a un estado resuelto lo manda al histórico automáticamente; el filtro de
-estado refina dentro de la pestaña activa.
+estado refina dentro de la pestaña activa. El control de pestañas se navega con
+**flechas / Home / End** (patrón ARIA tablist).
+
+## Borrar bugs
+
+Desde el detalle expandido de un bug, el botón **borrar** (con confirmación inline
+"¿borrar? sí / no") lo **saca de la tabla/sesión** y **olvida su estado guardado**
+(`bug-records`). La caché de análisis (por contenido) se conserva. Como no se edita el
+Excel original, un bug que vino de un Excel **reaparece** al re-analizarlo (como `nuevo`);
+los bugs **manuales** se eliminan de verdad. Si borrás el último bug, la app vuelve al inicio.
 
 ## Carga manual de bugs
 
@@ -214,9 +223,10 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 
 | Pieza | Qué hace |
 |---|---|
-| `App.tsx` | Estado global, eventos IPC, atajos de teclado, handler de cambio de estado, restore/auto-save de la sesión. |
-| `BugTable.tsx` | Tabla con pestañas **activos/históricos/todos**, filtros (categoría/severidad/estado), búsqueda, agrupación por pantalla, detalle con el reporte reescrito, y selector de estado inline. |
+| `App.tsx` | Estado global, eventos IPC, atajos de teclado, cambio de estado, borrado, restore/auto-save de la sesión. |
+| `BugTable.tsx` | Tabla con pestañas **activos/históricos/todos** (navegables con flechas), filtros, búsqueda, agrupación por pantalla, detalle con el reporte reescrito, selector de estado inline y **borrado con confirmación**. |
 | `ManualBugForm.tsx` | Modal para cargar un bug a mano (Esc/Tab-trap/autofocus, ⌘/Ctrl+Enter). |
+| `decor/BugMotifs.tsx` | Motivos decorativos temáticos (line-art mono): `BeetleMark` (escarabajo, ambiente) y `BugUnderLensMark` (lupa+bicho, marca/búsqueda). Usados en EmptyState, vacíos de la tabla y el panel izquierdo. |
 | `Settings.tsx` | Modelo LLM, acceso a Google, caché. |
 
 ---
@@ -245,6 +255,7 @@ buglens/
 │   └── types/index.ts            # Tipos TypeScript compartidos
 ├── renderer/
 │   ├── components/        # BugTable, ManualBugForm, Settings, FileUpload, ProgressLog, EmptyState
+│   │   └── decor/         # Motivos decorativos temáticos (BugMotifs: escarabajo, lupa+bicho)
 │   ├── App.tsx            # Root component + estado + atajos
 │   ├── main.tsx           # Entry point React
 │   ├── styles.css         # Tailwind
