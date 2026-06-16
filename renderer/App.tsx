@@ -9,7 +9,7 @@ import type {
   LogEvent,
   ProgressEvent,
 } from '../src/types/index'
-import BugTable from './components/BugTable'
+import BugTable, { severityLabel } from './components/BugTable'
 import { BeetleMark } from './components/decor/BugMotifs'
 import EmptyState from './components/EmptyState'
 import FileUpload from './components/FileUpload'
@@ -382,7 +382,7 @@ export default function App() {
                 }
               }}
             >
-              {t === 'main' ? 'main' : 'config'}
+              {t === 'main' ? 'principal' : 'config'}
             </button>
           ))}
           <button
@@ -765,7 +765,9 @@ export function StatsGrid({ results }: { results: AnalyzedBug[] }) {
           .sort()
           .map(([s, n]) => (
             <div key={s} className="flex justify-between">
-              <span className={severityColor[s] ?? 'text-om-fgmuted'}>{s}</span>
+              <span className={severityColor[s] ?? 'text-om-fgmuted'}>
+                {(severityLabel as Record<string, string>)[s] ?? s}
+              </span>
               <span className="text-om-fg">{n}</span>
             </div>
           ))}

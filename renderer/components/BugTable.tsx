@@ -17,6 +17,14 @@ interface Props {
 
 const severityOrder: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 }
 
+// Etiqueta en español para mostrar (el enum sigue en inglés en código/filtros).
+export const severityLabel: Record<Severity, string> = {
+  critical: 'crítica',
+  high: 'alta',
+  medium: 'media',
+  low: 'baja',
+}
+
 const severityStripColor: Record<Severity, string> = {
   critical: alpha(col.red, 1),
   high: alpha(col.amberStrip, 0.95),
@@ -271,7 +279,7 @@ export function CopyButton({ text }: { text: string }) {
         if (!copied) e.currentTarget.style.color = col.muted
       }}
     >
-      {copied ? '✓' : 'copy'}
+      {copied ? '✓' : 'copiar'}
     </button>
   )
 }
@@ -587,7 +595,7 @@ export default function BugTable({
           <option value="all">severidad</option>
           {severities.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {severityLabel[s]}
             </option>
           ))}
         </select>
@@ -627,8 +635,11 @@ export default function BugTable({
         <button
           type="button"
           onClick={() => setViewMode((v) => (v === 'flat' ? 'grouped' : 'flat'))}
-          className="ml-auto flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 font-mono text-xs transition-all"
+          className="ml-auto flex cursor-pointer items-center justify-center gap-1.5 rounded px-2 py-1 font-mono text-xs transition-all"
           style={{
+            // Ancho fijo al texto más largo ("agrupado", 8ch) para que el toggle
+            // agrupar↔agrupado no desplace lo de al lado.
+            minWidth: 'calc(8ch + 1rem + 2px)',
             color: viewMode === 'grouped' ? col.cream : col.muted,
             border: `1px solid ${viewMode === 'grouped' ? alpha(col.cream, 0.28) : alpha(col.border, 0.22)}`,
             background: viewMode === 'grouped' ? alpha(col.cream, 0.07) : 'transparent',
@@ -647,8 +658,15 @@ export default function BugTable({
               analizando
             </span>
           )}
-          {/* aria-live: al cambiar de pestaña/filtro, anuncia el nuevo total */}
-          <span aria-live="polite" aria-atomic="true">
+          {/* aria-live: anuncia el total al cambiar pestaña/filtro. Ancho fijo +
+              tabular-nums + alineado a la derecha → el conteo no salta al cambiar
+              de dígitos ni de formato ("N/M" ↔ "N bugs"). */}
+          <span
+            aria-live="polite"
+            aria-atomic="true"
+            className="inline-block text-right tabular-nums"
+            style={{ minWidth: '8ch' }}
+          >
             {filtered.length !== results.length ? (
               <>
                 <span style={{ color: col.fgMuted }}>{filtered.length}</span>
@@ -810,7 +828,7 @@ export default function BugTable({
                       <OmBadge style={ct}>{r.analysis.category}</OmBadge>
                     </td>
                     <td className="px-4 py-2.5">
-                      <OmBadge style={sv}>{r.analysis.severity}</OmBadge>
+                      <OmBadge style={sv}>{severityLabel[r.analysis.severity]}</OmBadge>
                     </td>
                     <td className="px-4 py-2.5">
                       <ConfidenceBar value={r.analysis.confidence} />
