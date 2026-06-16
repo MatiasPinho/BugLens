@@ -17,6 +17,14 @@ interface Props {
 
 const severityOrder: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 }
 
+// Etiqueta en español para mostrar (el enum sigue en inglés en código/filtros).
+export const severityLabel: Record<Severity, string> = {
+  critical: 'crítica',
+  high: 'alta',
+  medium: 'media',
+  low: 'baja',
+}
+
 const severityStripColor: Record<Severity, string> = {
   critical: alpha(col.red, 1),
   high: alpha(col.amberStrip, 0.95),
@@ -271,7 +279,7 @@ export function CopyButton({ text }: { text: string }) {
         if (!copied) e.currentTarget.style.color = col.muted
       }}
     >
-      {copied ? '✓' : 'copy'}
+      {copied ? '✓' : 'copiar'}
     </button>
   )
 }
@@ -587,7 +595,7 @@ export default function BugTable({
           <option value="all">severidad</option>
           {severities.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {severityLabel[s]}
             </option>
           ))}
         </select>
@@ -820,7 +828,7 @@ export default function BugTable({
                       <OmBadge style={ct}>{r.analysis.category}</OmBadge>
                     </td>
                     <td className="px-4 py-2.5">
-                      <OmBadge style={sv}>{r.analysis.severity}</OmBadge>
+                      <OmBadge style={sv}>{severityLabel[r.analysis.severity]}</OmBadge>
                     </td>
                     <td className="px-4 py-2.5">
                       <ConfidenceBar value={r.analysis.confidence} />
