@@ -34,6 +34,10 @@ no replicado). La sesión de trabajo se **guarda y restaura** al reabrir la app.
 - Node.js 20+ y npm 9+
 - [Ollama](https://ollama.com) corriendo (para el modo local, por defecto)
 
+**Plataformas**: Linux, macOS y Windows. El binario de **Ollama** y el navegador **Chrome/Chromium**
+(para capturas de Google Docs) se detectan en las rutas estándar de cada SO. Si los instalaste en
+una ubicación no estándar, indicá la ruta con las env vars `OLLAMA_BIN` y/o `CHROME_PATH`.
+
 ## Instalación
 
 ```bash

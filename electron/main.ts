@@ -612,13 +612,26 @@ let ollamaProcess: cp.ChildProcess | null = null
 
 /** Busca el binario de ollama en rutas comunes. */
 function findOllamaBin(): string | null {
-  const candidates = [
-    process.env['HOME'] ? path.join(process.env['HOME'], '.local', 'bin', 'ollama') : null,
-    '/usr/local/bin/ollama',
-    '/usr/bin/ollama',
-    '/opt/homebrew/bin/ollama',
-    process.env['OLLAMA_BIN'],
-  ]
+  const env = process.env
+  // OLLAMA_BIN (override explícito) primero, en cualquier plataforma.
+  const candidates: Array<string | null | undefined> = [env['OLLAMA_BIN']]
+
+  if (process.platform === 'win32') {
+    const localApp = env['LOCALAPPDATA']
+    const programFiles = env['ProgramFiles']
+    candidates.push(
+      localApp ? path.join(localApp, 'Programs', 'Ollama', 'ollama.exe') : null,
+      programFiles ? path.join(programFiles, 'Ollama', 'ollama.exe') : null,
+    )
+  } else {
+    candidates.push(
+      env['HOME'] ? path.join(env['HOME'], '.local', 'bin', 'ollama') : null,
+      '/usr/local/bin/ollama',
+      '/usr/bin/ollama',
+      '/opt/homebrew/bin/ollama',
+    )
+  }
+
   for (const p of candidates) {
     if (p && fs.existsSync(p)) return p
   }
@@ -647,13 +660,18 @@ async function ensureOllamaRunning(
   log('info', `Levantando Ollama: ${bin}`)
   // HSA_OVERRIDE_GFX_VERSION=10.3.0 is required for AMD RDNA2 GPUs (RX 6xxx series, gfx1030/1031/1032)
   // that are not in Ollama's bundled ROCm TensileLibrary. Maps gfx1032 → gfx1030 codepath.
+  // Solo aplica al ROCm de Linux; en Windows/macOS no corresponde.
   // OLLAMA_NUM_PARALLEL: sin esto ollama sirve los requests casi en serie, así que
   // analizar un batch grande tarda muchísimo. 3 slots paralelos comparten los pesos
   // del modelo (solo suman KV cache chico) y aceleran el throughput del batch.
   ollamaProcess = cp.spawn(bin, ['serve'], {
     detached: false,
     stdio: 'ignore',
-    env: { ...process.env, HSA_OVERRIDE_GFX_VERSION: '10.3.0', OLLAMA_NUM_PARALLEL: '3' },
+    env: {
+      ...process.env,
+      ...(process.platform === 'linux' ? { HSA_OVERRIDE_GFX_VERSION: '10.3.0' } : {}),
+      OLLAMA_NUM_PARALLEL: '3',
+    },
   })
   ollamaProcess.unref()
 
