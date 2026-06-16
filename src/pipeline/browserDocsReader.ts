@@ -468,17 +468,43 @@ function extractImageSrcs(html: string): Array<{ src: string; alt: string }> {
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
 function findChromiumPath(): string | null {
-  const candidates = [
-    '/usr/bin/google-chrome',
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/brave-browser',
-    '/snap/bin/chromium',
-    '/opt/google/chrome/chrome',
-    process.env['CHROME_PATH'],
-    process.env['CHROMIUM_PATH'],
-  ]
+  const env = process.env
+  // Overrides explícitos primero (cualquier plataforma).
+  const candidates: Array<string | null | undefined> = [env['CHROME_PATH'], env['CHROMIUM_PATH']]
+  const join = (base: string | undefined, ...rest: string[]) =>
+    base ? path.join(base, ...rest) : null
+
+  if (process.platform === 'win32') {
+    const pf = env['ProgramFiles']
+    const pf86 = env['ProgramFiles(x86)']
+    const local = env['LOCALAPPDATA']
+    candidates.push(
+      join(pf, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      join(pf86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      join(local, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      join(pf86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+      join(pf, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+      join(pf, 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+    )
+  } else if (process.platform === 'darwin') {
+    candidates.push(
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Chromium.app/Contents/MacOS/Chromium',
+      '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+    )
+  } else {
+    candidates.push(
+      '/usr/bin/google-chrome',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/chromium',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/brave-browser',
+      '/snap/bin/chromium',
+      '/opt/google/chrome/chrome',
+    )
+  }
+
   for (const p of candidates) {
     if (p && fs.existsSync(p)) return p
   }
