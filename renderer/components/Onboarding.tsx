@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { defaultModelFor, LLM_OPTIONS } from '../llmOptions'
 import { alpha, col } from '../theme'
 import { BugUnderLensMark } from './decor/BugMotifs'
 import { IconCheck } from './icons'
@@ -14,13 +15,6 @@ interface WizardState {
   llmModel: string
   ollamaBaseUrl: string
 }
-
-const LLM_OPTIONS = [
-  { id: 'ollama', name: 'ollama', description: 'Local y gratis. Requiere Ollama instalado.' },
-  { id: 'anthropic', name: 'anthropic', description: 'Alta calidad. Requiere ANTHROPIC_API_KEY.' },
-  { id: 'gemini', name: 'gemini', description: 'Rápido y económico. Requiere GEMINI_API_KEY.' },
-  { id: 'openai', name: 'openai', description: 'Requiere OPENAI_API_KEY.' },
-]
 
 const STEPS = ['rendimiento', 'modelo', 'google docs'] as const
 
@@ -169,7 +163,14 @@ export default function Onboarding({ onDone }: Props) {
                         name="onboarding-llm"
                         value={opt.id}
                         checked={isSelected}
-                        onChange={() => set('llmProvider', opt.id)}
+                        onChange={() =>
+                          // Resetear el modelo al default del proveedor (campo único compartido).
+                          setState((prev) => ({
+                            ...prev,
+                            llmProvider: opt.id,
+                            llmModel: defaultModelFor(opt.id),
+                          }))
+                        }
                         className="sr-only"
                       />
                       <div className="flex-1">
