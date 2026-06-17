@@ -5,7 +5,8 @@ import type { AnalyzedBug, IPCEvent } from '../src/types/index.js'
 contextBridge.exposeInMainWorld('electronAPI', {
   // Settings
   getSettings: () => ipcRenderer.invoke('settings:get'),
-  saveSettings: (settings: Record<string, unknown>) => ipcRenderer.invoke('settings:save', settings),
+  saveSettings: (settings: Record<string, unknown>) =>
+    ipcRenderer.invoke('settings:save', settings),
   pickDirectory: () => ipcRenderer.invoke('settings:pick-directory'),
 
   // Google Auth (OAuth)

@@ -78,9 +78,7 @@ export default function PerformanceModePicker({ value, onChange }: Props) {
         )}
       </div>
 
-      {probe && !probing && (
-        <ProbeNotice accelerator={probe.accelerator} detail={probe.detail} />
-      )}
+      {probe && !probing && <ProbeNotice accelerator={probe.accelerator} detail={probe.detail} />}
 
       <div className="space-y-1.5" role="radiogroup" aria-label="modo de rendimiento">
         {MODE_OPTIONS.map((opt) => {
@@ -157,7 +155,11 @@ function ProbeNotice({ accelerator, detail }: { accelerator: Accelerator; detail
       className="flex animate-fade-in items-start gap-2 rounded p-2.5 text-xs"
       role="status"
       aria-live="polite"
-      style={{ border: `1px solid ${alpha(tone, 0.35)}`, background: alpha(tone, 0.06), color: tone }}
+      style={{
+        border: `1px solid ${alpha(tone, 0.35)}`,
+        background: alpha(tone, 0.06),
+        color: tone,
+      }}
     >
       <Icon size={12} className="mt-px flex-shrink-0" />
       <span>{detail}</span>

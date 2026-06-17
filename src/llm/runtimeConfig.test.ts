@@ -65,7 +65,9 @@ describe('resolveConcurrency', () => {
   })
 
   it('LLM_CONCURRENCY gana sobre el modo y el proveedor', () => {
-    expect(resolveConcurrency('ollama', { env: { LLM_CONCURRENCY: '4' }, performanceMode: 'cpu' })).toBe(4)
+    expect(
+      resolveConcurrency('ollama', { env: { LLM_CONCURRENCY: '4' }, performanceMode: 'cpu' }),
+    ).toBe(4)
   })
 
   it('ignora un override inválido y cae al perfil del modo', () => {
