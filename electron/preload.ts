@@ -5,7 +5,7 @@ import type { AnalyzedBug, IPCEvent } from '../src/types/index.js'
 contextBridge.exposeInMainWorld('electronAPI', {
   // Settings
   getSettings: () => ipcRenderer.invoke('settings:get'),
-  saveSettings: (settings: Record<string, string>) => ipcRenderer.invoke('settings:save', settings),
+  saveSettings: (settings: Record<string, unknown>) => ipcRenderer.invoke('settings:save', settings),
   pickDirectory: () => ipcRenderer.invoke('settings:pick-directory'),
 
   // Google Auth (OAuth)
@@ -46,6 +46,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // LLM
   checkOllama: () => ipcRenderer.invoke('llm:check-ollama'),
   startOllama: () => ipcRenderer.invoke('llm:start-ollama'),
+  probeHardware: () => ipcRenderer.invoke('hardware:probe'),
 
   // Event listeners
   onProgress: (cb: (event: IPCEvent) => void) => {

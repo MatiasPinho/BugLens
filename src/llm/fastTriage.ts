@@ -10,6 +10,7 @@
 
 import type { BugAnalysis, EnrichedBug, LLMConfig, RawBug } from '../types/index.js'
 import { loadCachedAnalysis, makeCacheKey, saveCachedAnalysis } from './analysisCache.js'
+import { resolveOllamaTimeoutMs } from './runtimeConfig.js'
 
 // ─── Prompt ────────────────────────────────────────────────────────────────────
 
@@ -190,7 +191,7 @@ async function callOllama(prompt: string, config: LLMConfig): Promise<string> {
         { role: 'user', content: prompt },
       ],
     }),
-    signal: AbortSignal.timeout(90_000),
+    signal: AbortSignal.timeout(resolveOllamaTimeoutMs({ performanceMode: config.performanceMode })),
   })
 
   if (!response.ok) throw new Error(`Ollama error ${response.status}: ${await response.text()}`)

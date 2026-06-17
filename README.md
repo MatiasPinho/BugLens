@@ -80,6 +80,28 @@ setea sola al levantar Ollama; manualmente:
 HSA_OVERRIDE_GFX_VERSION=10.3.0 OLLAMA_NUM_PARALLEL=3 ollama serve
 ```
 
+### Rendimiento (GPU vs CPU)
+
+Al abrir la app por primera vez, un **wizard** te deja elegir lo importante (rendimiento,
+modelo, Google Docs). En el paso de rendimiento, **"analizar mi equipo"** le pregunta a
+Ollama si el modelo corre en GPU o CPU (lee `size_vram` de `/api/ps`) y marca la opción
+recomendada. **Sin placa de video el análisis es mucho más lento y puede cortar por
+timeout** — por eso el modo ajusta dos cosas:
+
+| Modo | Paralelismo | Timeout por bug |
+| ---- | ----------- | --------------- |
+| GPU  | 3 (default del proveedor) | 90 s  |
+| CPU  | 1 (serie)   | 240 s |
+
+Se cambia después en **config → rendimiento**. Si necesitás forzar valores, hay env vars
+que **ganan** sobre el modo:
+
+```env
+LLM_PERFORMANCE_MODE=cpu   # 'gpu' (default) o 'cpu'
+LLM_CONCURRENCY=1          # bugs simultáneos (cualquier proveedor)
+OLLAMA_TIMEOUT_MS=240000   # ms antes de abortar una llamada a Ollama
+```
+
 ### Proveedores cloud (opcionales)
 
 Se mantienen 4 proveedores. Configurás uno con `LLM_PROVIDER` en `.env` o desde la UI:
@@ -209,7 +231,8 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | `fastTriage.analyzeBug(enriched, config, cacheDir?)` | **El pipeline**: una llamada LLM por bug → clasifica + reescribe + lista faltantes. Con caché. |
 | `fastTriage.parseAnalysis(raw)` | Parsea la respuesta del LLM de forma robusta: tolera ` ```fences``` `, texto extra, campos faltantes/inválidos → defaults seguros. |
 | `fastTriage.extractRelevantDocSection(bug, text)` | Ventana deslizante que elige la sección del doc más relevante al bug (un doc puede documentar varios). |
-| `client.getLLMConfig(override?)` | Resuelve provider / modelo / baseUrl / apiKey desde env + overrides. |
+| `client.getLLMConfig(override?)` | Resuelve provider / modelo / baseUrl / apiKey / modo de rendimiento desde env + overrides. |
+| `runtimeConfig.resolveConcurrency / resolveOllamaTimeoutMs` | Paralelismo y timeout efectivos. Precedencia: env var > modo de rendimiento (cpu → 1 / 240 s) > default del proveedor. |
 | `analysisCache.makeCacheKey / load / save` | Caché por **contenido** (bug + docs + modelo + versión de prompt): re-correr el mismo Excel = 0 llamadas. |
 
 ### `electron/main.ts` — proceso main
@@ -222,6 +245,7 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | `session:load / save / clear` | Restaura / guarda / borra la sesión persistida (`session.json`). |
 | `bug:set-status` | Persiste el cambio de estado de un bug. |
 | `ensureOllamaRunning(baseUrl)` | Levanta Ollama si no corre (con el override de GPU AMD y paralelismo). |
+| `hardware:probe` | Sondea si el modelo corre en GPU o CPU: lo carga con una generación mínima y lee `size_vram` de `/api/ps`. Alimenta el wizard / config (recomendado + aviso). |
 
 ### `renderer/` — UI
 
@@ -231,7 +255,9 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | `BugTable.tsx` | Tabla con pestañas **activos/históricos/todos** (navegables con flechas), filtros, búsqueda, agrupación por pantalla, detalle con el reporte reescrito, selector de estado inline y **borrado con confirmación**. |
 | `ManualBugForm.tsx` | Modal para cargar un bug a mano (Esc/Tab-trap/autofocus, ⌘/Ctrl+Enter). |
 | `decor/BugMotifs.tsx` | Motivos decorativos temáticos (line-art mono): `BeetleMark` (escarabajo, ambiente) y `BugUnderLensMark` (lupa+bicho, marca/búsqueda). Usados en EmptyState, vacíos de la tabla y el panel izquierdo. |
-| `Settings.tsx` | Modelo LLM, acceso a Google, caché. |
+| `Onboarding.tsx` | Wizard de primer arranque (rendimiento → modelo → Google Docs). Se muestra hasta que `onboarded` queda en `true`. |
+| `PerformanceModePicker.tsx` | Selector GPU/CPU con "analizar mi equipo" (sondea Ollama, marca recomendado, avisa si es CPU). Usado por el wizard y Settings. |
+| `Settings.tsx` | Modelo LLM, rendimiento (GPU/CPU), acceso a Google, caché. |
 
 ---
 
@@ -255,10 +281,11 @@ buglens/
 │   ├── llm/
 │   │   ├── fastTriage.ts         # Pipeline de análisis (clasificar + reescribir)
 │   │   ├── client.ts             # Config de LLM (ollama / anthropic / gemini / openai)
+│   │   ├── runtimeConfig.ts      # Paralelismo + timeout efectivos (modo GPU/CPU + env)
 │   │   └── analysisCache.ts      # Caché de análisis por contenido
 │   └── types/index.ts            # Tipos TypeScript compartidos
 ├── renderer/
-│   ├── components/        # BugTable, ManualBugForm, Settings, FileUpload, ProgressLog, EmptyState
+│   ├── components/        # BugTable, ManualBugForm, Settings, Onboarding, PerformanceModePicker, FileUpload, ProgressLog, EmptyState
 │   │   └── decor/         # Motivos decorativos temáticos (BugMotifs: escarabajo, lupa+bicho)
 │   ├── App.tsx            # Root component + estado + atajos
 │   ├── main.tsx           # Entry point React

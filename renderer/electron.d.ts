@@ -9,8 +9,10 @@ interface ElectronAPI {
     llmProvider: string
     llmModel: string
     ollamaBaseUrl: string
+    performanceMode: 'gpu' | 'cpu'
+    onboarded: boolean
   }>
-  saveSettings(settings: Record<string, string>): Promise<{ ok: boolean }>
+  saveSettings(settings: Record<string, string | boolean>): Promise<{ ok: boolean }>
   pickDirectory(): Promise<string | null>
 
   // Google Auth (OAuth)
@@ -52,6 +54,11 @@ interface ElectronAPI {
   // LLM
   checkOllama(): Promise<{ available: boolean; models?: string[] }>
   startOllama(): Promise<{ ok: boolean; message: string }>
+  probeHardware(): Promise<{
+    accelerator: 'gpu' | 'cpu' | 'unknown'
+    detail: string
+    model?: string
+  }>
 
   // Events — return cleanup function
   onProgress(cb: (event: IPCEvent) => void): () => void
