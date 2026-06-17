@@ -27,6 +27,7 @@ if (typeof window !== 'undefined' && !(window as { electronAPI?: unknown }).elec
     setBugStatus: async () => ({ ok: true }),
     cacheStats: async () => ({ count: 0, sizeKB: 0 }),
     clearCache: async () => ({ ok: true }),
+    resetApp: async () => ({ ok: true }),
     exportExcel: async () => ({ ok: true }),
     openExcelDialog: async () => null,
     checkOllama: async () => ({ available: true, models: ['qwen2.5:7b', 'qwen2.5:14b'] }),

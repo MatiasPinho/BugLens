@@ -531,6 +531,34 @@ ipcMain.handle('cache:clear', () => {
   return { ok: true }
 })
 
+// ─── IPC: Reset (restablecer) ───────────────────────────────────────────────────
+// Dos scopes destructivos, separados a propósito:
+//  - 'bug-data': estados + sesión (bug-records.json + session.json) → tabla vacía.
+//  - 'config':   settings.json → vuelve a defaults (incl. onboarded:false → wizard).
+// No toca la caché de análisis (tiene su propio botón) ni las sesiones de Google.
+// Tras borrar, reinicia la app para arrancar desde un estado limpio.
+
+function removeFileIfExists(filePath: string): void {
+  try {
+    fs.rmSync(filePath, { force: true })
+  } catch {
+    // best-effort: si no se puede borrar, el reinicio igual no rompe nada
+  }
+}
+
+ipcMain.handle('app:reset', (_e, { scope }: { scope: 'bug-data' | 'config' }) => {
+  if (scope === 'bug-data') {
+    removeFileIfExists(getRecordsPath())
+    removeFileIfExists(getSessionPath())
+  } else if (scope === 'config') {
+    removeFileIfExists(getConfigPath())
+  }
+  // Reiniciar para que el renderer arranque sin estado en memoria.
+  app.relaunch()
+  app.quit()
+  return { ok: true }
+})
+
 // ─── IPC: Export ─────────────────────────────────────────────────────────────
 
 ipcMain.handle(

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { LogLine } from '../App'
 import { alpha, col } from '../theme'
 import PerformanceModePicker, { type PerformanceMode } from './PerformanceModePicker'
+import ResetControls from './ResetControls'
 
 interface SettingsData {
   googleClientId: string
@@ -453,6 +454,15 @@ export default function Settings({ addLog }: Props) {
             {clearingCache ? 'limpiando...' : 'limpiar caché'}
           </button>
         </div>
+      </Section>
+
+      {/* ── Reset ── */}
+      <Section title="restablecer">
+        <p className="mb-3 text-xs" style={{ color: col.fgMuted }}>
+          Acciones que borran datos y reinician la app. No afectan la caché de análisis ni las
+          sesiones de Google.
+        </p>
+        <ResetControls addLog={addLog} />
       </Section>
 
       {/* ── Save ── */}
