@@ -37,6 +37,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Cache
   cacheStats: () => ipcRenderer.invoke('cache:stats'),
   clearCache: () => ipcRenderer.invoke('cache:clear'),
+
+  // Reset (restablecer + reiniciar)
+  resetApp: (scope: 'bug-data' | 'config') => ipcRenderer.invoke('app:reset', { scope }),
   exportExcel: (originalPath: string, results: AnalyzedBug[]) =>
     ipcRenderer.invoke('export:excel', { originalPath, results }),
   exportBugs: (results: AnalyzedBug[]) => ipcRenderer.invoke('export:bugs', { results }),

@@ -42,6 +42,7 @@ interface ElectronAPI {
   // Cache
   cacheStats(): Promise<{ count: number; sizeKB: number }>
   clearCache(): Promise<{ ok: boolean }>
+  resetApp(scope: 'bug-data' | 'config'): Promise<{ ok: boolean }>
   exportExcel(
     originalPath: string,
     results: AnalyzedBug[],
