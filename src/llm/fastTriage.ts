@@ -191,7 +191,9 @@ async function callOllama(prompt: string, config: LLMConfig): Promise<string> {
         { role: 'user', content: prompt },
       ],
     }),
-    signal: AbortSignal.timeout(resolveOllamaTimeoutMs({ performanceMode: config.performanceMode })),
+    signal: AbortSignal.timeout(
+      resolveOllamaTimeoutMs({ performanceMode: config.performanceMode }),
+    ),
   })
 
   if (!response.ok) throw new Error(`Ollama error ${response.status}: ${await response.text()}`)

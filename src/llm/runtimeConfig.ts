@@ -43,7 +43,10 @@ export function parsePositiveIntEnv(raw: string | undefined, fallback: number): 
 /**
  * Timeout de Ollama en ms. Precedencia: `OLLAMA_TIMEOUT_MS` > perfil del modo > default.
  */
-export function resolveOllamaTimeoutMs({ env = process.env, performanceMode }: ResolveOptions = {}): number {
+export function resolveOllamaTimeoutMs({
+  env = process.env,
+  performanceMode,
+}: ResolveOptions = {}): number {
   const profileDefault =
     performanceMode === 'cpu' ? CPU_OLLAMA_TIMEOUT_MS : DEFAULT_OLLAMA_TIMEOUT_MS
   return parsePositiveIntEnv(env['OLLAMA_TIMEOUT_MS'], profileDefault)
