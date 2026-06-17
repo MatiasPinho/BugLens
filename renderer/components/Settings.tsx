@@ -1,6 +1,7 @@
 import type React from 'react'
 import { useEffect, useState } from 'react'
 import type { LogLine } from '../App'
+import { defaultModelFor, LLM_OPTIONS } from '../llmOptions'
 import { alpha, col } from '../theme'
 import PerformanceModePicker, { type PerformanceMode } from './PerformanceModePicker'
 import ResetControls from './ResetControls'
@@ -17,13 +18,6 @@ interface SettingsData {
 interface Props {
   addLog: (level: LogLine['level'], message: string) => void
 }
-
-const LLM_OPTIONS = [
-  { id: 'ollama', name: 'ollama', description: 'Local y gratis. Requiere Ollama instalado.' },
-  { id: 'anthropic', name: 'anthropic', description: 'Alta calidad. Requiere ANTHROPIC_API_KEY.' },
-  { id: 'gemini', name: 'gemini', description: 'Rápido y económico. Requiere GEMINI_API_KEY.' },
-  { id: 'openai', name: 'openai', description: 'Requiere OPENAI_API_KEY.' },
-]
 
 // Pistas cortas para modelos Ollama conocidos (tradeoff velocidad/calidad).
 // Match por nombre exacto o por familia (antes del ':').
@@ -305,7 +299,15 @@ export default function Settings({ addLog }: Props) {
                   name="llmProvider"
                   value={opt.id}
                   checked={isSelected}
-                  onChange={() => setSettings((prev) => ({ ...prev, llmProvider: opt.id }))}
+                  onChange={() =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      llmProvider: opt.id,
+                      // Resetear el modelo al default del proveedor: si no, arrastraba el
+                      // modelo del proveedor anterior (ej: gemini → ollama mostraba el de gemini).
+                      llmModel: defaultModelFor(opt.id),
+                    }))
+                  }
                   className="sr-only"
                 />
                 <div className="flex-1">
