@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { alpha, col } from '../theme'
+import { IconCheck, IconInfo, IconWarning } from './icons'
 
 export type PerformanceMode = 'gpu' | 'cpu'
 
@@ -56,12 +57,22 @@ export default function PerformanceModePicker({ value, onChange }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="button" className="btn-secondary text-xs" onClick={analyze} disabled={probing}>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <button
+          type="button"
+          className="btn-secondary text-xs"
+          onClick={analyze}
+          disabled={probing}
+          aria-busy={probing}
+        >
           {probing ? 'analizando tu equipo…' : 'analizar mi equipo'}
         </button>
         {probing && (
-          <span className="text-xs" style={{ color: col.fgMuted }}>
+          <span className="flex items-center gap-2 text-xs" style={{ color: col.fgMuted }}>
+            <span
+              className="h-1.5 w-1.5 flex-shrink-0 animate-scan rounded-full"
+              style={{ background: col.cream }}
+            />
             cargando el modelo para medir (puede tardar)
           </span>
         )}
@@ -71,14 +82,14 @@ export default function PerformanceModePicker({ value, onChange }: Props) {
         <ProbeNotice accelerator={probe.accelerator} detail={probe.detail} />
       )}
 
-      <div className="space-y-1.5">
+      <div className="space-y-1.5" role="radiogroup" aria-label="modo de rendimiento">
         {MODE_OPTIONS.map((opt) => {
           const isSelected = value === opt.id
           const isRecommended = recommended === opt.id
           return (
             <label
               key={opt.id}
-              className="flex cursor-pointer items-start gap-3 rounded p-2.5 transition-all"
+              className="choice-card flex cursor-pointer items-start gap-3 rounded p-2.5 transition-colors duration-200"
               style={{
                 border: `1px solid ${isSelected ? alpha(col.cream, 0.3) : alpha(col.border, 0.22)}`,
                 background: isSelected ? alpha(col.cream, 0.05) : 'transparent',
@@ -113,13 +124,14 @@ export default function PerformanceModePicker({ value, onChange }: Props) {
                   </span>
                   {isRecommended && (
                     <span
-                      className="rounded px-1.5 py-0.5 font-mono text-2xs"
+                      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-2xs"
                       style={{
                         color: col.green,
                         border: `1px solid ${alpha(col.green, 0.4)}`,
                         background: alpha(col.green, 0.08),
                       }}
                     >
+                      <IconCheck size={8} />
                       recomendado
                     </span>
                   )}
@@ -137,17 +149,18 @@ export default function PerformanceModePicker({ value, onChange }: Props) {
 }
 
 function ProbeNotice({ accelerator, detail }: { accelerator: Accelerator; detail: string }) {
-  // CPU/unknown → aviso ámbar; GPU → confirmación verde.
+  // CPU/unknown → aviso ámbar; GPU → confirmación verde. Color + ícono + texto (no solo color).
   const tone = accelerator === 'gpu' ? col.green : accelerator === 'cpu' ? col.amber : col.fgMuted
-  const icon = accelerator === 'gpu' ? '✓' : accelerator === 'cpu' ? '⚠' : 'ℹ'
+  const Icon = accelerator === 'gpu' ? IconCheck : accelerator === 'cpu' ? IconWarning : IconInfo
   return (
     <div
-      className="rounded p-2.5 text-xs"
+      className="flex animate-fade-in items-start gap-2 rounded p-2.5 text-xs"
       role="status"
+      aria-live="polite"
       style={{ border: `1px solid ${alpha(tone, 0.35)}`, background: alpha(tone, 0.06), color: tone }}
     >
-      <span className="mr-1.5">{icon}</span>
-      {detail}
+      <Icon size={12} className="mt-px flex-shrink-0" />
+      <span>{detail}</span>
     </div>
   )
 }
