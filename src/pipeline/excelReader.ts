@@ -70,7 +70,11 @@ export function readExcel(filePath: string): RawBug[] {
     return matching.length >= Math.ceil(entries.length * 0.6)
   }
 
-  const validRows = rows.filter((row) => !isRepeatedHeader(row))
+  // Filas 100% vacías (todas las celdas en blanco): basura, no generan un bug fantasma.
+  const isEmptyRow = (row: Record<string, string>): boolean =>
+    Object.values(row).every((v) => String(v ?? '').trim() === '')
+
+  const validRows = rows.filter((row) => !isRepeatedHeader(row) && !isEmptyRow(row))
 
   return validRows.map((row, index) => {
     const rawRow: Record<string, string> = {}

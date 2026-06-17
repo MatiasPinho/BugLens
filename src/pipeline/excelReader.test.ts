@@ -128,6 +128,71 @@ describe('readExcel (integración con archivo real)', () => {
     const file = writeXlsx([['Título', 'Entorno']]) // solo header
     expect(() => readExcel(file)).toThrow()
   })
+
+  // ── Robustez: Excels "feos" igual cargan (no tiran), y filtran basura ──
+
+  it('filtra filas 100% vacías (no genera bugs fantasma)', () => {
+    const file = writeXlsx([
+      ['Título', 'Entorno'],
+      ['Bug uno', 'prod'],
+      ['', ''], // fila totalmente vacía → debe filtrarse
+      ['Bug dos', 'dev'],
+    ])
+    const bugs = readExcel(file)
+    expect(bugs).toHaveLength(2)
+    expect(bugs.map((b) => b.title)).toEqual(['Bug uno', 'Bug dos'])
+  })
+
+  it('sin columna de título reconocible → usa fallback, no falla', () => {
+    const file = writeXlsx([
+      ['Pantalla', 'Notas'], // ninguna mapea a "title"
+      ['Login', 'algo raro'],
+    ])
+    let bugs: ReturnType<typeof readExcel> = []
+    expect(() => {
+      bugs = readExcel(file)
+    }).not.toThrow()
+    expect(bugs).toHaveLength(1)
+    expect(bugs[0].title).toBe('Login') // cae a la primera columna
+  })
+
+  it('celdas numéricas se cargan como string', () => {
+    const file = writeXlsx([
+      ['Título', 'Prioridad'],
+      ['Bug con prioridad', '3'],
+    ])
+    const bugs = readExcel(file)
+    expect(bugs[0].priority).toBe('3')
+    expect(typeof bugs[0].rawRow['Prioridad']).toBe('string')
+  })
+
+  it('filas parciales (celdas faltantes) igual cargan', () => {
+    const file = writeXlsx([
+      ['Título', 'Descripción', 'Entorno'],
+      ['Solo título', '', ''], // sin descripción ni entorno
+    ])
+    const bugs = readExcel(file)
+    expect(bugs).toHaveLength(1)
+    expect(bugs[0].title).toBe('Solo título')
+    expect(bugs[0].description).toBe('')
+    expect(bugs[0].environment).toBe('')
+  })
+
+  it('carga un CSV real (con acentos UTF-8)', () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'buglens-csv-'))
+    const file = path.join(dir, 'bugs.csv')
+    fs.writeFileSync(
+      file,
+      'Título,Descripción,Entorno\nLogin roto,no función el botón ó,prod\n',
+      'utf8',
+    )
+
+    const bugs = readExcel(file)
+    expect(bugs).toHaveLength(1)
+    expect(bugs[0].title).toBe('Login roto')
+    expect(bugs[0].description).toContain('ó') // el acento sobrevive (codepage UTF-8)
+    expect(bugs[0].environment).toBe('prod')
+  })
 })
 
 describe('writeBugsExcel (genera xlsx desde cero)', () => {
