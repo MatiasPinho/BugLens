@@ -2,6 +2,7 @@ import type React from 'react'
 import { useEffect, useState } from 'react'
 import type { LogLine } from '../App'
 import { alpha, col } from '../theme'
+import PerformanceModePicker, { type PerformanceMode } from './PerformanceModePicker'
 
 interface SettingsData {
   googleClientId: string
@@ -9,6 +10,7 @@ interface SettingsData {
   llmProvider: string
   llmModel: string
   ollamaBaseUrl: string
+  performanceMode: PerformanceMode
 }
 
 interface Props {
@@ -39,6 +41,7 @@ export default function Settings({ addLog }: Props) {
     llmProvider: 'ollama',
     llmModel: '',
     ollamaBaseUrl: 'http://localhost:11434',
+    performanceMode: 'gpu',
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -414,6 +417,18 @@ export default function Settings({ addLog }: Props) {
             </div>
           </div>
         )}
+      </Section>
+
+      {/* ── Rendimiento ── */}
+      <Section title="rendimiento">
+        <p className="mb-3 text-xs" style={{ color: col.fgMuted }}>
+          Sin placa de video el análisis es lento y puede cortar por timeout. "Analizar mi equipo"
+          le pregunta a Ollama si el modelo corre en GPU o CPU.
+        </p>
+        <PerformanceModePicker
+          value={settings.performanceMode}
+          onChange={(m) => setSettings((prev) => ({ ...prev, performanceMode: m }))}
+        />
       </Section>
 
       {/* ── Cache ── */}

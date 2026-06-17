@@ -91,6 +91,10 @@ export interface AnalyzedBug {
 
 export type LLMProvider = 'ollama' | 'anthropic' | 'gemini' | 'openai'
 
+// Modo de rendimiento: 'gpu' usa el paralelismo/timeout normales; 'cpu' baja el
+// paralelismo a 1 y sube el timeout (sin GPU la inferencia es mucho más lenta).
+export type PerformanceMode = 'gpu' | 'cpu'
+
 export interface LLMConfig {
   provider: LLMProvider
   model?: string
@@ -98,6 +102,7 @@ export interface LLMConfig {
   apiKey?: string
   temperature?: number
   maxTokens?: number
+  performanceMode?: PerformanceMode
 }
 
 // ─── Config general de la app ─────────────────────────────────────────────────

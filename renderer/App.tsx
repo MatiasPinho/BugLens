@@ -14,6 +14,7 @@ import { BeetleMark } from './components/decor/BugMotifs'
 import EmptyState from './components/EmptyState'
 import FileUpload from './components/FileUpload'
 import ManualBugForm from './components/ManualBugForm'
+import Onboarding from './components/Onboarding'
 import ProgressLog from './components/ProgressLog'
 import Settings from './components/Settings'
 import { alpha, col } from './theme'
@@ -44,6 +45,8 @@ export default function App() {
   }>({ current: 0, total: 0, message: '' })
   const [showLogs, setShowLogs] = useState(false)
   const [showManualForm, setShowManualForm] = useState(false)
+  // Primer arranque: null = cargando settings; false = mostrar wizard; true = app normal.
+  const [onboarded, setOnboarded] = useState<boolean | null>(null)
   // Gate del auto-guardado: no persistir hasta intentar restaurar (evita pisar
   // la sesión guardada con un estado vacío en el arranque).
   const hydratedRef = React.useRef(false)
@@ -99,6 +102,11 @@ export default function App() {
       cleanComplete()
     }
   }, [addLog])
+
+  // Saber si hay que mostrar el wizard de primer arranque.
+  useEffect(() => {
+    window.electronAPI.getSettings().then((s) => setOnboarded(Boolean(s.onboarded)))
+  }, [])
 
   // Restaurar la última sesión al abrir (una sola vez).
   useEffect(() => {
@@ -315,6 +323,16 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [tab, results, focusedBugId, expandedBugId, showHelp, handleSetStatus])
+
+  // Primer arranque: mientras carga no parpadeamos nada; si falta onboarding, wizard.
+  if (onboarded === null) return <div className="h-screen bg-om-base" />
+  if (!onboarded) {
+    return (
+      <div className="h-screen bg-om-base text-om-fg">
+        <Onboarding onDone={() => setOnboarded(true)} />
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen flex-col bg-om-base text-om-fg">

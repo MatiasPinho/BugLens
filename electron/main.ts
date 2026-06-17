@@ -13,6 +13,7 @@ dotenv.config({ path: envPath })
 import { clearCache, getCacheStats } from '../src/llm/analysisCache.js'
 import { getLLMConfig } from '../src/llm/client.js'
 import { analyzeBug } from '../src/llm/fastTriage.js'
+import { resolveConcurrency } from '../src/llm/runtimeConfig.js'
 import { BrowserDocsReader } from '../src/pipeline/browserDocsReader.js'
 import { BugEnricher } from '../src/pipeline/bugEnricher.js'
 import { readRecords, setBugStatus } from '../src/pipeline/bugRecordsStore.js'
@@ -21,7 +22,13 @@ import { readExcel, writeBugsExcel, writeEnrichedExcel } from '../src/pipeline/e
 import { GoogleDocsReader } from '../src/pipeline/googleDocsReader.js'
 import { buildManualBug, type ManualBugFields } from '../src/pipeline/manualBugBuilder.js'
 import { clearSession, readSession, writeSession } from '../src/pipeline/sessionStore.js'
-import type { AnalyzedBug, BugStatus, LLMConfig, RawBug } from '../src/types/index.js'
+import type {
+  AnalyzedBug,
+  BugStatus,
+  LLMConfig,
+  PerformanceMode,
+  RawBug,
+} from '../src/types/index.js'
 
 function getCacheDir(): string {
   return path.join(app.getPath('userData'), 'analysis-cache')
@@ -44,6 +51,10 @@ interface AppSettings {
   llmProvider: string
   llmModel: string
   ollamaBaseUrl: string
+  // Rendimiento: 'gpu' (paralelismo/timeout normales) o 'cpu' (serie + timeout largo).
+  performanceMode: PerformanceMode
+  // Marca de primer arranque: false hasta que el usuario completa el wizard inicial.
+  onboarded: boolean
 }
 
 function getConfigPath(): string {
@@ -57,6 +68,8 @@ function loadSettings(): AppSettings {
     llmProvider: process.env['LLM_PROVIDER'] ?? 'ollama',
     llmModel: process.env['LLM_MODEL'] ?? process.env['OLLAMA_MODEL'] ?? 'qwen2.5:7b',
     ollamaBaseUrl: process.env['OLLAMA_BASE_URL'] ?? 'http://localhost:11434',
+    performanceMode: process.env['LLM_PERFORMANCE_MODE'] === 'cpu' ? 'cpu' : 'gpu',
+    onboarded: false,
   }
 
   const configPath = getConfigPath()
@@ -241,6 +254,7 @@ async function analyzeBugs(
       provider: s.llmProvider as LLMConfig['provider'],
       model: s.llmModel,
       baseUrl: s.ollamaBaseUrl,
+      performanceMode: s.performanceMode,
     })
 
     // Auto-levantar Ollama si es el provider elegido y no está corriendo
@@ -272,17 +286,17 @@ async function analyzeBugs(
 
     const enricher = new BugEnricher(docsReader)
 
-    // Concurrency per provider. Cloud APIs toleran más paralelismo; Ollama queuea
-    // internamente igual, pero N workers evitan head-of-line blocking.
-    const CONCURRENCY: Record<string, number> = {
-      anthropic: 8,
-      openai: 8,
-      gemini: 3,
-      ollama: 3,
-    }
-    const concurrency = CONCURRENCY[llmConfig.provider] ?? 2
+    // Paralelismo por proveedor (cloud tolera más; Ollama queuea internamente, pero N
+    // workers evitan head-of-line blocking). En modo CPU baja a 1; override global vía
+    // LLM_CONCURRENCY (ver resolveConcurrency).
+    const concurrency = resolveConcurrency(llmConfig.provider, {
+      performanceMode: s.performanceMode,
+    })
 
-    log('info', `Paralelismo: ${concurrency} bugs simultáneos (${llmConfig.provider})`)
+    log(
+      'info',
+      `Paralelismo: ${concurrency} bugs simultáneos (${llmConfig.provider}, modo ${s.performanceMode})`,
+    )
 
     // Estados persistidos (clave por contenido → estado). Se lee una vez por corrida.
     const records = readRecords(getRecordsPath())
@@ -716,4 +730,86 @@ ipcMain.handle('llm:start-ollama', async () => {
   if (result.alreadyRunning) return { ok: true, message: 'Ollama ya estaba corriendo' }
   if (result.started) return { ok: true, message: 'Ollama iniciado correctamente' }
   return { ok: false, message: 'No se encontró el binario de Ollama — instalalo primero' }
+})
+
+// ─── Sondeo de hardware (GPU vs CPU) ────────────────────────────────────────────
+// La forma honesta de saber si el modelo correrá en GPU o CPU es preguntarle a Ollama:
+// cargamos el modelo con una generación mínima y leemos /api/ps. `size_vram > 0`
+// significa que Ollama lo está corriendo (al menos en parte) en la GPU.
+
+type Accelerator = 'gpu' | 'cpu' | 'unknown'
+
+interface HardwareProbe {
+  accelerator: Accelerator
+  detail: string
+  model?: string
+}
+
+interface OllamaPsModel {
+  name: string
+  model?: string
+  size?: number
+  size_vram?: number
+}
+
+async function probeAccelerator(baseUrl: string, model: string): Promise<HardwareProbe> {
+  const running = await ensureOllamaRunning(baseUrl)
+  if (!running.started && !running.alreadyRunning) {
+    return { accelerator: 'unknown', detail: 'Ollama no está disponible (instalalo y reintentá)' }
+  }
+
+  // ¿Está descargado el modelo? Sin él no podemos cargar nada.
+  try {
+    const tags = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(5000) })
+    const data = (await tags.json()) as { models?: Array<{ name: string }> }
+    const names = data.models?.map((m) => m.name) ?? []
+    const isDownloaded = names.some((n) => n === model || n.split(':')[0] === model.split(':')[0])
+    if (!isDownloaded) {
+      return { accelerator: 'unknown', detail: `El modelo "${model}" no está descargado todavía` }
+    }
+  } catch {
+    return { accelerator: 'unknown', detail: 'No se pudo consultar Ollama' }
+  }
+
+  // Cargar el modelo con una generación mínima (puede tardar en CPU — es esperable).
+  try {
+    await fetch(`${baseUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, prompt: 'hi', stream: false, options: { num_predict: 1 } }),
+      signal: AbortSignal.timeout(120_000),
+    })
+  } catch {
+    return { accelerator: 'unknown', detail: 'No se pudo cargar el modelo para el sondeo' }
+  }
+
+  // Leer qué tiene cargado y cuánta VRAM usa.
+  try {
+    const ps = await fetch(`${baseUrl}/api/ps`, { signal: AbortSignal.timeout(5000) })
+    const data = (await ps.json()) as { models?: OllamaPsModel[] }
+    const loaded =
+      data.models?.find((m) => (m.model ?? m.name) === model || m.name === model) ??
+      data.models?.[0]
+    if (!loaded) {
+      return { accelerator: 'unknown', detail: 'Ollama no reportó el modelo cargado', model }
+    }
+    const vram = loaded.size_vram ?? 0
+    if (vram > 0) {
+      return { accelerator: 'gpu', detail: 'El modelo corre en la GPU', model }
+    }
+    return {
+      accelerator: 'cpu',
+      detail: 'El modelo corre en CPU — el análisis será lento y puede cortar por timeout',
+      model,
+    }
+  } catch {
+    return { accelerator: 'unknown', detail: 'No se pudo leer el estado de Ollama', model }
+  }
+}
+
+ipcMain.handle('hardware:probe', async (): Promise<HardwareProbe> => {
+  const s = loadSettings()
+  const baseUrl = s.ollamaBaseUrl || 'http://localhost:11434'
+  const model = s.llmModel || 'qwen2.5:7b'
+  return probeAccelerator(baseUrl, model)
 })

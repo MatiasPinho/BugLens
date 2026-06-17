@@ -51,6 +51,15 @@ persisten como **sesión** y se restauran al reabrir.
 - **El análisis SIEMPRE produce salida útil** — nunca "información insuficiente" ni rechazo:
   reescribe lo que haya y lo que falta va en `missingInformation`. El parser cae a defaults
   seguros ante campos faltantes/inválidos. (No existe la categoría `insufficient_info`.)
+- **Rendimiento GPU/CPU** (`runtimeConfig`): `performanceMode` (`'gpu'`/`'cpu'`) define
+  paralelismo + timeout de Ollama. Precedencia de cada valor: **env var
+  (`LLM_CONCURRENCY`/`OLLAMA_TIMEOUT_MS`/`LLM_PERFORMANCE_MODE`) > modo > default del
+  proveedor**. El modo lo elige el usuario (wizard de primer arranque / config), ayudado por
+  `hardware:probe` (sondea Ollama: `size_vram` de `/api/ps` → GPU vs CPU). El sondeo y el IPC
+  son **integración** (no se testean por unit; la lógica de precedencia sí).
+- **Primer arranque**: `AppSettings.onboarded` (en `settings.json`) gatea el wizard
+  (`Onboarding`); arranca en `false` y pasa a `true` al completarlo. Todo lo del wizard queda
+  editable después en `Settings`.
 - **Caché por contenido** (`analysisCache`): al cambiar un prompt, **bumpear `PROMPT_VERSION`**
   para invalidar la caché vieja.
 - **Estados persistentes**: identidad por **contenido** (`bugRecordKey` = hash de

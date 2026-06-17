@@ -1,4 +1,4 @@
-import type { LLMConfig, LLMProvider } from '../types/index.js'
+import type { LLMConfig, LLMProvider, PerformanceMode } from '../types/index.js'
 
 // ─── LLM config ────────────────────────────────────────────────────────────────
 
@@ -16,7 +16,12 @@ export function getLLMConfig(override?: Partial<LLMConfig>): LLMConfig {
     apiKey: override?.apiKey ?? getApiKey(provider),
     temperature: override?.temperature ?? 0.1,
     maxTokens: override?.maxTokens ?? 4096,
+    performanceMode: override?.performanceMode ?? getPerformanceMode(),
   }
+}
+
+function getPerformanceMode(): PerformanceMode {
+  return process.env['LLM_PERFORMANCE_MODE'] === 'cpu' ? 'cpu' : 'gpu'
 }
 
 function getDefaultModel(provider: LLMProvider): string {
