@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { alpha, col } from '../theme'
+import { BugUnderLensMark } from './decor/BugMotifs'
+import { IconCheck } from './icons'
 import PerformanceModePicker, { type PerformanceMode } from './PerformanceModePicker'
 
 interface Props {
@@ -74,7 +76,11 @@ export default function Onboarding({ onDone }: Props) {
   return (
     <div className="flex h-full items-center justify-center p-6 font-mono">
       <div className="w-full max-w-xl">
-        <div className="mb-6 text-center">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <BugUnderLensMark
+            className="motif-sway mb-2"
+            style={{ width: 40, height: 40, color: col.cream }}
+          />
           <div className="font-semibold text-sm" style={{ color: col.cream }}>
             bienvenido a buglens
           </div>
@@ -84,26 +90,40 @@ export default function Onboarding({ onDone }: Props) {
         </div>
 
         {/* Stepper */}
-        <div className="mb-5 flex items-center justify-center gap-2">
-          {STEPS.map((label, i) => (
-            <div key={label} className="flex items-center gap-1.5 text-2xs">
-              <span
-                className="flex h-5 w-5 items-center justify-center rounded-full"
-                style={{
-                  border: `1px solid ${i <= step ? col.cream : alpha(col.border, 0.4)}`,
-                  background: i < step ? alpha(col.cream, 0.12) : 'transparent',
-                  color: i <= step ? col.cream : col.fgMuted,
-                }}
+        <ol className="mb-5 flex items-center justify-center gap-2" aria-label="progreso">
+          {STEPS.map((label, i) => {
+            const done = i < step
+            const active = i === step
+            return (
+              <li
+                key={label}
+                className="flex items-center gap-1.5 text-2xs"
+                aria-current={active ? 'step' : undefined}
               >
-                {i < step ? '✓' : i + 1}
-              </span>
-              <span style={{ color: i === step ? col.fg : col.fgMuted }}>{label}</span>
-              {i < STEPS.length - 1 && <span style={{ color: col.border }}>·</span>}
-            </div>
-          ))}
-        </div>
+                <span
+                  className="flex h-5 w-5 items-center justify-center rounded-full transition-colors duration-200"
+                  style={{
+                    border: `1px solid ${i <= step ? col.cream : alpha(col.border, 0.4)}`,
+                    background: done ? alpha(col.cream, 0.12) : 'transparent',
+                    color: i <= step ? col.cream : col.fgMuted,
+                  }}
+                >
+                  {done ? <IconCheck size={12} /> : i + 1}
+                </span>
+                <span style={{ color: active ? col.fg : col.fgMuted }}>{label}</span>
+                {i < STEPS.length - 1 && (
+                  <span
+                    aria-hidden="true"
+                    className="ml-1 h-px w-5"
+                    style={{ background: alpha(col.border, 0.5) }}
+                  />
+                )}
+              </li>
+            )
+          })}
+        </ol>
 
-        <div className="card">
+        <div key={step} className="card animate-fade-in">
           {step === 0 && (
             <Section
               title="rendimiento"
@@ -124,7 +144,7 @@ export default function Onboarding({ onDone }: Props) {
                   return (
                     <label
                       key={opt.id}
-                      className="flex cursor-pointer items-start gap-3 rounded p-2.5 transition-all"
+                      className="choice-card flex cursor-pointer items-start gap-3 rounded p-2.5 transition-colors duration-200"
                       style={{
                         border: `1px solid ${isSelected ? alpha(col.cream, 0.3) : alpha(col.border, 0.22)}`,
                         background: isSelected ? alpha(col.cream, 0.05) : 'transparent',
@@ -192,8 +212,12 @@ export default function Onboarding({ onDone }: Props) {
               hint="opcional. conecta el login del navegador para traer la evidencia de los docs. podés saltarlo y hacerlo después."
             >
               {browserAuth?.authenticated ? (
-                <span className="text-xs" style={{ color: col.green }}>
-                  ✓ sesión activa
+                <span
+                  className="inline-flex items-center gap-1.5 text-xs"
+                  style={{ color: col.green }}
+                >
+                  <IconCheck size={12} />
+                  sesión activa
                 </span>
               ) : (
                 <button

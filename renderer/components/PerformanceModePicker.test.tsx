@@ -49,4 +49,11 @@ describe('PerformanceModePicker', () => {
     expect(screen.getByTestId('mode')).toHaveTextContent('gpu')
     expect(screen.getByText('recomendado')).toBeInTheDocument()
   })
+
+  it('expone las opciones como un grupo de radios accesible', () => {
+    stubProbe({ accelerator: 'gpu', detail: 'GPU' })
+    render(<Harness initial="gpu" />)
+    expect(screen.getByRole('radiogroup', { name: 'modo de rendimiento' })).toBeInTheDocument()
+    expect(screen.getAllByRole('radio')).toHaveLength(2)
+  })
 })

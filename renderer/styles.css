@@ -85,6 +85,14 @@
     border-radius: 4px;
   }
 
+  /* Tarjetas de selección (radios sr-only dentro de un <label>): el input está
+     oculto, así que el foco de teclado se muestra sobre la tarjeta. `:has(:focus-visible)`
+     → solo con teclado, no al click con mouse. */
+  .choice-card:has(:focus-visible) {
+    outline: 2px solid rgb(var(--c-cream) / 0.55);
+    outline-offset: 2px;
+  }
+
   /* Respetar prefers-reduced-motion: cortar animaciones/transiciones. */
   @media (prefers-reduced-motion: reduce) {
     *,
