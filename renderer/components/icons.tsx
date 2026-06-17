@@ -44,6 +44,25 @@ export function IconInfo({ size = 16, className }: IconProps) {
   )
 }
 
+export function IconHelp({ size = 16, className }: IconProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} className={className} {...STROKE}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.2 9.5a2.8 2.8 0 0 1 5.4 1c0 1.9-2.8 2.5-2.8 2.5" />
+      <path d="M12 17h.01" />
+    </svg>
+  )
+}
+
+export function IconX({ size = 16, className }: IconProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} className={className} {...STROKE}>
+      <path d="M18 6 6 18" />
+      <path d="M6 6l12 12" />
+    </svg>
+  )
+}
+
 export function IconTrash({ size = 16, className }: IconProps) {
   return (
     <svg aria-hidden="true" width={size} height={size} className={className} {...STROKE}>

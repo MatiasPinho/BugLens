@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { LogLine } from '../App'
 import { defaultModelFor, LLM_OPTIONS } from '../llmOptions'
 import { alpha, col } from '../theme'
+import { IconCheck, IconX } from './icons'
 import PerformanceModePicker, { type PerformanceMode } from './PerformanceModePicker'
 import ResetControls from './ResetControls'
 
@@ -168,8 +169,12 @@ export default function Settings({ addLog }: Props) {
 
           {browserAuth?.authenticated ? (
             <div className="flex items-center gap-3">
-              <span className="text-xs" style={{ color: col.fgDim }}>
-                ✓ sesión activa
+              <span
+                className="inline-flex items-center gap-1.5 text-xs"
+                style={{ color: col.fgDim }}
+              >
+                <IconCheck size={12} />
+                sesión activa
               </span>
               <button type="button" className="btn-danger text-xs" onClick={revokeBrowserAuth}>
                 cerrar sesión
@@ -246,8 +251,12 @@ export default function Settings({ addLog }: Props) {
               <div className="flex items-center gap-3">
                 {googleAuth?.authenticated ? (
                   <>
-                    <span className="text-xs" style={{ color: col.fgDim }}>
-                      ✓ oauth autenticado
+                    <span
+                      className="inline-flex items-center gap-1.5 text-xs"
+                      style={{ color: col.fgDim }}
+                    >
+                      <IconCheck size={12} />
+                      oauth autenticado
                     </span>
                     <button type="button" className="btn-danger text-xs" onClick={revokeAuth}>
                       desconectar
@@ -392,10 +401,11 @@ export default function Settings({ addLog }: Props) {
               )}
               {ollamaStatus !== null && (
                 <span
-                  className="text-xs"
+                  className="inline-flex items-center gap-1.5 text-xs"
                   style={{ color: ollamaStatus.available ? col.fgDim : col.red }}
                 >
-                  {ollamaStatus.available ? '✓ disponible' : '✗ no disponible'}
+                  {ollamaStatus.available ? <IconCheck size={12} /> : <IconX size={12} />}
+                  {ollamaStatus.available ? 'disponible' : 'no disponible'}
                 </span>
               )}
             </div>
@@ -473,8 +483,9 @@ export default function Settings({ addLog }: Props) {
           {saving ? 'guardando...' : 'guardar'}
         </button>
         {saved && (
-          <span className="text-xs" style={{ color: col.fgDim }}>
-            ✓ guardado
+          <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: col.fgDim }}>
+            <IconCheck size={12} />
+            guardado
           </span>
         )}
       </div>
