@@ -43,6 +43,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportExcel: (originalPath: string, results: AnalyzedBug[]) =>
     ipcRenderer.invoke('export:excel', { originalPath, results }),
   exportBugs: (results: AnalyzedBug[]) => ipcRenderer.invoke('export:bugs', { results }),
+  exportFullData: (excelPath: string | null, results: AnalyzedBug[]) =>
+    ipcRenderer.invoke('export:full-data', { excelPath, results }),
 
   // Dialogs
   openExcelDialog: () => ipcRenderer.invoke('dialog:open-excel'),

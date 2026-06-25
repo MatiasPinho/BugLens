@@ -202,6 +202,16 @@ export default function App() {
     }
   }, [excelPath, results, addLog])
 
+  const handleExportFullData = useCallback(async () => {
+    if (results.length === 0) return
+    const result = await window.electronAPI.exportFullData(excelPath, results)
+    if (result.ok) {
+      addLog('info', `datos completos exportados: ${result.filePath}`)
+    } else if (result.error) {
+      addLog('error', `error al exportar datos completos: ${result.error}`)
+    }
+  }, [excelPath, results, addLog])
+
   // Bug seleccionado vía teclado (para j/k navigation + Enter/d shortcuts).
   // null = nada seleccionado.
   const [focusedBugId, setFocusedBugId] = useState<string | null>(null)
@@ -527,6 +537,13 @@ export default function App() {
                 <div className="flex flex-col gap-2">
                   <button type="button" className="btn-primary w-full" onClick={handleExport}>
                     exportar excel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary w-full"
+                    onClick={handleExportFullData}
+                  >
+                    exportar datos completos
                   </button>
                   <button type="button" className="btn-secondary w-full" onClick={handleReset}>
                     nuevo análisis

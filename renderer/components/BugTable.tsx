@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { AnalyzedBug, BugCategory, BugStatus, DocImage, Severity } from '../../src/types/index'
 import { alpha, col, sz } from '../theme'
 import { BugUnderLensMark } from './decor/BugMotifs'
+import { IconCheck, IconHelp, IconWarning, IconX } from './icons'
 
 interface Props {
   results: AnalyzedBug[]
@@ -279,7 +280,7 @@ export function CopyButton({ text }: { text: string }) {
         if (!copied) e.currentTarget.style.color = col.muted
       }}
     >
-      {copied ? '✓' : 'copiar'}
+      {copied ? <IconCheck size={12} /> : 'copiar'}
     </button>
   )
 }
@@ -841,8 +842,7 @@ export default function BugTable({
                         colSpan={8}
                         className="p-0"
                         style={{
-                          borderBottom: `2px solid ${severityStripColor[r.analysis.severity]}`,
-                          boxShadow: `inset 3px 0 0 ${severityStripColor[r.analysis.severity]}`,
+                          boxShadow: `inset 3px 0 0 ${severityStripColor[r.analysis.severity]}, inset 0 -3px 0 ${severityStripColor[r.analysis.severity]}`,
                           background: col.code,
                         }}
                       >
@@ -1068,6 +1068,7 @@ export function ExpandedDetail({
       <SectionCard title="reporte reescrito" accent>
         {rw.problemCount > 1 && (
           <div
+            role="status"
             className="mb-3 inline-flex items-center gap-1.5 rounded px-2 py-1 font-mono text-xs"
             style={{
               color: col.amber,
@@ -1075,40 +1076,31 @@ export function ExpandedDetail({
               background: alpha(col.amberDeep, 0.06),
             }}
           >
-            ⚠ este reporte junta {rw.problemCount} problemas distintos
+            <IconWarning size={12} className="flex-shrink-0" />
+            este reporte junta {rw.problemCount} problemas distintos
           </div>
         )}
-        <div className="grid grid-cols-2 gap-x-5 gap-y-3">
-          <div>
-            <div className="label">qué pasa</div>
-            <p
-              className="whitespace-pre-wrap text-sm leading-relaxed"
-              style={{ color: rw.observed === 'No informado' ? col.muted : col.fgDim }}
-            >
-              {rw.observed}
-            </p>
-          </div>
-          <div>
-            <div className="label">qué debería pasar</div>
-            <p
-              className="whitespace-pre-wrap text-sm leading-relaxed"
-              style={{ color: rw.expected === 'No informado' ? col.muted : col.fgDim }}
-            >
-              {rw.expected}
-            </p>
-          </div>
+        <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+          {/* Distinción semántica tipo diff: rojo = qué pasa (defecto), verde = qué debería pasar. */}
+          <RewriteColumn label="qué pasa" text={rw.observed} tone={col.red} Icon={IconX} />
+          <RewriteColumn
+            label="qué debería pasar"
+            text={rw.expected}
+            tone={col.green}
+            Icon={IconCheck}
+          />
 
           {rw.steps.length > 0 && (
             <div className="col-span-2">
               <div className="label">pasos para reproducir</div>
-              <ol className="space-y-1">
+              <ol className="space-y-1.5">
                 {rw.steps.map((s, i) => (
-                  <li key={i} className="flex items-start gap-2">
+                  <li key={i} className="flex items-start gap-2.5">
                     <span
-                      className="mt-0.5 flex-shrink-0 font-mono text-xs"
-                      style={{ color: col.muted }}
+                      className="mt-px flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full font-mono text-2xs"
+                      style={{ border: `1px solid ${alpha(col.border, 0.4)}`, color: col.fgMuted }}
                     >
-                      {i + 1}.
+                      {i + 1}
                     </span>
                     <span className="text-sm leading-relaxed" style={{ color: col.fgDim }}>
                       {s.replace(/^\d+[.)]\s*/, '')}
@@ -1119,20 +1111,13 @@ export function ExpandedDetail({
             </div>
           )}
 
-          <div>
-            <div className="label">ambiente</div>
-            <code
-              className="font-mono text-xs"
-              style={{ color: rw.environment === 'No informado' ? col.muted : col.fgMuted }}
-            >
-              {rw.environment}
-            </code>
-          </div>
-          <div>
-            <div className="label">tipo</div>
-            <code className="font-mono text-xs" style={{ color: col.fgMuted }}>
-              {analysis.bugType ?? '—'}
-            </code>
+          <div className="col-span-2 flex flex-wrap items-center gap-2 pt-1">
+            <MetaChip
+              label="ambiente"
+              value={rw.environment}
+              muted={rw.environment === 'No informado'}
+            />
+            <MetaChip label="tipo" value={analysis.bugType ?? '—'} />
           </div>
         </div>
       </SectionCard>
@@ -1140,14 +1125,11 @@ export function ExpandedDetail({
       {/* Qué falta */}
       {analysis.missingInformation.length > 0 && (
         <SectionCard title="datos que faltan en el reporte">
-          <ul className="space-y-1">
+          <ul className="space-y-1.5">
             {analysis.missingInformation.map((m, i) => (
               <li key={i} className="flex items-start gap-2">
-                <span
-                  className="mt-0.5 flex-shrink-0 font-mono text-xs"
-                  style={{ color: col.amber }}
-                >
-                  ?
+                <span className="mt-0.5 flex-shrink-0" style={{ color: col.amber }}>
+                  <IconHelp size={12} />
                 </span>
                 <span className="text-sm leading-relaxed" style={{ color: col.fgDim }}>
                   {m}
@@ -1206,6 +1188,61 @@ export function ExpandedDetail({
         </div>
       </details>
     </div>
+  )
+}
+
+// Columna de la reescritura con acento semántico (tipo diff): el ícono + el borde
+// izquierdo + el color del label comunican el rol (defecto vs. esperado); el cuerpo
+// queda en el color de lectura normal.
+function RewriteColumn({
+  label,
+  text,
+  tone,
+  Icon,
+}: {
+  label: string
+  text: string
+  tone: string
+  Icon: typeof IconCheck
+}) {
+  const isEmpty = text === 'No informado'
+  return (
+    <div style={{ borderLeft: `2px solid ${alpha(tone, 0.4)}`, paddingLeft: '0.65rem' }}>
+      <div
+        className="label"
+        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: tone }}
+      >
+        <Icon size={11} />
+        {label}
+      </div>
+      <p
+        className="whitespace-pre-wrap text-sm leading-relaxed"
+        style={{ color: isEmpty ? col.muted : col.fgDim }}
+      >
+        {text}
+      </p>
+    </div>
+  )
+}
+
+// Metadata compacta (ambiente / tipo) como chip etiqueta+valor.
+function MetaChip({
+  label,
+  value,
+  muted = false,
+}: {
+  label: string
+  value: string
+  muted?: boolean
+}) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded px-2 py-1 font-mono text-2xs"
+      style={{ border: `1px solid ${alpha(col.border, 0.25)}`, background: alpha(col.muted, 0.12) }}
+    >
+      <span style={{ color: col.border }}>{label}</span>
+      <span style={{ color: muted ? col.muted : col.fgMuted }}>{value}</span>
+    </span>
   )
 }
 
