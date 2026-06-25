@@ -19,6 +19,7 @@ import { BugEnricher } from '../src/pipeline/bugEnricher.js'
 import { readRecords, setBugStatus } from '../src/pipeline/bugRecordsStore.js'
 import { bugRecordKey } from '../src/pipeline/bugStatusKey.js'
 import { readExcel, writeBugsExcel, writeEnrichedExcel } from '../src/pipeline/excelReader.js'
+import { writeFullDataJson } from '../src/pipeline/fullDataExport.js'
 import { GoogleDocsReader } from '../src/pipeline/googleDocsReader.js'
 import { buildManualBug, type ManualBugFields } from '../src/pipeline/manualBugBuilder.js'
 import { clearSession, readSession, writeSession } from '../src/pipeline/sessionStore.js'
@@ -637,6 +638,33 @@ ipcMain.handle('export:bugs', async (_e, { results }: { results: AnalyzedBug[] }
     return { ok: false, error: message }
   }
 })
+
+// Export completo sin aplanar: conserva RawBug, rawRow, Google Docs leídos,
+// imágenes base64, análisis, rawResponse del LLM, errores, estado y tiempos.
+ipcMain.handle(
+  'export:full-data',
+  async (_e, { excelPath, results }: { excelPath: string | null; results: AnalyzedBug[] }) => {
+    const defaultName = excelPath
+      ? `${path.basename(excelPath, path.extname(excelPath))}_datos_completos.json`
+      : 'bugs_datos_completos.json'
+    const { filePath, canceled } = await dialog.showSaveDialog(mainWindow!, {
+      defaultPath: defaultName,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    })
+
+    if (canceled || !filePath) return { ok: false }
+
+    try {
+      writeFullDataJson(filePath, results, excelPath)
+      log('info', `Datos completos exportados: ${filePath}`)
+      return { ok: true, filePath }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      log('error', `Error exportando datos completos: ${message}`)
+      return { ok: false, error: message }
+    }
+  },
+)
 
 // ─── IPC: Dialogs & misc ─────────────────────────────────────────────────────
 

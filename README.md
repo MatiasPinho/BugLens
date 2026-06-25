@@ -24,7 +24,8 @@ no replicado). La sesión de trabajo se **guarda y restaura** al reabrir la app.
 4. Marcás el **estado** de cada bug; persiste entre corridas (incluso si reordenás el Excel).
    La tabla separa **activos** (nuevo / en progreso) de **históricos** (solucionado /
    cerrado / no replicado) con un control de pestañas (navegable con flechas).
-5. Filtrás/agrupás/buscás/**borrás** bugs, y exportás un Excel enriquecido (incluso sin Excel original).
+5. Filtrás/agrupás/buscás/**borrás** bugs, y exportás un Excel enriquecido (incluso sin Excel original)
+   o un JSON con los **datos completos** recopilados.
 6. Al reabrir la app, la **sesión** (bugs cargados + análisis) se restaura sola.
 
 ---
@@ -192,6 +193,41 @@ La sesión de trabajo (bugs cargados —de Excel o manuales— con su análisis)
 Es una sola sesión, auto-guardada; "nuevo análisis" la limpia. El estado de cada bug se
 reaplica desde `bug-records.json` (la fuente canónica) al restaurar.
 
+## Roadmap: equipo e investigación de código
+
+buglens hoy es una app **local**: cada usuario tiene su sesión, estados, configuración y
+caché en su propio `userData`. Para que funcione como herramienta de equipo real —por
+ejemplo, que una persona cargue un bug y otra lo vea— hace falta una fuente compartida
+de verdad: backend interno + base de datos, o una integración con una herramienta ya
+compartida (Jira, Linear, GitHub Issues, Google Sheets, etc.).
+
+La colaboración no requiere MCP. Requiere sincronización/persistencia compartida:
+
+```text
+buglens desktop -> API/DB compartida -> otros usuarios
+```
+
+Esa capa debería guardar proyectos, bugs, análisis, estados, asignaciones, comentarios,
+historial de cambios y deduplicación por contenido. El Excel pasaría a ser una entrada
+de datos, no la fuente de verdad.
+
+MCP es un tema separado: serviría para una feature avanzada de **investigación de código**
+por bug, delegando en una herramienta externa que el usuario ya tenga configurada
+(opencode, Codex CLI, Claude Code u otra). No debería volver al enfoque forense removido
+de embeddings/onnxruntime ni correr en batch automático sobre todos los bugs.
+
+Arquitectura posible:
+
+```text
+buglens -> MCP client -> buglens-code-investigator -> agente externo -> repo local
+```
+
+El contrato esperado sería por bug seleccionado: buglens envía el reporte reescrito y el
+repo elegido; el agente devuelve una respuesta estructurada con archivos relevantes,
+commits relacionados, tests sugeridos, hallazgos, nivel de confianza y limitaciones.
+Si el agente usa modelos cloud, debe advertirse explícitamente que puede consumir tokens
+del usuario y enviar fragmentos del repo al proveedor configurado.
+
 ## Atajos de teclado
 
 | Tecla | Acción |
@@ -216,6 +252,7 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | `excelReader.readExcel(path)` | Parsea el Excel → `RawBug[]`: mapea columnas, extrae links a docs, filtra filas que son headers repetidos. |
 | `excelReader.writeEnrichedExcel(...)` | Exporta el Excel original + columnas del análisis (reescritura, estado, etc.). |
 | `excelReader.writeBugsExcel(...)` | Exporta un `.xlsx` **desde cero** (sin Excel original): para bugs manuales o mezclados. |
+| `fullDataExport.writeFullDataJson(...)` | Exporta un `.json` completo sin aplanar: fila original, docs leídos, imágenes, análisis, estado, errores, tiempos y respuesta cruda del LLM. |
 | `excelReader.mapHeader(h)` / `extractGoogleLinks(t)` | Helpers puros: mapeo de cabeceras ES/EN y detección de links Docs/Drive. |
 | `manualBugBuilder.buildManualBug(fields, seq)` | Arma un `RawBug` válido desde los campos del formulario manual (sin Excel). |
 | `bugEnricher.BugEnricher.enrich(bug)` | Trae los Google Docs del bug. **Cachea por URL** para no re-descargar el mismo doc (un doc suele documentar varios bugs). |
@@ -242,6 +279,7 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | `analyze:run` | Orquesta el batch: lee Excel → enricher → `analyzeBug` por bug (con concurrencia) → adjunta el estado persistido. Emite resultados al renderer en streaming. |
 | `analyze:manual-bug` | Arma un bug desde los campos del formulario y lo analiza, streameándolo a la tabla **sin reemplazar** lo ya cargado. |
 | `export:excel` / `export:bugs` | Exporta el Excel enriquecido (con original) o un `.xlsx` nuevo desde cero (manual / mezclado). |
+| `export:full-data` | Exporta un `.json` completo con todos los bugs analizados y la data recopilada sin aplanar. |
 | `session:load / save / clear` | Restaura / guarda / borra la sesión persistida (`session.json`). |
 | `bug:set-status` | Persiste el cambio de estado de un bug. |
 | `ensureOllamaRunning(baseUrl)` | Levanta Ollama si no corre (con el override de GPU AMD y paralelismo). |

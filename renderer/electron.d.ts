@@ -48,6 +48,10 @@ interface ElectronAPI {
     results: AnalyzedBug[],
   ): Promise<{ ok: boolean; filePath?: string; error?: string }>
   exportBugs(results: AnalyzedBug[]): Promise<{ ok: boolean; filePath?: string; error?: string }>
+  exportFullData(
+    excelPath: string | null,
+    results: AnalyzedBug[],
+  ): Promise<{ ok: boolean; filePath?: string; error?: string }>
 
   // Dialogs
   openExcelDialog(): Promise<string | null>

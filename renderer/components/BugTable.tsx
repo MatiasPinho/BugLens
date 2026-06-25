@@ -842,8 +842,7 @@ export default function BugTable({
                         colSpan={8}
                         className="p-0"
                         style={{
-                          borderBottom: `2px solid ${severityStripColor[r.analysis.severity]}`,
-                          boxShadow: `inset 3px 0 0 ${severityStripColor[r.analysis.severity]}`,
+                          boxShadow: `inset 3px 0 0 ${severityStripColor[r.analysis.severity]}, inset 0 -3px 0 ${severityStripColor[r.analysis.severity]}`,
                           background: col.code,
                         }}
                       >
