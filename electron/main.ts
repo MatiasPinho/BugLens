@@ -21,21 +21,21 @@ import { writeFullDataJson } from '../src/pipeline/fullDataExport.js'
 import { GoogleDocsReader } from '../src/pipeline/googleDocsReader.js'
 import { buildManualBug, type ManualBugFields } from '../src/pipeline/manualBugBuilder.js'
 import {
-  createSupabaseProject,
-  createSupabaseTeamClient,
-  getSupabaseTeamStatus,
-  signOutSupabaseTeam,
-  startSupabaseGoogleAuth,
-  type SupabaseTeamConfig,
-} from '../src/supabase/teamClient.js'
-import {
   createRemoteBugImport,
   deleteRemoteBug,
   loadRemoteAnalyzedBugs,
+  type RemoteAnalysisContext,
   saveRemoteAnalysisResult,
   setRemoteBugStatus,
-  type RemoteAnalysisContext,
 } from '../src/supabase/teamBugs.js'
+import {
+  createSupabaseProject,
+  createSupabaseTeamClient,
+  getSupabaseTeamStatus,
+  type SupabaseTeamConfig,
+  signOutSupabaseTeam,
+  startSupabaseGoogleAuth,
+} from '../src/supabase/teamClient.js'
 import type {
   AnalyzedBug,
   BugStatus,
@@ -129,8 +129,9 @@ function makeSupabaseTeamClient() {
 // ─── Window ───────────────────────────────────────────────────────────────────
 
 let mainWindow: BrowserWindow | null = null
-let remoteBugsChannel: ReturnType<NonNullable<ReturnType<typeof makeSupabaseTeamClient>>['channel']> | null =
-  null
+let remoteBugsChannel: ReturnType<
+  NonNullable<ReturnType<typeof makeSupabaseTeamClient>>['channel']
+> | null = null
 let watchedProjectId: string | null = null
 
 // En Linux, algunos drivers/Mesa hacen que el proceso GPU de Chromium sea
@@ -373,7 +374,9 @@ ipcMain.handle(
       const message = errorMessage(err)
       log('error', `Error creando proyecto: ${message}`)
       return {
-        configured: Boolean(loadSupabaseTeamConfig().url && loadSupabaseTeamConfig().publishableKey),
+        configured: Boolean(
+          loadSupabaseTeamConfig().url && loadSupabaseTeamConfig().publishableKey,
+        ),
         authenticated: false,
         error: message,
       }
@@ -449,7 +452,12 @@ async function analyzeBugs(
     sourceType,
     sourceName,
     sourcePath,
-  }: { emitComplete: boolean; sourceType: 'excel' | 'manual'; sourceName?: string; sourcePath?: string },
+  }: {
+    emitComplete: boolean
+    sourceType: 'excel' | 'manual'
+    sourceName?: string
+    sourcePath?: string
+  },
 ): Promise<{ ok: boolean; count?: number; error?: string }> {
   const start = Date.now()
 
@@ -745,21 +753,18 @@ ipcMain.handle('bugs:load-remote', async () => {
   }
 })
 
-ipcMain.handle(
-  'bug:delete',
-  async (_e, { bug }: { bug: AnalyzedBug }) => {
-    try {
-      const client = makeSupabaseTeamClient()
-      if (!client) throw new Error('Supabase no está configurado.')
-      await deleteRemoteBug(client, loadSupabaseTeamConfig(), bug.enriched.raw)
-      return { ok: true }
-    } catch (err) {
-      const message = errorMessage(err)
-      log('error', `Error borrando bug remoto: ${message}`)
-      return { ok: false, error: message }
-    }
-  },
-)
+ipcMain.handle('bug:delete', async (_e, { bug }: { bug: AnalyzedBug }) => {
+  try {
+    const client = makeSupabaseTeamClient()
+    if (!client) throw new Error('Supabase no está configurado.')
+    await deleteRemoteBug(client, loadSupabaseTeamConfig(), bug.enriched.raw)
+    return { ok: true }
+  } catch (err) {
+    const message = errorMessage(err)
+    log('error', `Error borrando bug remoto: ${message}`)
+    return { ok: false, error: message }
+  }
+})
 
 ipcMain.handle('bugs:watch-remote', async () => {
   try {

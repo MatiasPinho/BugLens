@@ -78,7 +78,8 @@ imports y corridas se persisten en Supabase; al reabrir se restaura desde el pro
   Es derivado, no un campo aparte. El control de pestañas sigue el patrón ARIA tablist
   (roving tabindex + flechas/Home/End).
 - **Borrar bug**: hace soft-delete remoto (`deleted_at`) vía `bug:delete` y lo saca de la
-  tabla. La caché por contenido se conserva. Confirmación inline (sin `confirm()` nativo).
+  tabla. La caché por contenido se conserva. Usa el sistema de modales de confirmación
+  compartido (sin `confirm()` nativo).
 - **Decorados** (`decor/BugMotifs`): motivos temáticos line-art mono a un trazo (`currentColor`),
   **decorativos** (`aria-hidden`, sin alt). Animaciones sutiles vía clases en `styles.css`
   (`.motif-sway`) que el corte global de `prefers-reduced-motion` neutraliza. No decorar la
@@ -157,7 +158,7 @@ Vitest + React Testing Library (jsdom). Cubre **lógica pura** (excelReader, `bu
 mapper Supabase, parseo del LLM, caché, identidad por contenido, dedup del enricher) + las interacciones de
 `BugTable` (estados + pestañas activos/históricos + teclado + borrado) y `ManualBugForm`. La **integración** (LLM
 real, IPC de Electron, doc readers con red/auth, auth/realtime de Supabase) **no** se testea
-por unit — se verifica corriendo. CI corre `typecheck → test → build` en cada push.
+por unit — se verifica corriendo. CI corre `lint → typecheck → test → build` en cada push.
 
 ## Git
 
@@ -167,4 +168,7 @@ por unit — se verifica corriendo. CI corre `typecheck → test → build` en c
 - **Ramas**: una por feature/fix (`feat/x`, `fix/y`) que sale de `main`. `main` siempre estable.
 - **Integración**: todo entra a `main` vía **Pull Request** (aunque lo revise el mismo autor) —
   deja historial y corre el CI.
+- **Pull Requests**: título y descripción deben describir el producto/cambio, sin prefijos de
+  herramienta o autor (`[codex]`, `[agent]`, etc.) y sin notas internas que no aporten al
+  reviewer (estado de auth local, limitaciones del agente, detalles del entorno personal).
 - **El agente NO commitea/pushea por defecto**: solo cuando se lo piden explícitamente.

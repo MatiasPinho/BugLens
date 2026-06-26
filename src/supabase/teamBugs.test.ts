@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { bugRecordKey } from '../pipeline/bugStatusKey'
+import type { AnalyzedBug } from '../types/index'
 import {
   createRemoteBugImport,
   deleteRemoteBug,
@@ -9,7 +10,6 @@ import {
   setRemoteBugStatus,
 } from './teamBugs'
 import * as teamClient from './teamClient'
-import type { AnalyzedBug } from '../types/index'
 
 describe('teamBugs', () => {
   function config() {
@@ -41,12 +41,7 @@ describe('teamBugs', () => {
     const client = { rpc }
 
     const raw = { title: 'Login roto', description: 'No entra al sistema.' }
-    const result = await setRemoteBugStatus(
-      client as never,
-      config(),
-      raw,
-      'en_progreso',
-    )
+    const result = await setRemoteBugStatus(client as never, config(), raw, 'en_progreso')
 
     expect(result).toEqual({ bugId: 'bug-remote-1', status: 'en_progreso' })
     expect(rpc).toHaveBeenCalledWith('upsert_bug_status', {

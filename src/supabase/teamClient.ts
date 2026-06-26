@@ -118,9 +118,9 @@ export async function getSupabaseTeamStatus(
     projects = [project]
   }
   const project =
-    projects.find((item) => item.id === config.activeProjectId)
-    ?? projects.find((item) => item.slug === config.defaultProjectSlug)
-    ?? projects[0]
+    projects.find((item) => item.id === config.activeProjectId) ??
+    projects.find((item) => item.slug === config.defaultProjectSlug) ??
+    projects[0]
   return {
     configured: true,
     authenticated: true,
@@ -157,9 +157,9 @@ export async function startSupabaseGoogleAuth(
     const defaultProject = await ensureDefaultProject(client, config)
     const projects = await listSupabaseProjects(client)
     const project =
-      projects.find((item) => item.id === config.activeProjectId)
-      ?? projects.find((item) => item.id === defaultProject.id)
-      ?? defaultProject
+      projects.find((item) => item.id === config.activeProjectId) ??
+      projects.find((item) => item.id === defaultProject.id) ??
+      defaultProject
     const {
       data: { user },
       error: userError,
@@ -285,7 +285,8 @@ async function createLocalCallbackServer(): Promise<{
       }
 
       const code = requestUrl.searchParams.get('code')
-      const error = requestUrl.searchParams.get('error_description') ?? requestUrl.searchParams.get('error')
+      const error =
+        requestUrl.searchParams.get('error_description') ?? requestUrl.searchParams.get('error')
       if (error) throw new Error(error)
       if (!code) throw new Error('Google no devolvió código de autenticación.')
 

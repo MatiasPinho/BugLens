@@ -45,7 +45,10 @@ interface ElectronAPI {
     projects?: Array<{ id: string; name: string; slug: string }>
     error?: string
   }>
-  createSupabaseProject(name: string, slug: string): Promise<{
+  createSupabaseProject(
+    name: string,
+    slug: string,
+  ): Promise<{
     configured: boolean
     authenticated: boolean
     user?: { id: string; email?: string }
@@ -74,10 +77,7 @@ interface ElectronAPI {
   watchRemoteBugs(): Promise<{ ok: boolean; error?: string }>
 
   // Estado de bugs (persistente)
-  setBugStatus(
-    bug: AnalyzedBug,
-    status: string,
-  ): Promise<{ ok: boolean; error?: string }>
+  setBugStatus(bug: AnalyzedBug, status: string): Promise<{ ok: boolean; error?: string }>
   deleteBug(bug: AnalyzedBug): Promise<{ ok: boolean; error?: string }>
 
   // Cache

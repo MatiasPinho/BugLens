@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react'
+import type React from 'react'
+import { useEffect, useRef } from 'react'
 import { alpha, col } from '../theme'
 import { IconWarning, IconX } from './icons'
 import { LoadingInline } from './Loading'
@@ -74,7 +75,7 @@ export function ActionModal({
           <div className="min-w-0">
             <div className="flex items-start gap-2">
               {tone === 'danger' && <IconWarning size={16} className="mt-0.5 flex-shrink-0" />}
-              <h2 className="text-sm font-semibold leading-5" style={{ color: accent }}>
+              <h2 className="font-semibold text-sm leading-5" style={{ color: accent }}>
                 {title}
               </h2>
             </div>

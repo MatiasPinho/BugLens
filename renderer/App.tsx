@@ -61,6 +61,7 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false)
   const searchInputRef = React.useRef<HTMLInputElement | null>(null)
   const remoteReloadTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activeProjectId = teamStatus?.project?.id ?? null
 
   const addLog = useCallback((level: LogLine['level'], message: string, timestamp?: string) => {
     setLogs((prev) => [
@@ -129,7 +130,8 @@ export default function App() {
     try {
       const status = await window.electronAPI.startSupabaseGoogleAuth()
       setTeamStatus(status)
-      if (status.authenticated) addLog('info', `equipo conectado: ${status.user?.email ?? status.user?.id}`)
+      if (status.authenticated)
+        addLog('info', `equipo conectado: ${status.user?.email ?? status.user?.id}`)
       else addLog('error', `error en equipo: ${status.error ?? 'login no completado'}`)
     } finally {
       setTeamAuthLoading(false)
@@ -139,7 +141,7 @@ export default function App() {
 
   const handleSelectProject = useCallback(
     async (projectId: string) => {
-      if (!projectId || projectId === teamStatus?.project?.id) return
+      if (!projectId || projectId === activeProjectId) return
       setProjectBusy(true)
       setRequestLoading({
         title: 'cambiando proyecto',
@@ -158,7 +160,7 @@ export default function App() {
         setRequestLoading(null)
       }
     },
-    [addLog, teamStatus?.project?.id],
+    [activeProjectId, addLog],
   )
 
   const handleCreateProject = useCallback(
@@ -215,7 +217,7 @@ export default function App() {
   // fuente de verdad: si el equipo está conectado, lo que se ve sale del proyecto remoto.
   useEffect(() => {
     let cancelled = false
-    if (!teamStatus?.authenticated || !teamStatus.project) return
+    if (!teamStatus?.authenticated || !activeProjectId) return
 
     loadRemoteResults(true, true).then(() => {
       if (cancelled) return
@@ -224,10 +226,10 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [loadRemoteResults, teamStatus?.authenticated, teamStatus?.project?.id])
+  }, [activeProjectId, loadRemoteResults, teamStatus?.authenticated])
 
   useEffect(() => {
-    if (!teamStatus?.authenticated || !teamStatus.project) return
+    if (!teamStatus?.authenticated || !activeProjectId) return
 
     window.electronAPI.watchRemoteBugs().then((result) => {
       if (!result.ok) addLog('warn', `realtime no disponible: ${result.error ?? 'sin detalle'}`)
@@ -244,7 +246,7 @@ export default function App() {
       cleanRemoteChanges()
       if (remoteReloadTimerRef.current) clearTimeout(remoteReloadTimerRef.current)
     }
-  }, [addLog, loadRemoteResults, phase, teamStatus?.authenticated, teamStatus?.project?.id])
+  }, [activeProjectId, addLog, loadRemoteResults, phase, teamStatus?.authenticated])
 
   // Si la tabla queda vacía estando en 'done' (borraste el último bug), volver al
   // inicio para mostrar la pantalla de carga.
@@ -326,17 +328,20 @@ export default function App() {
   }, [excelPath, results, addLog])
 
   // Cambiar el estado de un bug: update optimista en la UI + persistir en Supabase.
-  const handleSetStatus = useCallback(async (bug: AnalyzedBug, status: BugStatus) => {
-    const id = bug.enriched.raw.id
-    setResults((prev) => prev.map((r) => (r.enriched.raw.id === id ? { ...r, status } : r)))
-    const result = await window.electronAPI.setBugStatus(bug, status)
-    if (!result.ok) {
-      addLog('error', `error guardando estado: ${result.error}`)
-      setResults((prev) =>
-        prev.map((r) => (r.enriched.raw.id === id ? { ...r, status: bug.status } : r)),
-      )
-    }
-  }, [addLog])
+  const handleSetStatus = useCallback(
+    async (bug: AnalyzedBug, status: BugStatus) => {
+      const id = bug.enriched.raw.id
+      setResults((prev) => prev.map((r) => (r.enriched.raw.id === id ? { ...r, status } : r)))
+      const result = await window.electronAPI.setBugStatus(bug, status)
+      if (!result.ok) {
+        addLog('error', `error guardando estado: ${result.error}`)
+        setResults((prev) =>
+          prev.map((r) => (r.enriched.raw.id === id ? { ...r, status: bug.status } : r)),
+        )
+      }
+    },
+    [addLog],
+  )
 
   // Borrar un bug: soft-delete remoto en Supabase + update optimista de la tabla.
   const handleDeleteBug = useCallback(
@@ -454,11 +459,7 @@ export default function App() {
   if (!teamStatus?.authenticated) {
     return (
       <div className="relative h-screen">
-        <TeamLogin
-          status={teamStatus}
-          loading={teamAuthLoading}
-          onLogin={handleTeamLogin}
-        />
+        <TeamLogin status={teamStatus} loading={teamAuthLoading} onLogin={handleTeamLogin} />
         <LoadingOverlay
           visible={Boolean(requestLoading)}
           title={requestLoading?.title ?? ''}
@@ -667,7 +668,11 @@ export default function App() {
 
               {phase === 'done' && (
                 <div className="flex flex-col gap-2">
-                  <button type="button" className="btn-primary side-action w-full" onClick={handleExport}>
+                  <button
+                    type="button"
+                    className="btn-primary side-action w-full"
+                    onClick={handleExport}
+                  >
                     exportar excel
                   </button>
                   <button

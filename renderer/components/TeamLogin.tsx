@@ -1,6 +1,6 @@
+import { alpha, col } from '../theme'
 import { BugUnderLensMark } from './decor/BugMotifs'
 import { IconCheck } from './icons'
-import { alpha, col } from '../theme'
 import { LoadingInline } from './Loading'
 
 export interface TeamAuthStatus {
@@ -39,7 +39,10 @@ export default function TeamLogin({ status, loading, onLogin }: Props) {
         <div className="card">
           {status?.authenticated ? (
             <div className="space-y-3">
-              <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: col.fgDim }}>
+              <span
+                className="inline-flex items-center gap-1.5 text-xs"
+                style={{ color: col.fgDim }}
+              >
                 <IconCheck size={12} />
                 {status.user?.email ?? 'sesión activa'}
               </span>

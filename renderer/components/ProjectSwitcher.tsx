@@ -109,9 +109,7 @@ export default function ProjectSwitcher({
           ))}
         </select>
         <div className="h-5 truncate text-xs" style={{ color: col.fgMuted }}>
-          {busy && (
-            <LoadingInline label="sincronizando proyecto" />
-          )}
+          {busy && <LoadingInline label="sincronizando proyecto" />}
         </div>
       </div>
 
@@ -153,7 +151,6 @@ export default function ProjectSwitcher({
                 if (event.key === 'Escape') setCreating(false)
               }}
               placeholder="cliente / producto"
-              autoFocus
             />
           </div>
           <div>

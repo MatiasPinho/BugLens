@@ -1,6 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { AnalyzedBug, BugAnalysis, BugStatus, GoogleDocContent, RawBug } from '../types/index.js'
 import { bugRecordKey } from '../pipeline/bugStatusKey.js'
+import type {
+  AnalyzedBug,
+  BugAnalysis,
+  BugStatus,
+  GoogleDocContent,
+  RawBug,
+} from '../types/index.js'
 import type { SupabaseTeamConfig } from './teamClient.js'
 import { getSupabaseTeamStatus } from './teamClient.js'
 
@@ -35,7 +41,9 @@ export interface RemoteAnalysisContext {
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
 }
 
 function toRawBug(row: RemoteBugRow, fallbackId: string): RawBug {
@@ -53,7 +61,8 @@ function toRawBug(row: RemoteBugRow, fallbackId: string): RawBug {
     assignee: typeof raw.assignee === 'string' ? raw.assignee : undefined,
     status: typeof raw.status === 'string' ? raw.status : undefined,
     priority: typeof raw.priority === 'string' ? raw.priority : undefined,
-    rawRow: raw.rawRow && typeof raw.rawRow === 'object' ? raw.rawRow as Record<string, string> : {},
+    rawRow:
+      raw.rawRow && typeof raw.rawRow === 'object' ? (raw.rawRow as Record<string, string>) : {},
     googleDocLinks: stringArray(raw.googleDocLinks),
   }
 }
@@ -109,7 +118,7 @@ export async function loadRemoteAnalyzedBugs(
   })
 
   if (error) throw error
-  const rows = Array.isArray(data) ? data as RemoteBugRow[] : []
+  const rows = Array.isArray(data) ? (data as RemoteBugRow[]) : []
   return rows.map(mapRemoteBugRow)
 }
 

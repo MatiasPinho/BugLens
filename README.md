@@ -155,8 +155,8 @@ Cada bug tiene un estado del ciclo de vida, **persistente entre corridas**:
 `nuevo` (default) · `en progreso` · `solucionado` · `cerrado` · `no replicado`
 
 - Se marca con el selector inline de cada fila, o con las teclas **1–5** sobre el bug enfocado.
-- Persiste en un JSON local, identificado por **contenido** del bug (título + descripción),
-  así sobrevive aunque reordenes o re-exportes el Excel.
+- Persiste en Supabase dentro del proyecto activo, identificado por **contenido** del bug
+  (título + descripción), así sobrevive aunque reordenes o re-exportes el Excel.
 - Los bugs `solucionado`/`cerrado` se atenúan; el resumen muestra el conteo por estado.
 
 ### Activos vs históricos
@@ -174,11 +174,11 @@ estado refina dentro de la pestaña activa. El control de pestañas se navega co
 
 ## Borrar bugs
 
-Desde el detalle expandido de un bug, el botón **borrar** (con confirmación inline
-"¿borrar? sí / no") hace un **soft-delete en Supabase** (`deleted_at`) y lo saca de la
-tabla compartida. La caché de análisis (por contenido) se conserva. Como no se edita el
-Excel original, un bug que vino de un Excel puede volver a aparecer si se re-analiza.
-Si borrás el último bug, la app vuelve al inicio.
+Desde el detalle expandido de un bug, el botón **borrar** abre un modal de confirmación
+y hace un **soft-delete en Supabase** (`deleted_at`) si se confirma. El bug sale de la
+tabla compartida y la caché de análisis (por contenido) se conserva. Como no se edita el
+Excel original, un bug que vino de un Excel puede volver a aparecer si se re-analiza. Si
+borrás el último bug, la app vuelve al inicio.
 
 ## Carga manual de bugs
 
@@ -344,7 +344,16 @@ del LLM, caché, selección de sección de doc, dedup de docs, y las interaccion
 (estados + pestañas activos/históricos). La integración (LLM real, IPC, lectores de docs,
 auth/red/realtime de Supabase) se verifica corriendo la app.
 
-El **CI** (`.github/workflows/ci.yml`) corre `typecheck → test → build` en cada push y PR.
+El **CI** (`.github/workflows/ci.yml`) corre `lint → typecheck → test → build` en cada push
+y PR.
+
+## Pull Requests
+
+- Usá títulos descriptivos del cambio, sin prefijos de herramienta o autor como `[codex]`,
+  `[agent]` o similares.
+- La descripción debe enfocarse en qué cambió, por qué, impacto y validación. Evitá notas
+  internas que no aportan al reviewer, como estado de autenticación local, limitaciones del
+  agente o detalles personales del entorno.
 
 ---
 

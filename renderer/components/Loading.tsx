@@ -44,7 +44,7 @@ export function LoadingPanel({ title, detail }: { title: string; detail?: string
     >
       <div className="mb-2 flex items-center gap-2">
         <LoadingGlyph size={16} />
-        <span className="font-mono text-xs font-semibold" style={{ color: col.cream }}>
+        <span className="font-mono font-semibold text-xs" style={{ color: col.cream }}>
           {title}
         </span>
       </div>
