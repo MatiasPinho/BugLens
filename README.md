@@ -4,10 +4,11 @@ App de escritorio (Electron + React) que **ordena y reescribe** reportes de bugs
 Cargás bugs **desde un Excel** o **a mano** (típicamente escritos por QA, a veces
 incoherentes), y la app los clasifica, los reescribe en texto claro y estructurado, y
 te deja llevar un **estado** por bug (nuevo / en progreso / solucionado / cerrado /
-no replicado). La sesión de trabajo se **guarda y restaura** al reabrir la app.
+no replicado). Los bugs analizados y sus estados se **sincronizan con Supabase** para
+trabajar en equipo.
 
 > No analiza el código fuente: su trabajo es de **intake + clasificación + reescritura**.
-> Corre 100% local con Ollama (gratis, sin API key), o con un proveedor cloud opcional.
+> El análisis puede correr local con Ollama (gratis, sin API key), o con un proveedor cloud opcional.
 
 ## Qué hace
 
@@ -21,12 +22,12 @@ no replicado). La sesión de trabajo se **guarda y restaura** al reabrir la app.
      de un mismo bug no cuentan como problemas distintos).
    - **Datos que faltan**: lo que el QA no informó (para pedírselo) — nunca rechaza con
      "información insuficiente".
-4. Marcás el **estado** de cada bug; persiste entre corridas (incluso si reordenás el Excel).
+4. Marcás el **estado** de cada bug; persiste en Supabase y lo ve todo el equipo.
    La tabla separa **activos** (nuevo / en progreso) de **históricos** (solucionado /
    cerrado / no replicado) con un control de pestañas (navegable con flechas).
 5. Filtrás/agrupás/buscás/**borrás** bugs, y exportás un Excel enriquecido (incluso sin Excel original)
    o un JSON con los **datos completos** recopilados.
-6. Al reabrir la app, la **sesión** (bugs cargados + análisis) se restaura sola.
+6. Al reabrir la app, la tabla se restaura desde el proyecto compartido en Supabase.
 
 ---
 
@@ -174,10 +175,10 @@ estado refina dentro de la pestaña activa. El control de pestañas se navega co
 ## Borrar bugs
 
 Desde el detalle expandido de un bug, el botón **borrar** (con confirmación inline
-"¿borrar? sí / no") lo **saca de la tabla/sesión** y **olvida su estado guardado**
-(`bug-records`). La caché de análisis (por contenido) se conserva. Como no se edita el
-Excel original, un bug que vino de un Excel **reaparece** al re-analizarlo (como `nuevo`);
-los bugs **manuales** se eliminan de verdad. Si borrás el último bug, la app vuelve al inicio.
+"¿borrar? sí / no") hace un **soft-delete en Supabase** (`deleted_at`) y lo saca de la
+tabla compartida. La caché de análisis (por contenido) se conserva. Como no se edita el
+Excel original, un bug que vino de un Excel puede volver a aparecer si se re-analiza.
+Si borrás el último bug, la app vuelve al inicio.
 
 ## Carga manual de bugs
 
@@ -186,30 +187,24 @@ formulario con título, descripción, pasos, esperado, actual y ambiente (basta 
 **o** descripción). Se analiza con el mismo pipeline y se **agrega** a la tabla sin
 reemplazar lo ya cargado.
 
-## Persistencia de sesión
+## Persistencia compartida
 
-La sesión de trabajo (bugs cargados —de Excel o manuales— con su análisis) se guarda en
-`session.json` (userData) con **escritura atómica** y se **restaura al reabrir** la app.
-Es una sola sesión, auto-guardada; "nuevo análisis" la limpia. El estado de cada bug se
-reaplica desde `bug-records.json` (la fuente canónica) al restaurar.
+Supabase es la fuente de verdad para los bugs analizados, estados, imports y corridas de
+análisis. Electron usa sesión de usuario con Google Auth y una publishable key; nunca usa
+service keys. Al abrir la app, la tabla se hidrata desde Supabase y un canal realtime avisa
+cambios remotos para refrescar la vista.
 
-## Roadmap: equipo e investigación de código
+Un usuario puede pertenecer a varios proyectos. El proyecto activo se elige desde
+**config → equipo → proyectos**; cada proyecto tiene sus propios bugs, análisis, estados,
+imports y eventos realtime.
 
-buglens hoy es una app **local**: cada usuario tiene su sesión, estados, configuración y
-caché en su propio `userData`. Para que funcione como herramienta de equipo real —por
-ejemplo, que una persona cargue un bug y otra lo vea— hace falta una fuente compartida
-de verdad: backend interno + base de datos, o una integración con una herramienta ya
-compartida (Jira, Linear, GitHub Issues, Google Sheets, etc.).
+La colaboración no requiere MCP. MCP solo tendría sentido para integrar herramientas externas
+de investigación; la coexistencia real del equipo depende de autenticación, RLS y persistencia
+compartida.
 
-La colaboración no requiere MCP. Requiere sincronización/persistencia compartida:
-
-```text
-buglens desktop -> API/DB compartida -> otros usuarios
-```
-
-Esa capa debería guardar proyectos, bugs, análisis, estados, asignaciones, comentarios,
-historial de cambios y deduplicación por contenido. El Excel pasaría a ser una entrada
-de datos, no la fuente de verdad.
+La primera base de esta migración está documentada en
+[`docs/supabase-migration.md`](docs/supabase-migration.md), con el schema inicial en
+[`supabase/migrations/0001_initial_team_schema.sql`](supabase/migrations/0001_initial_team_schema.sql).
 
 MCP es un tema separado: serviría para una feature avanzada de **investigación de código**
 por bug, delegando en una herramienta externa que el usuario ya tenga configurada
@@ -256,9 +251,8 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | `excelReader.mapHeader(h)` / `extractGoogleLinks(t)` | Helpers puros: mapeo de cabeceras ES/EN y detección de links Docs/Drive. |
 | `manualBugBuilder.buildManualBug(fields, seq)` | Arma un `RawBug` válido desde los campos del formulario manual (sin Excel). |
 | `bugEnricher.BugEnricher.enrich(bug)` | Trae los Google Docs del bug. **Cachea por URL** para no re-descargar el mismo doc (un doc suele documentar varios bugs). |
-| `bugStatusKey.bugRecordKey(raw)` | Clave de identidad **estable por contenido** (título+descripción). Permite que el estado reencuentre al bug aunque cambie de posición. |
-| `bugRecordsStore.readRecords / setBugStatus` | Persistencia del estado de cada bug en `bug-records.json` (solo guarda los ≠ `nuevo`). |
-| `sessionStore.read / write / clearSession` | Persistencia de la **sesión** (bugs + análisis) en `session.json`, con escritura atómica (temp + rename). |
+| `bugStatusKey.bugRecordKey(raw)` | Clave de identidad **estable por contenido** (título+descripción). Vincula el mismo bug con su fila compartida en Supabase aunque cambie de posición. |
+| `src/supabase/teamBugs` | Crea imports, guarda análisis, cambia estados, borra bugs con soft-delete y reconstruye la tabla desde Supabase. |
 | `googleDocsReader` / `browserDocsReader` | Lectura de Google Docs vía OAuth (texto) o sesión de navegador (texto + capturas). |
 
 ### `src/llm/` — análisis
@@ -280,8 +274,8 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | `analyze:manual-bug` | Arma un bug desde los campos del formulario y lo analiza, streameándolo a la tabla **sin reemplazar** lo ya cargado. |
 | `export:excel` / `export:bugs` | Exporta el Excel enriquecido (con original) o un `.xlsx` nuevo desde cero (manual / mezclado). |
 | `export:full-data` | Exporta un `.json` completo con todos los bugs analizados y la data recopilada sin aplanar. |
-| `session:load / save / clear` | Restaura / guarda / borra la sesión persistida (`session.json`). |
-| `bug:set-status` | Persiste el cambio de estado de un bug. |
+| `bugs:load-remote` / `bugs:watch-remote` | Carga la tabla desde Supabase y escucha cambios realtime del proyecto. |
+| `bug:set-status` / `bug:delete` | Persiste cambios de estado y soft-delete remoto. |
 | `ensureOllamaRunning(baseUrl)` | Levanta Ollama si no corre (con el override de GPU AMD y paralelismo). |
 | `hardware:probe` | Sondea si el modelo corre en GPU o CPU: lo carga con una generación mínima y lee `size_vram` de `/api/ps`. Alimenta el wizard / config (recomendado + aviso). |
 
@@ -289,13 +283,13 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 
 | Pieza | Qué hace |
 |---|---|
-| `App.tsx` | Estado global, eventos IPC, atajos de teclado, cambio de estado, borrado, restore/auto-save de la sesión. |
+| `App.tsx` | Estado global, eventos IPC, atajos de teclado, cambio de estado, borrado y restore remoto desde Supabase. |
 | `BugTable.tsx` | Tabla con pestañas **activos/históricos/todos** (navegables con flechas), filtros, búsqueda, agrupación por pantalla, detalle con el reporte reescrito, selector de estado inline y **borrado con confirmación**. |
 | `ManualBugForm.tsx` | Modal para cargar un bug a mano (Esc/Tab-trap/autofocus, ⌘/Ctrl+Enter). |
 | `decor/BugMotifs.tsx` | Motivos decorativos temáticos (line-art mono): `BeetleMark` (escarabajo, ambiente) y `BugUnderLensMark` (lupa+bicho, marca/búsqueda). Usados en EmptyState, vacíos de la tabla y el panel izquierdo. |
 | `Onboarding.tsx` | Wizard de primer arranque (rendimiento → modelo → Google Docs). Se muestra hasta que `onboarded` queda en `true`. |
 | `PerformanceModePicker.tsx` | Selector GPU/CPU con "analizar mi equipo" (sondea Ollama, marca recomendado, avisa si es CPU). Usado por el wizard y Settings. |
-| `Settings.tsx` | Modelo LLM, rendimiento (GPU/CPU), acceso a Google, caché. |
+| `Settings.tsx` | Modelo LLM, rendimiento (GPU/CPU), acceso a Google, caché y proyectos Supabase. |
 
 ---
 
@@ -313,9 +307,10 @@ buglens/
 │   │   ├── googleDocsReader.ts   # Google Docs vía OAuth2
 │   │   ├── browserDocsReader.ts  # Google Docs vía sesión de navegador (+ capturas)
 │   │   ├── bugEnricher.ts        # Trae los docs del bug (con dedup por URL)
-│   │   ├── bugStatusKey.ts       # Clave de identidad estable por contenido
-│   │   ├── bugRecordsStore.ts    # Persistencia del estado de los bugs
-│   │   └── sessionStore.ts       # Persistencia de la sesión (bugs + análisis)
+│   │   └── bugStatusKey.ts       # Clave de identidad estable por contenido
+│   ├── supabase/
+│   │   ├── teamClient.ts         # Auth, storage y cliente Supabase
+│   │   └── teamBugs.ts           # Persistencia compartida de bugs/análisis
 │   ├── llm/
 │   │   ├── fastTriage.ts         # Pipeline de análisis (clasificar + reescribir)
 │   │   ├── client.ts             # Config de LLM (ollama / anthropic / gemini / openai)
@@ -343,11 +338,11 @@ npm test            # corre todo
 npm run test:watch  # modo watch
 ```
 
-La suite (Vitest + React Testing Library) cubre la **lógica de negocio**: identidad y
-persistencia de estados, parsing del Excel, construcción del bug manual, persistencia de
-sesión, parseo robusto del LLM, caché, selección de sección de doc, dedup de docs, y las
-interacciones de la tabla (estados + pestañas activos/históricos). La integración
-(LLM real, IPC, lectores de docs, restore/auto-save de sesión) se verifica corriendo la app.
+La suite (Vitest + React Testing Library) cubre la **lógica de negocio**: identidad por
+contenido, parsing del Excel, construcción del bug manual, mapeo Supabase, parseo robusto
+del LLM, caché, selección de sección de doc, dedup de docs, y las interacciones de la tabla
+(estados + pestañas activos/históricos). La integración (LLM real, IPC, lectores de docs,
+auth/red/realtime de Supabase) se verifica corriendo la app.
 
 El **CI** (`.github/workflows/ci.yml`) corre `typecheck → test → build` en cada push y PR.
 

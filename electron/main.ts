@@ -16,13 +16,26 @@ import { analyzeBug } from '../src/llm/fastTriage.js'
 import { resolveConcurrency } from '../src/llm/runtimeConfig.js'
 import { BrowserDocsReader } from '../src/pipeline/browserDocsReader.js'
 import { BugEnricher } from '../src/pipeline/bugEnricher.js'
-import { readRecords, setBugStatus } from '../src/pipeline/bugRecordsStore.js'
-import { bugRecordKey } from '../src/pipeline/bugStatusKey.js'
 import { readExcel, writeBugsExcel, writeEnrichedExcel } from '../src/pipeline/excelReader.js'
 import { writeFullDataJson } from '../src/pipeline/fullDataExport.js'
 import { GoogleDocsReader } from '../src/pipeline/googleDocsReader.js'
 import { buildManualBug, type ManualBugFields } from '../src/pipeline/manualBugBuilder.js'
-import { clearSession, readSession, writeSession } from '../src/pipeline/sessionStore.js'
+import {
+  createSupabaseProject,
+  createSupabaseTeamClient,
+  getSupabaseTeamStatus,
+  signOutSupabaseTeam,
+  startSupabaseGoogleAuth,
+  type SupabaseTeamConfig,
+} from '../src/supabase/teamClient.js'
+import {
+  createRemoteBugImport,
+  deleteRemoteBug,
+  loadRemoteAnalyzedBugs,
+  saveRemoteAnalysisResult,
+  setRemoteBugStatus,
+  type RemoteAnalysisContext,
+} from '../src/supabase/teamBugs.js'
 import type {
   AnalyzedBug,
   BugStatus,
@@ -35,12 +48,8 @@ function getCacheDir(): string {
   return path.join(app.getPath('userData'), 'analysis-cache')
 }
 
-function getRecordsPath(): string {
-  return path.join(app.getPath('userData'), 'bug-records.json')
-}
-
-function getSessionPath(): string {
-  return path.join(app.getPath('userData'), 'session.json')
+function getSupabaseSessionPath(): string {
+  return path.join(app.getPath('userData'), 'supabase-session.json')
 }
 
 // ─── Simple JSON config store ─────────────────────────────────────────────────
@@ -54,6 +63,11 @@ interface AppSettings {
   ollamaBaseUrl: string
   // Rendimiento: 'gpu' (paralelismo/timeout normales) o 'cpu' (serie + timeout largo).
   performanceMode: PerformanceMode
+  supabaseUrl: string
+  supabasePublishableKey: string
+  supabaseDefaultProjectSlug: string
+  supabaseDefaultProjectName: string
+  supabaseActiveProjectId: string
   // Marca de primer arranque: false hasta que el usuario completa el wizard inicial.
   onboarded: boolean
 }
@@ -70,6 +84,12 @@ function loadSettings(): AppSettings {
     llmModel: process.env['LLM_MODEL'] ?? process.env['OLLAMA_MODEL'] ?? 'qwen2.5:7b',
     ollamaBaseUrl: process.env['OLLAMA_BASE_URL'] ?? 'http://localhost:11434',
     performanceMode: process.env['LLM_PERFORMANCE_MODE'] === 'cpu' ? 'cpu' : 'gpu',
+    supabaseUrl: process.env['SUPABASE_URL'] ?? '',
+    supabasePublishableKey:
+      process.env['SUPABASE_PUBLISHABLE_KEY'] ?? process.env['SUPABASE_ANON_KEY'] ?? '',
+    supabaseDefaultProjectSlug: process.env['SUPABASE_DEFAULT_PROJECT_SLUG'] ?? 'buglens-default',
+    supabaseDefaultProjectName: process.env['SUPABASE_DEFAULT_PROJECT_NAME'] ?? 'buglens',
+    supabaseActiveProjectId: process.env['SUPABASE_ACTIVE_PROJECT_ID'] ?? '',
     onboarded: false,
   }
 
@@ -91,9 +111,27 @@ function saveSettings(patch: Partial<AppSettings>): void {
   fs.writeFileSync(getConfigPath(), JSON.stringify(updated, null, 2))
 }
 
+function loadSupabaseTeamConfig(): SupabaseTeamConfig {
+  const s = loadSettings()
+  return {
+    url: s.supabaseUrl,
+    publishableKey: s.supabasePublishableKey,
+    defaultProjectSlug: s.supabaseDefaultProjectSlug,
+    defaultProjectName: s.supabaseDefaultProjectName,
+    activeProjectId: s.supabaseActiveProjectId || undefined,
+  }
+}
+
+function makeSupabaseTeamClient() {
+  return createSupabaseTeamClient(loadSupabaseTeamConfig(), getSupabaseSessionPath())
+}
+
 // ─── Window ───────────────────────────────────────────────────────────────────
 
 let mainWindow: BrowserWindow | null = null
+let remoteBugsChannel: ReturnType<NonNullable<ReturnType<typeof makeSupabaseTeamClient>>['channel']> | null =
+  null
+let watchedProjectId: string | null = null
 
 // En Linux, algunos drivers/Mesa hacen que el proceso GPU de Chromium sea
 // inusable ("GPU process isn't usable. Goodbye." → SIGTRAP). Para una UI simple
@@ -156,6 +194,65 @@ function log(level: 'info' | 'warn' | 'error', message: string): void {
   })
 }
 
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message
+  if (err && typeof err === 'object') {
+    const record = err as Record<string, unknown>
+    const parts = [record['message'], record['details'], record['hint'], record['code']]
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .map((value) => value.trim())
+    if (parts.length > 0) return parts.join(' · ')
+    try {
+      return JSON.stringify(record)
+    } catch {
+      return String(err)
+    }
+  }
+  return String(err)
+}
+
+async function watchRemoteBugChanges(projectId: string): Promise<void> {
+  if (watchedProjectId === projectId && remoteBugsChannel) return
+
+  const client = makeSupabaseTeamClient()
+  if (!client) throw new Error('Supabase no está configurado.')
+
+  if (remoteBugsChannel) {
+    await client.removeChannel(remoteBugsChannel)
+    remoteBugsChannel = null
+    watchedProjectId = null
+  }
+
+  remoteBugsChannel = client
+    .channel(`project-bugs:${projectId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'bugs',
+        filter: `project_id=eq.${projectId}`,
+      },
+      () => {
+        sendToRenderer('remote-bugs-changed', { type: 'remote-bugs-changed' })
+      },
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') log('info', 'Realtime de bugs conectado')
+      if (status === 'CHANNEL_ERROR') log('warn', 'Realtime de bugs tuvo un error')
+    })
+
+  watchedProjectId = projectId
+}
+
+async function unwatchRemoteBugChanges(): Promise<void> {
+  if (!remoteBugsChannel) return
+  const client = makeSupabaseTeamClient()
+  if (client) await client.removeChannel(remoteBugsChannel)
+  remoteBugsChannel = null
+  watchedProjectId = null
+}
+
 // ─── Lazy singleton factories ─────────────────────────────────────────────────
 
 function makeGoogleReader(): GoogleDocsReader {
@@ -181,6 +278,108 @@ ipcMain.handle('settings:pick-directory', async () => {
   const result = await dialog.showOpenDialog(mainWindow!, { properties: ['openDirectory'] })
   return result.canceled ? null : result.filePaths[0]
 })
+
+// ─── IPC: Supabase team auth ─────────────────────────────────────────────────
+
+ipcMain.handle('supabase:status', async () => {
+  try {
+    const status = await getSupabaseTeamStatus(makeSupabaseTeamClient(), loadSupabaseTeamConfig())
+    if (status.authenticated && status.project) {
+      saveSettings({ supabaseActiveProjectId: status.project.id })
+      await watchRemoteBugChanges(status.project.id).catch((err) => {
+        log('warn', `No se pudo conectar realtime: ${errorMessage(err)}`)
+      })
+    }
+    return status
+  } catch (err) {
+    return {
+      configured: Boolean(loadSupabaseTeamConfig().url && loadSupabaseTeamConfig().publishableKey),
+      authenticated: false,
+      error: errorMessage(err),
+    }
+  }
+})
+
+ipcMain.handle('supabase:start-google-auth', async () => {
+  try {
+    const config = loadSupabaseTeamConfig()
+    const client = createSupabaseTeamClient(config, getSupabaseSessionPath())
+    if (!client) {
+      return {
+        configured: false,
+        authenticated: false,
+        error: 'Configurá SUPABASE_URL y SUPABASE_PUBLISHABLE_KEY antes de iniciar sesión.',
+      }
+    }
+    const status = await startSupabaseGoogleAuth(client, config, shell)
+    log('info', `supabase login completado: ${status.user?.email ?? status.user?.id}`)
+    if (status.project) {
+      saveSettings({ supabaseActiveProjectId: status.project.id })
+      await watchRemoteBugChanges(status.project.id).catch((err) => {
+        log('warn', `No se pudo conectar realtime: ${errorMessage(err)}`)
+      })
+    }
+    return status
+  } catch (err) {
+    const message = errorMessage(err)
+    log('error', `Error en Supabase Auth: ${message}`)
+    return {
+      configured: Boolean(loadSupabaseTeamConfig().url && loadSupabaseTeamConfig().publishableKey),
+      authenticated: false,
+      error: message,
+    }
+  }
+})
+
+ipcMain.handle('supabase:sign-out', async () => {
+  await unwatchRemoteBugChanges()
+  await signOutSupabaseTeam(makeSupabaseTeamClient())
+  return { ok: true }
+})
+
+ipcMain.handle('supabase:select-project', async (_e, { projectId }: { projectId: string }) => {
+  try {
+    saveSettings({ supabaseActiveProjectId: projectId })
+    const status = await getSupabaseTeamStatus(makeSupabaseTeamClient(), loadSupabaseTeamConfig())
+    if (status.authenticated && status.project) {
+      saveSettings({ supabaseActiveProjectId: status.project.id })
+      await watchRemoteBugChanges(status.project.id)
+    }
+    return status
+  } catch (err) {
+    const message = errorMessage(err)
+    log('error', `Error seleccionando proyecto: ${message}`)
+    return {
+      configured: Boolean(loadSupabaseTeamConfig().url && loadSupabaseTeamConfig().publishableKey),
+      authenticated: false,
+      error: message,
+    }
+  }
+})
+
+ipcMain.handle(
+  'supabase:create-project',
+  async (_e, { name, slug }: { name: string; slug: string }) => {
+    try {
+      const client = makeSupabaseTeamClient()
+      if (!client) throw new Error('Supabase no está configurado.')
+      const project = await createSupabaseProject(client, name, slug)
+      saveSettings({ supabaseActiveProjectId: project.id })
+      const status = await getSupabaseTeamStatus(client, loadSupabaseTeamConfig())
+      await watchRemoteBugChanges(project.id)
+      log('info', `proyecto creado: ${project.name}`)
+      return status
+    } catch (err) {
+      const message = errorMessage(err)
+      log('error', `Error creando proyecto: ${message}`)
+      return {
+        configured: Boolean(loadSupabaseTeamConfig().url && loadSupabaseTeamConfig().publishableKey),
+        authenticated: false,
+        error: message,
+      }
+    }
+  },
+)
 
 // ─── IPC: Google Auth ─────────────────────────────────────────────────────────
 
@@ -245,7 +444,12 @@ let manualBugCounter = 0
  */
 async function analyzeBugs(
   bugs: RawBug[],
-  { emitComplete }: { emitComplete: boolean },
+  {
+    emitComplete,
+    sourceType,
+    sourceName,
+    sourcePath,
+  }: { emitComplete: boolean; sourceType: 'excel' | 'manual'; sourceName?: string; sourcePath?: string },
 ): Promise<{ ok: boolean; count?: number; error?: string }> {
   const start = Date.now()
 
@@ -257,6 +461,22 @@ async function analyzeBugs(
       baseUrl: s.ollamaBaseUrl,
       performanceMode: s.performanceMode,
     })
+    const teamClient = makeSupabaseTeamClient()
+    if (!teamClient) throw new Error('Supabase no está configurado.')
+    const remoteClient = teamClient
+    const teamConfig = loadSupabaseTeamConfig()
+    const importId = await createRemoteBugImport(teamClient, teamConfig, {
+      sourceType,
+      sourceName,
+      sourcePath,
+      rowCount: bugs.length,
+    })
+    const remoteContext: RemoteAnalysisContext = {
+      importId,
+      sourceType,
+      provider: llmConfig.provider,
+      model: llmConfig.model,
+    }
 
     // Auto-levantar Ollama si es el provider elegido y no está corriendo
     if (s.llmProvider === 'ollama') {
@@ -299,11 +519,6 @@ async function analyzeBugs(
       `Paralelismo: ${concurrency} bugs simultáneos (${llmConfig.provider}, modo ${s.performanceMode})`,
     )
 
-    // Estados persistidos (clave por contenido → estado). Se lee una vez por corrida.
-    const records = readRecords(getRecordsPath())
-    const statusOf = (bug: (typeof bugs)[number]): BugStatus =>
-      records[bugRecordKey(bug)]?.status ?? 'nuevo'
-
     // Results array preserves original order
     const results: AnalyzedBug[] = new Array(bugs.length)
     let completed = 0
@@ -335,11 +550,12 @@ async function analyzeBugs(
         const result: AnalyzedBug = {
           enriched,
           analysis,
-          status: statusOf(bug),
+          status: 'nuevo',
           processingMs: Date.now() - bugStart,
         }
 
         results[i] = result
+        await saveRemoteAnalysisResult(remoteClient, teamConfig, result, remoteContext)
         completed++
 
         log(
@@ -362,7 +578,7 @@ async function analyzeBugs(
           total: bugs.length,
         })
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
+        const message = errorMessage(err)
         log('error', `✗ Bug ${i + 1} falló: ${message}`)
         const result: AnalyzedBug = {
           enriched: { raw: bug, googleDocs: [] },
@@ -382,11 +598,12 @@ async function analyzeBugs(
             missingInformation: [],
             rawResponse: message,
           },
-          status: statusOf(bug),
+          status: 'nuevo',
           error: message,
           processingMs: Date.now() - bugStart,
         }
         results[i] = result
+        await saveRemoteAnalysisResult(remoteClient, teamConfig, result, remoteContext)
         completed++
 
         sendToRenderer('bug-result', {
@@ -445,7 +662,7 @@ async function analyzeBugs(
 
     return { ok: true, count: results.length }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
+    const message = errorMessage(err)
     log('error', `Error general: ${message}`)
     return { ok: false, error: message }
   }
@@ -464,7 +681,12 @@ ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
     log('info', `Leyendo Excel: ${excelPath}`)
     const bugs = readExcel(excelPath)
     log('info', `Encontrados ${bugs.length} bugs`)
-    return await analyzeBugs(bugs, { emitComplete: true })
+    return await analyzeBugs(bugs, {
+      emitComplete: true,
+      sourceType: 'excel',
+      sourceName: path.basename(excelPath),
+      sourcePath: excelPath,
+    })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log('error', `Error leyendo Excel: ${message}`)
@@ -478,7 +700,11 @@ ipcMain.handle('analyze:manual-bug', async (_e, fields: ManualBugFields) => {
   try {
     const bug = buildManualBug(fields, ++manualBugCounter)
     log('info', `Bug manual cargado: ${bug.title}`)
-    return await analyzeBugs([bug], { emitComplete: false })
+    return await analyzeBugs([bug], {
+      emitComplete: false,
+      sourceType: 'manual',
+      sourceName: 'manual',
+    })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log('error', `Error en bug manual: ${message}`)
@@ -490,37 +716,64 @@ ipcMain.handle('analyze:manual-bug', async (_e, fields: ManualBugFields) => {
 
 // ─── IPC: Estado de bugs (persistente) ───────────────────────────────────────
 
-ipcMain.handle('bug:set-status', (_e, { key, status }: { key: string; status: BugStatus }) => {
-  setBugStatus(getRecordsPath(), key, status)
-  return { ok: true }
-})
-
-// ─── IPC: Sesión (persistente) ────────────────────────────────────────────────
-
-// Restaura la sesión guardada, reaplicando el estado CANÓNICO desde bug-records
-// (pudo cambiar fuera de esta sesión).
-ipcMain.handle('session:load', () => {
-  const session = readSession(getSessionPath())
-  if (!session) return null
-  const records = readRecords(getRecordsPath())
-  const results = session.results.map((r) => ({
-    ...r,
-    status: records[bugRecordKey(r.enriched.raw)]?.status ?? 'nuevo',
-  }))
-  return { excelPath: session.excelPath, results }
-})
-
 ipcMain.handle(
-  'session:save',
-  (_e, { excelPath, results }: { excelPath: string | null; results: AnalyzedBug[] }) => {
-    writeSession(getSessionPath(), { excelPath, results })
-    return { ok: true }
+  'bug:set-status',
+  async (_e, { bug, status }: { bug: AnalyzedBug; status: BugStatus }) => {
+    try {
+      const client = makeSupabaseTeamClient()
+      if (!client) throw new Error('Supabase no está configurado.')
+      await setRemoteBugStatus(client, loadSupabaseTeamConfig(), bug.enriched.raw, status)
+      return { ok: true }
+    } catch (err) {
+      const message = errorMessage(err)
+      log('error', `Error guardando estado remoto: ${message}`)
+      return { ok: false, error: message }
+    }
   },
 )
 
-ipcMain.handle('session:clear', () => {
-  clearSession(getSessionPath())
-  return { ok: true }
+ipcMain.handle('bugs:load-remote', async () => {
+  try {
+    const client = makeSupabaseTeamClient()
+    if (!client) throw new Error('Supabase no está configurado.')
+    const results = await loadRemoteAnalyzedBugs(client, loadSupabaseTeamConfig())
+    return { ok: true, results }
+  } catch (err) {
+    const message = errorMessage(err)
+    log('error', `Error cargando bugs remotos: ${message}`)
+    return { ok: false, error: message, results: [] }
+  }
+})
+
+ipcMain.handle(
+  'bug:delete',
+  async (_e, { bug }: { bug: AnalyzedBug }) => {
+    try {
+      const client = makeSupabaseTeamClient()
+      if (!client) throw new Error('Supabase no está configurado.')
+      await deleteRemoteBug(client, loadSupabaseTeamConfig(), bug.enriched.raw)
+      return { ok: true }
+    } catch (err) {
+      const message = errorMessage(err)
+      log('error', `Error borrando bug remoto: ${message}`)
+      return { ok: false, error: message }
+    }
+  },
+)
+
+ipcMain.handle('bugs:watch-remote', async () => {
+  try {
+    const status = await getSupabaseTeamStatus(makeSupabaseTeamClient(), loadSupabaseTeamConfig())
+    if (!status.authenticated || !status.project) {
+      throw new Error('No hay sesión de equipo o proyecto compartido activo.')
+    }
+    await watchRemoteBugChanges(status.project.id)
+    return { ok: true }
+  } catch (err) {
+    const message = errorMessage(err)
+    log('error', `Error conectando realtime: ${message}`)
+    return { ok: false, error: message }
+  }
 })
 
 // ─── IPC: Cache ───────────────────────────────────────────────────────────────
@@ -534,7 +787,7 @@ ipcMain.handle('cache:clear', () => {
 
 // ─── IPC: Reset (restablecer) ───────────────────────────────────────────────────
 // Dos scopes destructivos, separados a propósito:
-//  - 'bug-data': estados + sesión (bug-records.json + session.json) → tabla vacía.
+//  - 'bug-data': alcance legado. No borra Supabase.
 //  - 'config':   settings.json → vuelve a defaults (incl. onboarded:false → wizard).
 // No toca la caché de análisis (tiene su propio botón) ni las sesiones de Google.
 // Tras borrar, reinicia la app para arrancar desde un estado limpio.
@@ -548,10 +801,7 @@ function removeFileIfExists(filePath: string): void {
 }
 
 ipcMain.handle('app:reset', (_e, { scope }: { scope: 'bug-data' | 'config' }) => {
-  if (scope === 'bug-data') {
-    removeFileIfExists(getRecordsPath())
-    removeFileIfExists(getSessionPath())
-  } else if (scope === 'config') {
+  if (scope === 'config') {
     removeFileIfExists(getConfigPath())
   }
   // Reiniciar para que el renderer arranque sin estado en memoria.

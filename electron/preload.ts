@@ -9,6 +9,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('settings:save', settings),
   pickDirectory: () => ipcRenderer.invoke('settings:pick-directory'),
 
+  // Supabase team auth
+  getSupabaseStatus: () => ipcRenderer.invoke('supabase:status'),
+  startSupabaseGoogleAuth: () => ipcRenderer.invoke('supabase:start-google-auth'),
+  selectSupabaseProject: (projectId: string) =>
+    ipcRenderer.invoke('supabase:select-project', { projectId }),
+  createSupabaseProject: (name: string, slug: string) =>
+    ipcRenderer.invoke('supabase:create-project', { name, slug }),
+  signOutSupabase: () => ipcRenderer.invoke('supabase:sign-out'),
+
   // Google Auth (OAuth)
   getAuthStatus: () => ipcRenderer.invoke('google:auth-status'),
   startAuth: () => ipcRenderer.invoke('google:start-auth'),
@@ -23,16 +32,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   runAnalysis: (excelPath: string) => ipcRenderer.invoke('analyze:run', excelPath),
   analyzeManualBug: (fields: Record<string, string>) =>
     ipcRenderer.invoke('analyze:manual-bug', fields),
+  loadRemoteBugs: () => ipcRenderer.invoke('bugs:load-remote'),
+  watchRemoteBugs: () => ipcRenderer.invoke('bugs:watch-remote'),
 
   // Estado de bugs (persistente)
-  setBugStatus: (key: string, status: string) =>
-    ipcRenderer.invoke('bug:set-status', { key, status }),
-
-  // Sesión (persistente)
-  loadSession: () => ipcRenderer.invoke('session:load'),
-  saveSession: (excelPath: string | null, results: AnalyzedBug[]) =>
-    ipcRenderer.invoke('session:save', { excelPath, results }),
-  clearSession: () => ipcRenderer.invoke('session:clear'),
+  setBugStatus: (bug: AnalyzedBug, status: string) =>
+    ipcRenderer.invoke('bug:set-status', { bug, status }),
+  deleteBug: (bug: AnalyzedBug) => ipcRenderer.invoke('bug:delete', { bug }),
 
   // Cache
   cacheStats: () => ipcRenderer.invoke('cache:stats'),
@@ -74,5 +80,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_: Electron.IpcRendererEvent, data: IPCEvent) => cb(data)
     ipcRenderer.on('bug-result', handler)
     return () => ipcRenderer.removeListener('bug-result', handler)
+  },
+  onRemoteBugsChanged: (cb: () => void) => {
+    const handler = () => cb()
+    ipcRenderer.on('remote-bugs-changed', handler)
+    return () => ipcRenderer.removeListener('remote-bugs-changed', handler)
   },
 })

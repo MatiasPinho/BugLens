@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ResetControls from './ResetControls'
@@ -15,13 +15,13 @@ afterEach(() => {
 })
 
 describe('ResetControls', () => {
-  it('pide confirmación inline antes de restablecer (no llama de una)', async () => {
+  it('pide confirmación modal antes de restablecer (no llama de una)', async () => {
     const { resetApp } = stubReset()
     render(<ResetControls addLog={vi.fn()} />)
 
-    await userEvent.click(screen.getByRole('button', { name: 'borrar datos de bugs' }))
+    await userEvent.click(screen.getByRole('button', { name: 'vaciar vista local' }))
     expect(resetApp).not.toHaveBeenCalled()
-    expect(screen.getByText(/reinicia la app/)).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'vaciar vista local' })).toBeInTheDocument()
   })
 
   it('confirmar llama resetApp con el scope correcto', async () => {
@@ -29,7 +29,8 @@ describe('ResetControls', () => {
     render(<ResetControls addLog={vi.fn()} />)
 
     await userEvent.click(screen.getByRole('button', { name: 'restablecer configuración' }))
-    await userEvent.click(screen.getByRole('button', { name: /sí, restablecer/ }))
+    const dialog = screen.getByRole('dialog', { name: 'restablecer configuración' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'restablecer' }))
 
     await waitFor(() => expect(resetApp).toHaveBeenCalledWith('config'))
   })
@@ -38,23 +39,24 @@ describe('ResetControls', () => {
     const { resetApp } = stubReset()
     render(<ResetControls addLog={vi.fn()} />)
 
-    await userEvent.click(screen.getByRole('button', { name: 'borrar datos de bugs' }))
-    await userEvent.click(screen.getByRole('button', { name: 'cancelar' }))
+    await userEvent.click(screen.getByRole('button', { name: 'vaciar vista local' }))
+    const dialog = screen.getByRole('dialog', { name: 'vaciar vista local' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'cancelar' }))
 
     expect(resetApp).not.toHaveBeenCalled()
-    expect(screen.queryByText(/reinicia la app/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'vaciar vista local' })).not.toBeInTheDocument()
   })
 
   it('Escape cancela la confirmación', async () => {
     const { resetApp } = stubReset()
     render(<ResetControls addLog={vi.fn()} />)
 
-    await userEvent.click(screen.getByRole('button', { name: 'borrar datos de bugs' }))
-    expect(screen.getByText(/reinicia la app/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'vaciar vista local' }))
+    expect(screen.getByRole('dialog', { name: 'vaciar vista local' })).toBeInTheDocument()
 
     await userEvent.keyboard('{Escape}')
 
     expect(resetApp).not.toHaveBeenCalled()
-    expect(screen.queryByText(/reinicia la app/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'vaciar vista local' })).not.toBeInTheDocument()
   })
 })
