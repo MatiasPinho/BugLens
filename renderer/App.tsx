@@ -12,6 +12,7 @@ import BugTable, { severityLabel } from './components/BugTable'
 import { BeetleMark } from './components/decor/BugMotifs'
 import EmptyState from './components/EmptyState'
 import FileUpload from './components/FileUpload'
+import { IconPlus } from './components/icons'
 import { LoadingOverlay } from './components/Loading'
 import ManualBugForm from './components/ManualBugForm'
 import Onboarding from './components/Onboarding'
@@ -586,7 +587,8 @@ export default function App() {
                   className="btn-secondary side-action w-full"
                   onClick={() => setShowManualForm(true)}
                 >
-                  + cargar bug manual
+                  <IconPlus size={12} className="button-icon button-icon-plus" />
+                  cargar bug manual
                 </button>
               )}
 

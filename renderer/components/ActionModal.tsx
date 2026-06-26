@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useEffect, useRef } from 'react'
-import { alpha, col } from '../theme'
+import { col } from '../theme'
 import { IconWarning, IconX } from './icons'
 import { LoadingInline } from './Loading'
 
@@ -24,6 +24,8 @@ export function ActionModal({
   onClose,
 }: ActionModalProps) {
   const panelRef = useRef<HTMLDivElement>(null)
+  const titleId = `modal-title-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+  const descriptionId = description ? `${titleId}-description` : undefined
 
   useEffect(() => {
     if (!open) return
@@ -47,40 +49,41 @@ export function ActionModal({
   if (!open) return null
 
   const accent = tone === 'danger' ? col.red : col.cream
+  const shellClassName = `modal-shell animate-fade-in font-mono ${
+    tone === 'danger' ? 'modal-shell-danger' : ''
+  }`
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
         type="button"
         aria-label="cerrar modal"
-        className="absolute inset-0 cursor-default"
-        style={{ background: alpha(col.code, 0.82) }}
+        className="modal-backdrop"
         onClick={onClose}
       />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
         tabIndex={-1}
-        className="relative w-full max-w-md animate-fade-in rounded-md p-4 font-mono"
-        style={{
-          color: col.fg,
-          background: col.surface,
-          border: `1px solid ${alpha(accent, 0.26)}`,
-          boxShadow: `0 20px 60px ${alpha(col.code, 0.65)}`,
-        }}
+        className={shellClassName}
       >
-        <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="modal-header">
           <div className="min-w-0">
-            <div className="flex items-start gap-2">
-              {tone === 'danger' && <IconWarning size={16} className="mt-0.5 flex-shrink-0" />}
-              <h2 className="font-semibold text-sm leading-5" style={{ color: accent }}>
+            <div className="modal-title-row">
+              {tone === 'danger' && <IconWarning size={16} className="self-center flex-shrink-0" />}
+              <h2
+                id={titleId}
+                className="font-semibold text-sm leading-5"
+                style={{ color: accent }}
+              >
                 {title}
               </h2>
             </div>
             {description && (
-              <p className="mt-1 text-xs" style={{ color: col.fgMuted }}>
+              <p id={descriptionId} className="modal-description mt-1 text-xs">
                 {description}
               </p>
             )}
@@ -94,7 +97,7 @@ export function ActionModal({
             <IconX size={12} />
           </button>
         </div>
-        {children}
+        <div className="modal-body">{children}</div>
       </div>
     </div>
   )

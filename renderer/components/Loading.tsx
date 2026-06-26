@@ -1,4 +1,4 @@
-import { alpha, col } from '../theme'
+import { col } from '../theme'
 
 interface LoadingGlyphProps {
   size?: 12 | 16 | 20 | 24
@@ -25,23 +25,14 @@ export function LoadingInline({ label }: { label: string }) {
   return (
     <span className="inline-flex items-center justify-center gap-2">
       <LoadingGlyph size={12} />
-      <span>{label}</span>
+      <span className="truncate">{label}</span>
     </span>
   )
 }
 
 export function LoadingPanel({ title, detail }: { title: string; detail?: string }) {
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="animate-fade-in rounded-md p-4"
-      style={{
-        color: col.fgDim,
-        border: `1px solid ${alpha(col.cream, 0.16)}`,
-        background: alpha(col.cream, 0.035),
-      }}
-    >
+    <div role="status" aria-live="polite" className="loading-panel animate-fade-in rounded-md p-4">
       <div className="mb-2 flex items-center gap-2">
         <LoadingGlyph size={16} />
         <span className="font-mono font-semibold text-xs" style={{ color: col.cream }}>
@@ -69,10 +60,7 @@ export function LoadingOverlay({
   if (!visible) return null
 
   return (
-    <div
-      className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center p-6"
-      style={{ background: alpha(col.code, 0.72) }}
-    >
+    <div className="loading-overlay pointer-events-auto absolute inset-0 z-40 flex items-center justify-center p-6">
       <div className="w-full max-w-sm">
         <LoadingPanel title={title} detail={detail} />
       </div>
