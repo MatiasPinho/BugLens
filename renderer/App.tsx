@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { bugRecordKey } from '../src/pipeline/bugStatusKey'
 import type { ManualBugFields } from '../src/pipeline/manualBugBuilder'
 import type {
   AnalyzedBug,
@@ -13,10 +12,13 @@ import BugTable, { severityLabel } from './components/BugTable'
 import { BeetleMark } from './components/decor/BugMotifs'
 import EmptyState from './components/EmptyState'
 import FileUpload from './components/FileUpload'
+import { LoadingOverlay } from './components/Loading'
 import ManualBugForm from './components/ManualBugForm'
 import Onboarding from './components/Onboarding'
 import ProgressLog from './components/ProgressLog'
+import ProjectSwitcher from './components/ProjectSwitcher'
 import Settings from './components/Settings'
+import TeamLogin, { type TeamAuthStatus } from './components/TeamLogin'
 import { alpha, col } from './theme'
 
 type Tab = 'main' | 'settings'
@@ -47,9 +49,19 @@ export default function App() {
   const [showManualForm, setShowManualForm] = useState(false)
   // Primer arranque: null = cargando settings; false = mostrar wizard; true = app normal.
   const [onboarded, setOnboarded] = useState<boolean | null>(null)
-  // Gate del auto-guardado: no persistir hasta intentar restaurar (evita pisar
-  // la sesión guardada con un estado vacío en el arranque).
-  const hydratedRef = React.useRef(false)
+  const [teamStatus, setTeamStatus] = useState<TeamAuthStatus | null>(null)
+  const [teamAuthLoading, setTeamAuthLoading] = useState(false)
+  const [projectBusy, setProjectBusy] = useState(false)
+  const [requestLoading, setRequestLoading] = useState<{
+    title: string
+    detail?: string
+  } | null>(null)
+  const [focusedBugId, setFocusedBugId] = useState<string | null>(null)
+  const [expandedBugId, setExpandedBugId] = useState<string | null>(null)
+  const [showHelp, setShowHelp] = useState(false)
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null)
+  const remoteReloadTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activeProjectId = teamStatus?.project?.id ?? null
 
   const addLog = useCallback((level: LogLine['level'], message: string, timestamp?: string) => {
     setLogs((prev) => [
@@ -106,35 +118,135 @@ export default function App() {
   // Saber si hay que mostrar el wizard de primer arranque.
   useEffect(() => {
     window.electronAPI.getSettings().then((s) => setOnboarded(Boolean(s.onboarded)))
+    window.electronAPI.getSupabaseStatus().then(setTeamStatus)
   }, [])
 
-  // Restaurar la última sesión al abrir (una sola vez).
+  const handleTeamLogin = useCallback(async () => {
+    setTeamAuthLoading(true)
+    setRequestLoading({
+      title: 'esperando login',
+      detail: 'Completá Google Auth en el navegador.',
+    })
+    try {
+      const status = await window.electronAPI.startSupabaseGoogleAuth()
+      setTeamStatus(status)
+      if (status.authenticated)
+        addLog('info', `equipo conectado: ${status.user?.email ?? status.user?.id}`)
+      else addLog('error', `error en equipo: ${status.error ?? 'login no completado'}`)
+    } finally {
+      setTeamAuthLoading(false)
+      setRequestLoading(null)
+    }
+  }, [addLog])
+
+  const handleSelectProject = useCallback(
+    async (projectId: string) => {
+      if (!projectId || projectId === activeProjectId) return
+      setProjectBusy(true)
+      setRequestLoading({
+        title: 'cambiando proyecto',
+        detail: 'Sincronizando bugs, estados y realtime.',
+      })
+      try {
+        const status = await window.electronAPI.selectSupabaseProject(projectId)
+        setTeamStatus(status)
+        setResults([])
+        setExpandedBugId(null)
+        setFocusedBugId(null)
+        if (status.project) addLog('info', `proyecto activo: ${status.project.name}`)
+        else addLog('error', `error seleccionando proyecto: ${status.error ?? 'sin detalle'}`)
+      } finally {
+        setProjectBusy(false)
+        setRequestLoading(null)
+      }
+    },
+    [activeProjectId, addLog],
+  )
+
+  const handleCreateProject = useCallback(
+    async (name: string, slug: string) => {
+      setProjectBusy(true)
+      setRequestLoading({
+        title: 'creando proyecto',
+        detail: `${name} / ${slug}`,
+      })
+      try {
+        const status = await window.electronAPI.createSupabaseProject(name, slug)
+        setTeamStatus(status)
+        setResults([])
+        setExpandedBugId(null)
+        setFocusedBugId(null)
+        if (status.project) addLog('info', `proyecto creado: ${status.project.name}`)
+        else addLog('error', `error creando proyecto: ${status.error ?? 'sin detalle'}`)
+      } finally {
+        setProjectBusy(false)
+        setRequestLoading(null)
+      }
+    },
+    [addLog],
+  )
+
+  const loadRemoteResults = useCallback(
+    async (logRestore = false, showLoading = false) => {
+      if (showLoading) {
+        setRequestLoading({
+          title: 'cargando proyecto',
+          detail: 'Leyendo bugs analizados desde Supabase.',
+        })
+      }
+      try {
+        const remote = await window.electronAPI.loadRemoteBugs()
+        if (remote.ok) {
+          setResults(remote.results)
+          setExcelPath(null)
+          setPhase(remote.results.length > 0 ? 'done' : 'idle')
+          if (logRestore && remote.results.length > 0) {
+            addLog('info', `bugs restaurados desde Supabase: ${remote.results.length}`)
+          }
+        } else {
+          addLog('error', `error restaurando Supabase: ${remote.error ?? 'sin detalle'}`)
+        }
+      } finally {
+        if (showLoading) setRequestLoading(null)
+      }
+    },
+    [addLog],
+  )
+
+  // Restaurar la tabla desde Supabase al abrir. La sesión local dejó de ser la
+  // fuente de verdad: si el equipo está conectado, lo que se ve sale del proyecto remoto.
   useEffect(() => {
     let cancelled = false
-    window.electronAPI.loadSession().then((session) => {
-      if (!cancelled && session && session.results.length > 0) {
-        setResults(session.results)
-        setExcelPath(session.excelPath)
-        setPhase('done')
-      }
-      hydratedRef.current = true
+    if (!teamStatus?.authenticated || !activeProjectId) return
+
+    loadRemoteResults(true, true).then(() => {
+      if (cancelled) return
     })
+
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [activeProjectId, loadRemoteResults, teamStatus?.authenticated])
 
-  // Auto-guardar la sesión (debounced). No persiste durante el análisis (resultados
-  // parciales + churn de MB con imágenes). Si la tabla queda vacía (ej. borraste el
-  // último bug), borra la sesión guardada para que no reaparezca al reabrir.
   useEffect(() => {
-    if (!hydratedRef.current || phase === 'analyzing') return
-    const timer = setTimeout(() => {
-      if (results.length > 0) window.electronAPI.saveSession(excelPath, results)
-      else window.electronAPI.clearSession()
-    }, 800)
-    return () => clearTimeout(timer)
-  }, [results, excelPath, phase])
+    if (!teamStatus?.authenticated || !activeProjectId) return
+
+    window.electronAPI.watchRemoteBugs().then((result) => {
+      if (!result.ok) addLog('warn', `realtime no disponible: ${result.error ?? 'sin detalle'}`)
+    })
+
+    const cleanRemoteChanges = window.electronAPI.onRemoteBugsChanged(() => {
+      if (remoteReloadTimerRef.current) clearTimeout(remoteReloadTimerRef.current)
+      remoteReloadTimerRef.current = setTimeout(() => {
+        if (phase !== 'analyzing') void loadRemoteResults(false)
+      }, 500)
+    })
+
+    return () => {
+      cleanRemoteChanges()
+      if (remoteReloadTimerRef.current) clearTimeout(remoteReloadTimerRef.current)
+    }
+  }, [activeProjectId, addLog, loadRemoteResults, phase, teamStatus?.authenticated])
 
   // Si la tabla queda vacía estando en 'done' (borraste el último bug), volver al
   // inicio para mostrar la pantalla de carga.
@@ -155,8 +267,10 @@ export default function App() {
     if (!result.ok) {
       addLog('error', `error: ${result.error}`)
       setPhase('idle')
+    } else {
+      await loadRemoteResults(false)
     }
-  }, [excelPath, addLog])
+  }, [excelPath, addLog, loadRemoteResults])
 
   // Analizar un bug cargado a mano: lo appendea a la tabla (no resetea).
   const handleAddManualBug = useCallback(
@@ -169,6 +283,7 @@ export default function App() {
       try {
         const result = await window.electronAPI.analyzeManualBug(fields)
         if (result.ok) {
+          await loadRemoteResults(false)
           setPhase('done')
           return
         }
@@ -183,7 +298,7 @@ export default function App() {
         return prev
       })
     },
-    [addLog],
+    [addLog, loadRemoteResults],
   )
 
   const handleExport = useCallback(async () => {
@@ -212,44 +327,41 @@ export default function App() {
     }
   }, [excelPath, results, addLog])
 
-  // Bug seleccionado vía teclado (para j/k navigation + Enter/d shortcuts).
-  // null = nada seleccionado.
-  const [focusedBugId, setFocusedBugId] = useState<string | null>(null)
-  const [expandedBugId, setExpandedBugId] = useState<string | null>(null)
-  const [showHelp, setShowHelp] = useState(false)
-  const searchInputRef = React.useRef<HTMLInputElement | null>(null)
-
-  // Cambiar el estado de un bug: update optimista en la UI + persistir en disco.
-  const handleSetStatus = useCallback(async (bug: AnalyzedBug, status: BugStatus) => {
-    const id = bug.enriched.raw.id
-    setResults((prev) => prev.map((r) => (r.enriched.raw.id === id ? { ...r, status } : r)))
-    await window.electronAPI.setBugStatus(bugRecordKey(bug.enriched.raw), status)
-  }, [])
-
-  // Borrar un bug: lo saca de la tabla/sesión y OLVIDA su estado guardado
-  // (setBugStatus→'nuevo' elimina el registro en bug-records). La caché de análisis
-  // (por contenido) se conserva. Si vino de un Excel, re-analizarlo lo trae de vuelta
-  // como 'nuevo' (no editamos el Excel original).
-  const handleDeleteBug = useCallback(
-    (bug: AnalyzedBug) => {
+  // Cambiar el estado de un bug: update optimista en la UI + persistir en Supabase.
+  const handleSetStatus = useCallback(
+    async (bug: AnalyzedBug, status: BugStatus) => {
       const id = bug.enriched.raw.id
-      setResults((prev) => prev.filter((r) => r.enriched.raw.id !== id))
-      setExpandedBugId((curr) => (curr === id ? null : curr))
-      setFocusedBugId((curr) => (curr === id ? null : curr))
-      window.electronAPI.setBugStatus(bugRecordKey(bug.enriched.raw), 'nuevo')
-      addLog('info', `bug borrado: ${bug.enriched.raw.title}`)
+      setResults((prev) => prev.map((r) => (r.enriched.raw.id === id ? { ...r, status } : r)))
+      const result = await window.electronAPI.setBugStatus(bug, status)
+      if (!result.ok) {
+        addLog('error', `error guardando estado: ${result.error}`)
+        setResults((prev) =>
+          prev.map((r) => (r.enriched.raw.id === id ? { ...r, status: bug.status } : r)),
+        )
+      }
     },
     [addLog],
   )
 
-  const handleReset = useCallback(() => {
-    setPhase('idle')
-    setExcelPath(null)
-    setResults([])
-    setLogs([])
-    setProgress({ current: 0, total: 0, message: '' })
-    window.electronAPI.clearSession()
-  }, [])
+  // Borrar un bug: soft-delete remoto en Supabase + update optimista de la tabla.
+  const handleDeleteBug = useCallback(
+    async (bug: AnalyzedBug) => {
+      const id = bug.enriched.raw.id
+      const previousResults = results
+      setResults((prev) => prev.filter((r) => r.enriched.raw.id !== id))
+      setExpandedBugId((curr) => (curr === id ? null : curr))
+      setFocusedBugId((curr) => (curr === id ? null : curr))
+
+      const result = await window.electronAPI.deleteBug(bug)
+      if (result.ok) {
+        addLog('info', `bug borrado: ${bug.enriched.raw.title}`)
+      } else {
+        setResults(previousResults)
+        addLog('error', `error borrando bug: ${result.error ?? 'sin detalle'}`)
+      }
+    },
+    [addLog, results],
+  )
 
   // ─── Keyboard shortcuts ────────────────────────────────────────────────────
   // j/k: next/prev bug, Enter: expandir, Esc: cerrar, /: focus search, d: deep analysis del bug abierto, ?: help
@@ -344,8 +456,21 @@ export default function App() {
     )
   }
 
+  if (!teamStatus?.authenticated) {
+    return (
+      <div className="relative h-screen">
+        <TeamLogin status={teamStatus} loading={teamAuthLoading} onLogin={handleTeamLogin} />
+        <LoadingOverlay
+          visible={Boolean(requestLoading)}
+          title={requestLoading?.title ?? ''}
+          detail={requestLoading?.detail}
+        />
+      </div>
+    )
+  }
+
   return (
-    <div className="flex h-screen flex-col bg-om-base text-om-fg">
+    <div className="relative flex h-screen flex-col bg-om-base text-om-fg">
       {/* Header */}
       <header className="flex flex-shrink-0 items-center justify-between border-om-border/25 border-b bg-om-surface px-4 py-2">
         <div className="flex items-center gap-2.5">
@@ -436,11 +561,19 @@ export default function App() {
 
       <main className="flex-1 overflow-hidden">
         {tab === 'settings' ? (
-          <Settings addLog={addLog} />
+          <Settings addLog={addLog} onTeamStatusChange={setTeamStatus} />
         ) : (
           <div className="flex h-full">
             {/* Left panel */}
-            <div className="flex w-72 flex-shrink-0 flex-col gap-3 overflow-y-auto border-om-border/20 border-r p-4">
+            <div className="side-panel flex flex-shrink-0 flex-col gap-3 overflow-y-auto border-om-border/20 border-r p-4">
+              <ProjectSwitcher
+                activeProject={teamStatus.project}
+                projects={teamStatus.projects ?? (teamStatus.project ? [teamStatus.project] : [])}
+                busy={projectBusy || phase === 'analyzing'}
+                onSelect={(projectId) => void handleSelectProject(projectId)}
+                onCreate={(name, slug) => void handleCreateProject(name, slug)}
+              />
+
               <FileUpload
                 excelPath={excelPath}
                 onFileSelected={setExcelPath}
@@ -450,7 +583,7 @@ export default function App() {
               {phase !== 'analyzing' && (
                 <button
                   type="button"
-                  className="btn-secondary w-full"
+                  className="btn-secondary side-action w-full"
                   onClick={() => setShowManualForm(true)}
                 >
                   + cargar bug manual
@@ -460,7 +593,7 @@ export default function App() {
               {phase === 'idle' && (
                 <button
                   type="button"
-                  className="btn-primary w-full"
+                  className="btn-primary side-action w-full"
                   onClick={handleAnalyze}
                   disabled={!excelPath}
                 >
@@ -535,18 +668,19 @@ export default function App() {
 
               {phase === 'done' && (
                 <div className="flex flex-col gap-2">
-                  <button type="button" className="btn-primary w-full" onClick={handleExport}>
+                  <button
+                    type="button"
+                    className="btn-primary side-action w-full"
+                    onClick={handleExport}
+                  >
                     exportar excel
                   </button>
                   <button
                     type="button"
-                    className="btn-secondary w-full"
+                    className="btn-secondary side-action w-full"
                     onClick={handleExportFullData}
                   >
                     exportar datos completos
-                  </button>
-                  <button type="button" className="btn-secondary w-full" onClick={handleReset}>
-                    nuevo análisis
                   </button>
                 </div>
               )}
@@ -608,6 +742,12 @@ export default function App() {
           </div>
         )}
       </main>
+
+      <LoadingOverlay
+        visible={Boolean(requestLoading)}
+        title={requestLoading?.title ?? ''}
+        detail={requestLoading?.detail}
+      />
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
       {showManualForm && (

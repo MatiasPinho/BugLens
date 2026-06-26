@@ -83,3 +83,20 @@ export function IconRestore({ size = 16, className }: IconProps) {
     </svg>
   )
 }
+
+export function IconPlus({ size = 16, className }: IconProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} className={className} {...STROKE}>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  )
+}
+
+export function IconFolder({ size = 16, className }: IconProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} className={className} {...STROKE}>
+      <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+    </svg>
+  )
+}

@@ -30,17 +30,18 @@ manual ─┘   clasifica + reescribe + lista faltantes) → tabla (activos/hist
 ```
 
 Dos entradas, mismo pipeline: el Excel (`analyze:run`) y la carga manual
-(`analyze:manual-bug`, que appendea sin reemplazar). La tabla y los bugs cargados se
-persisten como **sesión** y se restauran al reabrir.
+(`analyze:manual-bug`, que appendea sin reemplazar). Los bugs analizados, estados,
+imports y corridas se persisten en Supabase; al reabrir se restaura desde el proyecto remoto.
 
 - `src/pipeline/` — `excelReader` (lee + exporta; `writeBugsExcel` exporta desde cero),
   `manualBugBuilder` (RawBug desde el form), doc readers
-  (`googleDocsReader`/`browserDocsReader`), `bugEnricher`, estados (`bugStatusKey`,
-  `bugRecordsStore`), sesión (`sessionStore`)
+  (`googleDocsReader`/`browserDocsReader`), `bugEnricher`, identidad (`bugStatusKey`)
+- `src/supabase/` — `teamClient` (auth/cliente) y `teamBugs` (imports, análisis,
+  estados, soft-delete, restore remoto)
 - `src/llm/` — `fastTriage` (el pipeline real), `client` (config de LLM), `analysisCache`
 - `electron/main.ts` — IPC (`analyze:run`/`analyze:manual-bug`, `export:excel`/`export:bugs`,
-  `session:*`, `bug:set-status`) + orquestación del batch · `renderer/` — UI (`App`,
-  `BugTable`, `ManualBugForm`, `decor/BugMotifs`, …)
+  `bugs:load-remote`/`bugs:watch-remote`, `bug:set-status`/`bug:delete`) + orquestación
+  del batch · `renderer/` — UI (`App`, `BugTable`, `ManualBugForm`, `decor/BugMotifs`, …)
 
 ## Convenciones y constraints
 
@@ -62,20 +63,23 @@ persisten como **sesión** y se restauran al reabrir.
   editable después en `Settings`.
 - **Caché por contenido** (`analysisCache`): al cambiar un prompt, **bumpear `PROMPT_VERSION`**
   para invalidar la caché vieja.
-- **Estados persistentes**: identidad por **contenido** (`bugRecordKey` = hash de
-  título+descripción), no por posición de fila. Persisten en `bug-records.json` (userData);
-  solo se guardan los ≠ `nuevo`.
-- **Sesión persistente**: los bugs cargados + su análisis se guardan en `session.json`
-  (userData) con **escritura atómica** (temp + rename) y se restauran al reabrir. Una sola
-  sesión, auto-guardada (debounced, gateada a fase `done`); al restaurar se reaplica el estado
-  canónico desde `bug-records.json`. `bug-records.json` sigue siendo la fuente de verdad del estado.
+- **Persistencia compartida**: Supabase es la fuente de verdad para bugs, estados, imports
+  y análisis. La identidad sigue siendo por **contenido** (`bugRecordKey` = hash de
+  título+descripción), no por posición de fila. Al reabrir, `App` carga con
+  `bugs:load-remote`; realtime (`bugs:watch-remote`) dispara refresh de la tabla.
+- **Proyectos**: un usuario puede tener varios proyectos. `settings.json` guarda
+  `supabaseActiveProjectId`; si falta o no existe, se cae al proyecto default por slug y luego
+  al primer proyecto disponible. Todo IPC de bugs usa siempre el proyecto activo resuelto por
+  `getSupabaseTeamStatus`.
+- **Reimportar no pisa estados**: `save_analysis_result` conserva el estado remoto existente
+  en conflictos por `(project_id, content_key)`. Bugs nuevos entran como `nuevo`.
 - **Activos vs históricos**: la tabla separa por **estado** (`isActiveStatus` en `BugTable`):
   activos = `nuevo`/`en_progreso`; históricos = `solucionado`/`cerrado`/`no_replicado`.
   Es derivado, no un campo aparte. El control de pestañas sigue el patrón ARIA tablist
   (roving tabindex + flechas/Home/End).
-- **Borrar bug**: saca de la tabla/sesión y **olvida el estado** (reusa `setBugStatus → 'nuevo'`,
-  que borra el registro); la caché por contenido se conserva. No se edita el Excel → un bug de
-  Excel reaparece al re-analizar. Confirmación inline (sin `confirm()` nativo).
+- **Borrar bug**: hace soft-delete remoto (`deleted_at`) vía `bug:delete` y lo saca de la
+  tabla. La caché por contenido se conserva. Usa el sistema de modales de confirmación
+  compartido (sin `confirm()` nativo).
 - **Decorados** (`decor/BugMotifs`): motivos temáticos line-art mono a un trazo (`currentColor`),
   **decorativos** (`aria-hidden`, sin alt). Animaciones sutiles vía clases en `styles.css`
   (`.motif-sway`) que el corte global de `prefers-reduced-motion` neutraliza. No decorar la
@@ -151,10 +155,10 @@ persisten como **sesión** y se restauran al reabrir.
 ## Tests
 
 Vitest + React Testing Library (jsdom). Cubre **lógica pura** (excelReader, `buildManualBug`,
-`sessionStore`, parseo del LLM, caché, estados, dedup del enricher) + las interacciones de
+mapper Supabase, parseo del LLM, caché, identidad por contenido, dedup del enricher) + las interacciones de
 `BugTable` (estados + pestañas activos/históricos + teclado + borrado) y `ManualBugForm`. La **integración** (LLM
-real, IPC de Electron, doc readers con red/auth, restore/auto-save de sesión) **no** se testea
-por unit — se verifica corriendo. CI corre `typecheck → test → build` en cada push.
+real, IPC de Electron, doc readers con red/auth, auth/realtime de Supabase) **no** se testea
+por unit — se verifica corriendo. CI corre `lint → typecheck → test → build` en cada push.
 
 ## Git
 
@@ -164,4 +168,7 @@ por unit — se verifica corriendo. CI corre `typecheck → test → build` en c
 - **Ramas**: una por feature/fix (`feat/x`, `fix/y`) que sale de `main`. `main` siempre estable.
 - **Integración**: todo entra a `main` vía **Pull Request** (aunque lo revise el mismo autor) —
   deja historial y corre el CI.
+- **Pull Requests**: título y descripción deben describir el producto/cambio, sin prefijos de
+  herramienta o autor (`[codex]`, `[agent]`, etc.) y sin notas internas que no aporten al
+  reviewer (estado de auth local, limitaciones del agente, detalles del entorno personal).
 - **El agente NO commitea/pushea por defecto**: solo cuando se lo piden explícitamente.

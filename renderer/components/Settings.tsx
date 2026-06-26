@@ -6,6 +6,7 @@ import { alpha, col } from '../theme'
 import { IconCheck, IconX } from './icons'
 import PerformanceModePicker, { type PerformanceMode } from './PerformanceModePicker'
 import ResetControls from './ResetControls'
+import type { TeamAuthStatus } from './TeamLogin'
 
 interface SettingsData {
   googleClientId: string
@@ -14,10 +15,16 @@ interface SettingsData {
   llmModel: string
   ollamaBaseUrl: string
   performanceMode: PerformanceMode
+  supabaseUrl: string
+  supabasePublishableKey: string
+  supabaseDefaultProjectSlug: string
+  supabaseDefaultProjectName: string
+  supabaseActiveProjectId: string
 }
 
 interface Props {
   addLog: (level: LogLine['level'], message: string) => void
+  onTeamStatusChange?: (status: TeamAuthStatus) => void
 }
 
 // Pistas cortas para modelos Ollama conocidos (tradeoff velocidad/calidad).
@@ -30,7 +37,7 @@ const MODEL_HINTS: Record<string, string> = {
   'qwen2.5': 'recomendado',
 }
 
-export default function Settings({ addLog }: Props) {
+export default function Settings({ addLog, onTeamStatusChange }: Props) {
   const [settings, setSettings] = useState<SettingsData>({
     googleClientId: '',
     googleClientSecret: '',
@@ -38,6 +45,11 @@ export default function Settings({ addLog }: Props) {
     llmModel: '',
     ollamaBaseUrl: 'http://localhost:11434',
     performanceMode: 'gpu',
+    supabaseUrl: '',
+    supabasePublishableKey: '',
+    supabaseDefaultProjectSlug: 'buglens-default',
+    supabaseDefaultProjectName: 'buglens',
+    supabaseActiveProjectId: '',
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -47,6 +59,8 @@ export default function Settings({ addLog }: Props) {
   const [browserAuth, setBrowserAuth] = useState<{ authenticated: boolean } | null>(null)
   const [authLoading, setAuthLoading] = useState(false)
   const [browserAuthLoading, setBrowserAuthLoading] = useState(false)
+  const [supabaseStatus, setSupabaseStatus] = useState<TeamAuthStatus | null>(null)
+  const [supabaseAuthLoading, setSupabaseAuthLoading] = useState(false)
   const [ollamaStatus, setOllamaStatus] = useState<{
     available: boolean
     models?: string[]
@@ -57,6 +71,7 @@ export default function Settings({ addLog }: Props) {
     window.electronAPI.getSettings().then((s: SettingsData) => setSettings(s))
     window.electronAPI.getAuthStatus().then(setGoogleAuth)
     window.electronAPI.getBrowserAuthStatus().then(setBrowserAuth)
+    window.electronAPI.getSupabaseStatus().then(setSupabaseStatus)
     window.electronAPI.checkOllama().then(setOllamaStatus)
     window.electronAPI.cacheStats().then(setCacheStats)
   }, [])
@@ -126,6 +141,34 @@ export default function Settings({ addLog }: Props) {
     addLog('info', 'sesión del navegador eliminada')
   }
 
+  const startSupabaseGoogleAuth = async () => {
+    await window.electronAPI.saveSettings({
+      supabaseUrl: settings.supabaseUrl,
+      supabasePublishableKey: settings.supabasePublishableKey,
+      supabaseDefaultProjectSlug: settings.supabaseDefaultProjectSlug,
+      supabaseDefaultProjectName: settings.supabaseDefaultProjectName,
+    })
+    setSupabaseAuthLoading(true)
+    addLog('info', 'abriendo login de supabase...')
+    const status = await window.electronAPI.startSupabaseGoogleAuth()
+    setSupabaseAuthLoading(false)
+    setSupabaseStatus(status)
+    onTeamStatusChange?.(status)
+    if (status.authenticated) {
+      addLog('info', `supabase conectado: ${status.user?.email ?? status.user?.id}`)
+    } else {
+      addLog('error', `error en supabase: ${status.error ?? 'login no completado'}`)
+    }
+  }
+
+  const signOutSupabase = async () => {
+    await window.electronAPI.signOutSupabase()
+    const status = await window.electronAPI.getSupabaseStatus()
+    setSupabaseStatus(status)
+    onTeamStatusChange?.(status)
+    addLog('info', 'sesión de supabase cerrada')
+  }
+
   const checkOllama = async () => {
     const status = await window.electronAPI.checkOllama()
     setOllamaStatus(status)
@@ -148,6 +191,110 @@ export default function Settings({ addLog }: Props) {
           ~/buglens/config
         </div>
       </div>
+
+      {/* ── Equipo / Supabase ── */}
+      <Section title="equipo">
+        <p className="mb-3 text-xs" style={{ color: col.fgMuted }}>
+          Sincronización compartida con Supabase. Usa Google Auth y un proyecto compartido por
+          defecto.
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <label className="label" htmlFor="settings-supabase-url">
+              supabase url
+            </label>
+            <input
+              id="settings-supabase-url"
+              type="text"
+              className="input text-xs"
+              placeholder="https://xxxx.supabase.co"
+              value={settings.supabaseUrl}
+              onChange={update('supabaseUrl')}
+            />
+          </div>
+
+          <div>
+            <label className="label" htmlFor="settings-supabase-publishable-key">
+              publishable key
+            </label>
+            <input
+              id="settings-supabase-publishable-key"
+              type="password"
+              className="input text-xs"
+              placeholder="sb_publishable_..."
+              value={settings.supabasePublishableKey}
+              onChange={update('supabasePublishableKey')}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="label" htmlFor="settings-supabase-project-name">
+                proyecto inicial
+              </label>
+              <input
+                id="settings-supabase-project-name"
+                type="text"
+                className="input text-xs"
+                value={settings.supabaseDefaultProjectName}
+                onChange={update('supabaseDefaultProjectName')}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="settings-supabase-project-slug">
+                slug
+              </label>
+              <input
+                id="settings-supabase-project-slug"
+                type="text"
+                className="input text-xs"
+                value={settings.supabaseDefaultProjectSlug}
+                onChange={update('supabaseDefaultProjectSlug')}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {supabaseStatus?.authenticated ? (
+              <>
+                <span
+                  className="inline-flex items-center gap-1.5 text-xs"
+                  style={{ color: col.fgDim }}
+                >
+                  <IconCheck size={12} />
+                  {supabaseStatus.user?.email ?? 'conectado'}
+                </span>
+                {supabaseStatus.project && (
+                  <span className="text-xs" style={{ color: col.fgMuted }}>
+                    proyecto: {supabaseStatus.project.name}
+                  </span>
+                )}
+                <button type="button" className="btn-danger text-xs" onClick={signOutSupabase}>
+                  cerrar sesión
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={startSupabaseGoogleAuth}
+                disabled={
+                  supabaseAuthLoading || !settings.supabaseUrl || !settings.supabasePublishableKey
+                }
+              >
+                {supabaseAuthLoading ? 'esperando login...' : 'conectar con google'}
+              </button>
+            )}
+          </div>
+
+          {supabaseStatus?.error && (
+            <div className="text-xs" style={{ color: col.red }}>
+              {supabaseStatus.error}
+            </div>
+          )}
+        </div>
+      </Section>
 
       {/* ── Google Docs ── */}
       <Section title="acceso a google docs">

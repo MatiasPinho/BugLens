@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { AnalyzedBug, BugStatus } from '../../src/types/index'
@@ -168,38 +168,41 @@ describe('BugTable — borrar bug', () => {
     await userEvent.click(screen.getByText('Activo nuevo')) // expandir el detalle
     await userEvent.click(screen.getByRole('button', { name: 'borrar' }))
     expect(onDelete).not.toHaveBeenCalled() // hasta confirmar, no borra
-    await userEvent.click(screen.getByRole('button', { name: 'sí, borrar' }))
+    const dialog = screen.getByRole('dialog', { name: 'borrar bug' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'borrar bug' }))
 
     expect(onDelete).toHaveBeenCalledTimes(1)
     expect(onDelete.mock.calls[0][0].enriched.raw.id).toBe('a')
   })
 
-  it('cancelar no borra y vuelve al botón inicial', async () => {
+  it('cancelar no borra y cierra el modal', async () => {
     const onDelete = renderWithDelete()
     await userEvent.click(screen.getByText('Activo nuevo'))
     await userEvent.click(screen.getByRole('button', { name: 'borrar' }))
-    await userEvent.click(screen.getByRole('button', { name: 'no' }))
+    const dialog = screen.getByRole('dialog', { name: 'borrar bug' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'cancelar' }))
 
     expect(onDelete).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog', { name: 'borrar bug' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'borrar' })).toBeInTheDocument()
   })
 
-  it('al confirmar, el foco pasa al botón "sí, borrar"', async () => {
+  it('al pedir confirmación, el foco pasa al modal', async () => {
     renderWithDelete()
     await userEvent.click(screen.getByText('Activo nuevo'))
     await userEvent.click(screen.getByRole('button', { name: 'borrar' }))
-    expect(screen.getByRole('button', { name: 'sí, borrar' })).toHaveFocus()
+    expect(screen.getByRole('dialog', { name: 'borrar bug' })).toHaveFocus()
   })
 
-  it('Escape cancela la confirmación y devuelve el foco al disparador', async () => {
+  it('Escape cancela la confirmación y cierra el modal', async () => {
     const onDelete = renderWithDelete()
     await userEvent.click(screen.getByText('Activo nuevo'))
     await userEvent.click(screen.getByRole('button', { name: 'borrar' }))
     await userEvent.keyboard('{Escape}')
 
     expect(onDelete).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog', { name: 'borrar bug' })).not.toBeInTheDocument()
     const trigger = screen.getByRole('button', { name: 'borrar' })
     expect(trigger).toBeInTheDocument()
-    expect(trigger).toHaveFocus()
   })
 })
