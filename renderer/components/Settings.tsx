@@ -1,5 +1,6 @@
 import type React from 'react'
 import { useEffect, useState } from 'react'
+import type { ExternalAgentRepository } from '../../src/types/index'
 import type { LogLine } from '../App'
 import { defaultModelFor, LLM_OPTIONS } from '../llmOptions'
 import { alpha, col } from '../theme'
@@ -20,6 +21,10 @@ interface SettingsData {
   supabaseDefaultProjectSlug: string
   supabaseDefaultProjectName: string
   supabaseActiveProjectId: string
+  externalAgentCommand: string
+  externalAgentTimeoutMs: number
+  externalAgentWorkingDirectory: string
+  externalAgentRepositories: ExternalAgentRepository[]
 }
 
 interface Props {
@@ -37,6 +42,74 @@ const MODEL_HINTS: Record<string, string> = {
   'qwen2.5': 'recomendado',
 }
 
+interface ExternalAgentPreset {
+  id: string
+  name: string
+  command: string
+  description: string
+  legacyCommands?: string[]
+}
+
+const EXTERNAL_AGENT_PRESETS: ExternalAgentPreset[] = [
+  {
+    id: 'codex',
+    name: 'Codex CLI',
+    command: 'codex exec "$(cat {promptFile})"',
+    description: 'usa la sesión local de Codex',
+  },
+  {
+    id: 'claude',
+    name: 'Claude Code',
+    command: 'claude -p "$(cat {promptFile})"',
+    description: 'usa Claude Code en modo print',
+  },
+  {
+    id: 'gemini',
+    name: 'Gemini CLI',
+    command: 'gemini -p "$(cat {promptFile})"',
+    description: 'usa Gemini desde terminal',
+  },
+  {
+    id: 'opencode',
+    name: 'OpenCode',
+    command: 'opencode run "$(cat {promptFile})"',
+    legacyCommands: ['cd ~ && opencode run "$(cat {promptFile})"'],
+    description: 'usa OpenCode Zen desde tu configuración global',
+  },
+]
+
+const CUSTOM_EXTERNAL_AGENT_ID = 'custom'
+
+function canonicalExternalAgentCommand(command: string): string {
+  const preset = EXTERNAL_AGENT_PRESETS.find((item) => item.legacyCommands?.includes(command))
+  return preset?.command ?? command
+}
+
+function externalAgentModeFor(command: string): string {
+  const canonicalCommand = canonicalExternalAgentCommand(command)
+  if (!canonicalCommand) return ''
+  return (
+    EXTERNAL_AGENT_PRESETS.find((preset) => preset.command === canonicalCommand)?.id ??
+    CUSTOM_EXTERNAL_AGENT_ID
+  )
+}
+
+function normalizeExternalAgentRepositories(
+  settings: Partial<SettingsData>,
+): ExternalAgentRepository[] {
+  const repositories = Array.isArray(settings.externalAgentRepositories)
+    ? settings.externalAgentRepositories
+        .map((repo) => ({
+          path: repo.path?.trim() ?? '',
+          branch: repo.branch?.trim() ?? '',
+        }))
+        .filter((repo) => repo.path)
+    : []
+  if (repositories.length > 0) return repositories
+  const legacyPath = settings.externalAgentWorkingDirectory?.trim()
+  return legacyPath ? [{ path: legacyPath, branch: '' }] : []
+}
+
 export default function Settings({ addLog, onTeamStatusChange }: Props) {
   const [settings, setSettings] = useState<SettingsData>({
     googleClientId: '',
@@ -50,6 +123,10 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
     supabaseDefaultProjectSlug: 'buglens-default',
     supabaseDefaultProjectName: 'buglens',
     supabaseActiveProjectId: '',
+    externalAgentCommand: '',
+    externalAgentTimeoutMs: 20 * 60 * 1000,
+    externalAgentWorkingDirectory: '',
+    externalAgentRepositories: [],
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -61,6 +138,7 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
   const [browserAuthLoading, setBrowserAuthLoading] = useState(false)
   const [supabaseStatus, setSupabaseStatus] = useState<TeamAuthStatus | null>(null)
   const [supabaseAuthLoading, setSupabaseAuthLoading] = useState(false)
+  const [externalAgentMode, setExternalAgentMode] = useState('')
   const [ollamaStatus, setOllamaStatus] = useState<{
     available: boolean
     models?: string[]
@@ -68,7 +146,17 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
   const [showOAuth, setShowOAuth] = useState(false)
 
   useEffect(() => {
-    window.electronAPI.getSettings().then((s: SettingsData) => setSettings(s))
+    window.electronAPI.getSettings().then((s: SettingsData) => {
+      const externalAgentCommand = canonicalExternalAgentCommand(s.externalAgentCommand)
+      const externalAgentRepositories = normalizeExternalAgentRepositories(s)
+      setSettings({
+        ...s,
+        externalAgentCommand,
+        externalAgentRepositories,
+        externalAgentWorkingDirectory: externalAgentRepositories[0]?.path ?? '',
+      })
+      setExternalAgentMode(externalAgentModeFor(externalAgentCommand))
+    })
     window.electronAPI.getAuthStatus().then(setGoogleAuth)
     window.electronAPI.getBrowserAuthStatus().then(setBrowserAuth)
     window.electronAPI.getSupabaseStatus().then(setSupabaseStatus)
@@ -90,10 +178,71 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
 
   const save = async () => {
     setSaving(true)
-    await window.electronAPI.saveSettings(settings as unknown as Record<string, string>)
+    const externalAgentRepositories = normalizeExternalAgentRepositories(settings)
+    await window.electronAPI.saveSettings({
+      ...settings,
+      externalAgentRepositories,
+      externalAgentWorkingDirectory: externalAgentRepositories[0]?.path ?? '',
+    })
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  const addExternalAgentRepository = () => {
+    setSettings((prev) => ({
+      ...prev,
+      externalAgentRepositories: [...prev.externalAgentRepositories, { path: '', branch: '' }],
+    }))
+  }
+
+  const pickExternalAgentRepository = async (index: number) => {
+    const directory = await window.electronAPI.pickDirectory()
+    if (!directory) return
+    setSettings((prev) => {
+      const repositories =
+        prev.externalAgentRepositories.length > 0
+          ? prev.externalAgentRepositories
+          : [{ path: '', branch: '' }]
+      const externalAgentRepositories = repositories.map((repo, repoIndex) =>
+        repoIndex === index ? { ...repo, path: directory } : repo,
+      )
+      return {
+        ...prev,
+        externalAgentRepositories,
+        externalAgentWorkingDirectory: externalAgentRepositories[0]?.path ?? '',
+      }
+    })
+  }
+
+  const updateExternalAgentRepository = (
+    index: number,
+    key: keyof ExternalAgentRepository,
+    value: string,
+  ) => {
+    setSettings((prev) => {
+      const externalAgentRepositories = prev.externalAgentRepositories.map((repo, repoIndex) =>
+        repoIndex === index ? { ...repo, [key]: value } : repo,
+      )
+      return {
+        ...prev,
+        externalAgentRepositories,
+        externalAgentWorkingDirectory: externalAgentRepositories[0]?.path ?? '',
+      }
+    })
+  }
+
+  const removeExternalAgentRepository = (index: number) => {
+    setSettings((prev) => {
+      const externalAgentRepositories = prev.externalAgentRepositories.filter(
+        (_repo, repoIndex) => repoIndex !== index,
+      )
+      return {
+        ...prev,
+        externalAgentRepositories,
+        externalAgentWorkingDirectory: externalAgentRepositories[0]?.path ?? '',
+      }
+    })
   }
 
   const startAuth = async () => {
@@ -577,6 +726,202 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
             </div>
           </div>
         )}
+      </Section>
+
+      {/* ── Agente externo ── */}
+      <Section title="agente externo">
+        <p className="mb-3 text-xs" style={{ color: col.fgMuted }}>
+          BugLens ejecuta el agente instalado en la terminal del usuario y muestra la salida en el
+          detalle del bug.
+        </p>
+        <div className="space-y-3">
+          <label className="label" htmlFor="settings-external-agent-preset">
+            agente
+          </label>
+          <select
+            id="settings-external-agent-preset"
+            className="input text-xs"
+            value={externalAgentMode}
+            onChange={(event) => {
+              setExternalAgentMode(event.target.value)
+              const preset = EXTERNAL_AGENT_PRESETS.find((item) => item.id === event.target.value)
+              if (preset) {
+                setSettings((prev) => ({ ...prev, externalAgentCommand: preset.command }))
+                return
+              }
+              if (event.target.value === '') {
+                setSettings((prev) => ({ ...prev, externalAgentCommand: '' }))
+              }
+            }}
+          >
+            <option value="">sin agente configurado</option>
+            {EXTERNAL_AGENT_PRESETS.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.name} · {preset.command}
+              </option>
+            ))}
+            <option value={CUSTOM_EXTERNAL_AGENT_ID}>personalizado</option>
+          </select>
+
+          <div className="grid grid-cols-2 gap-2">
+            {EXTERNAL_AGENT_PRESETS.map((preset) => {
+              const selected = settings.externalAgentCommand === preset.command
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  className="rounded p-2 text-left transition-all"
+                  style={{
+                    border: `1px solid ${selected ? alpha(col.cream, 0.35) : alpha(col.border, 0.22)}`,
+                    background: selected ? alpha(col.cream, 0.06) : 'transparent',
+                  }}
+                  onClick={() => {
+                    setExternalAgentMode(preset.id)
+                    setSettings((prev) => ({ ...prev, externalAgentCommand: preset.command }))
+                  }}
+                >
+                  <span className="block font-medium text-xs" style={{ color: col.fg }}>
+                    {preset.name}
+                  </span>
+                  <span className="mt-1 block text-xs" style={{ color: col.fgMuted }}>
+                    {preset.description}
+                  </span>
+                  <span
+                    className="mt-1 block truncate font-mono text-xs"
+                    style={{ color: col.border }}
+                  >
+                    {preset.command}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {externalAgentMode === CUSTOM_EXTERNAL_AGENT_ID && (
+            <div>
+              <label className="label" htmlFor="settings-external-agent-command">
+                comando personalizado
+              </label>
+              <input
+                id="settings-external-agent-command"
+                type="text"
+                className="input text-xs"
+                placeholder="mi-agente --prompt-file {promptFile}"
+                value={settings.externalAgentCommand}
+                onChange={update('externalAgentCommand')}
+              />
+            </div>
+          )}
+
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div>
+                <div className="label mb-0">repositorios locales</div>
+                <p className="mt-1 text-xs" style={{ color: col.fgMuted }}>
+                  Agregá todos los repos que el agente puede consultar y la rama objetivo de cada
+                  uno.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary flex-shrink-0 text-xs"
+                onClick={addExternalAgentRepository}
+              >
+                + repo
+              </button>
+            </div>
+
+            {settings.externalAgentRepositories.length === 0 ? (
+              <button
+                type="button"
+                className="external-agent-empty-repo"
+                onClick={addExternalAgentRepository}
+              >
+                agregar primer repositorio
+              </button>
+            ) : (
+              <div className="external-agent-repo-list">
+                {settings.externalAgentRepositories.map((repo, index) => (
+                  <div key={index} className="external-agent-repo-row">
+                    <div className="external-agent-repo-index">
+                      {index === 0 ? 'principal' : `repo ${index + 1}`}
+                    </div>
+                    <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_10rem]">
+                      <input
+                        type="text"
+                        className="input text-xs"
+                        aria-label={`ruta del repositorio ${index + 1}`}
+                        placeholder="/ruta/al/repositorio"
+                        value={repo.path}
+                        onChange={(event) =>
+                          updateExternalAgentRepository(index, 'path', event.target.value)
+                        }
+                      />
+                      <input
+                        type="text"
+                        className="input text-xs"
+                        aria-label={`rama del repositorio ${index + 1}`}
+                        placeholder="rama"
+                        value={repo.branch}
+                        onChange={(event) =>
+                          updateExternalAgentRepository(index, 'branch', event.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="external-agent-repo-actions">
+                      <button
+                        type="button"
+                        className="btn-secondary text-xs"
+                        onClick={() => pickExternalAgentRepository(index)}
+                      >
+                        elegir
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary text-xs"
+                        onClick={() => removeExternalAgentRepository(index)}
+                      >
+                        quitar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="label" htmlFor="settings-external-agent-timeout">
+              timeout
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="settings-external-agent-timeout"
+                type="number"
+                min={60}
+                step={60}
+                className="input text-xs"
+                value={Math.round(settings.externalAgentTimeoutMs / 1000)}
+                onChange={(event) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    externalAgentTimeoutMs: Number(event.target.value) * 1000,
+                  }))
+                }
+              />
+              <span className="font-mono text-xs" style={{ color: col.fgMuted }}>
+                segundos
+              </span>
+            </div>
+          </div>
+
+          <div className="text-xs" style={{ color: col.border }}>
+            Los presets usan {'{promptFile}'} para pasar el bug sin TTY. BugLens ejecuta el agente
+            desde el primer repositorio y le informa toda la lista con sus ramas objetivo; no hace
+            checkout ni cambia ramas por su cuenta. Credenciales, modelo y límites quedan a cargo
+            del agente local.
+          </div>
+        </div>
       </Section>
 
       {/* ── Rendimiento ── */}

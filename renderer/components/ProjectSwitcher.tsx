@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { alpha, col } from '../theme'
+import { col } from '../theme'
 import { ActionModal } from './ActionModal'
 import { IconFolder, IconPlus } from './icons'
 import { LoadingInline } from './Loading'
@@ -56,23 +56,10 @@ export default function ProjectSwitcher({
   }
 
   return (
-    <section
-      className="project-switcher rounded-md p-3"
-      style={{
-        border: `1px solid ${alpha(col.cream, 0.2)}`,
-        background: alpha(col.cream, 0.035),
-      }}
-    >
+    <section className="project-switcher rounded-md p-3" aria-busy={busy}>
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span
-            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded"
-            style={{
-              color: col.cream,
-              border: `1px solid ${alpha(col.cream, 0.22)}`,
-              background: alpha(col.cream, 0.08),
-            }}
-          >
+          <span className="project-mark flex h-7 w-7 flex-shrink-0 items-center justify-center rounded">
             <IconFolder size={16} />
           </span>
           <div className="min-w-0">
@@ -80,13 +67,15 @@ export default function ProjectSwitcher({
             <div className="truncate text-xs" style={{ color: col.fg }}>
               {activeProject?.name ?? 'sin proyecto'}
             </div>
+            {activeProject?.slug && (
+              <div className="truncate text-2xs" style={{ color: col.muted }}>
+                {activeProject.slug}
+              </div>
+            )}
           </div>
         </div>
 
-        <span
-          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-2xs"
-          style={{ color: col.fgMuted, border: `1px solid ${alpha(col.border, 0.28)}` }}
-        >
+        <span className="project-count flex h-6 min-w-6 flex-shrink-0 items-center justify-center rounded px-1.5 text-2xs">
           {projectCount}
         </span>
       </div>
@@ -108,8 +97,8 @@ export default function ProjectSwitcher({
             </option>
           ))}
         </select>
-        <div className="h-5 truncate text-xs" style={{ color: col.fgMuted }}>
-          {busy && <LoadingInline label="sincronizando proyecto" />}
+        <div className="project-sync-line truncate text-xs">
+          {busy ? <LoadingInline label="sincronizando proyecto" /> : 'proyecto compartido'}
         </div>
       </div>
 
@@ -123,7 +112,7 @@ export default function ProjectSwitcher({
           <LoadingInline label="esperando" />
         ) : (
           <>
-            <IconPlus size={12} />
+            <IconPlus size={12} className="button-icon button-icon-plus" />
             nuevo proyecto
           </>
         )}
@@ -135,7 +124,7 @@ export default function ProjectSwitcher({
         description="Creá un espacio separado para bugs, estados y análisis."
         onClose={() => setCreating(false)}
       >
-        <div className="space-y-3">
+        <div className="space-y-3.5">
           <div>
             <label className="label" htmlFor="dashboard-new-project-name">
               nombre
@@ -154,13 +143,18 @@ export default function ProjectSwitcher({
             />
           </div>
           <div>
-            <label className="label" htmlFor="dashboard-new-project-slug">
-              slug
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="label mb-0" htmlFor="dashboard-new-project-slug">
+                slug
+              </label>
+              <span className="text-2xs" style={{ color: col.dim }}>
+                único
+              </span>
+            </div>
             <input
               id="dashboard-new-project-slug"
               type="text"
-              className="input text-xs"
+              className="input mt-1 text-xs"
               value={slug}
               onChange={(event) => setSlug(slugify(event.target.value))}
               onKeyDown={(event) => {

@@ -51,3 +51,32 @@ export const ConFaltantes: Story = {
     }),
   },
 }
+
+export const ConAgenteExterno: Story = {
+  args: {
+    result: (() => {
+      const bug = makeBug({
+        id: 'b4',
+        title: 'Login queda cargando',
+        observed: 'al enviar credenciales válidas queda el spinner infinito',
+        expected: 'debería navegar al dashboard o mostrar error de credenciales',
+        steps: ['abrir /login', 'ingresar usuario válido', 'click en Entrar'],
+      })
+      bug.analysis.externalAgent = {
+        ok: true,
+        command: 'codex exec',
+        durationMs: 3400,
+        output:
+          '## Diagnóstico probable\nEl submit no resuelve la promesa cuando /api/session devuelve 500.\n\n## Evidencia\n- el formulario queda con spinner activo\n- el endpoint de sesión responde error\n- no se muestra estado de error visible\n\n## Próximo paso\nAgregar manejo de error y liberar el estado de carga.',
+      }
+      return bug
+    })(),
+    onAnalyzeExternalAgent: async () => ({
+      ok: true,
+      command: 'codex exec',
+      durationMs: 3400,
+      output:
+        'Diagnóstico probable: el submit no resuelve la promesa cuando /api/session devuelve 500.\n\nPróximos pasos:\n- revisar el handler de login\n- validar logs del endpoint de sesión\n- agregar estado de error visible en el formulario',
+    }),
+  },
+}

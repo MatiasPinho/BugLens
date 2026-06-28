@@ -4,6 +4,7 @@ import type {
   AnalyzedBug,
   BugResultEvent,
   BugStatus,
+  ExternalAgentResult,
   IPCEvent,
   LogEvent,
   ProgressEvent,
@@ -12,6 +13,7 @@ import BugTable, { severityLabel } from './components/BugTable'
 import { BeetleMark } from './components/decor/BugMotifs'
 import EmptyState from './components/EmptyState'
 import FileUpload from './components/FileUpload'
+import { IconPlus } from './components/icons'
 import { LoadingOverlay } from './components/Loading'
 import ManualBugForm from './components/ManualBugForm'
 import Onboarding from './components/Onboarding'
@@ -363,6 +365,21 @@ export default function App() {
     [addLog, results],
   )
 
+  const handleAnalyzeExternalAgent = useCallback(
+    async (bug: AnalyzedBug): Promise<ExternalAgentResult> => {
+      const result = await window.electronAPI.analyzeWithExternalAgent(bug)
+      setResults((prev) =>
+        prev.map((item) =>
+          item.enriched.raw.id === bug.enriched.raw.id
+            ? { ...item, analysis: { ...item.analysis, externalAgent: result } }
+            : item,
+        ),
+      )
+      return result
+    },
+    [],
+  )
+
   // ─── Keyboard shortcuts ────────────────────────────────────────────────────
   // j/k: next/prev bug, Enter: expandir, Esc: cerrar, /: focus search, d: deep analysis del bug abierto, ?: help
   useEffect(() => {
@@ -586,7 +603,8 @@ export default function App() {
                   className="btn-secondary side-action w-full"
                   onClick={() => setShowManualForm(true)}
                 >
-                  + cargar bug manual
+                  <IconPlus size={12} className="button-icon button-icon-plus" />
+                  cargar bug manual
                 </button>
               )}
 
@@ -716,6 +734,7 @@ export default function App() {
                       analyzing={phase === 'analyzing'}
                       onSetStatus={handleSetStatus}
                       onDelete={handleDeleteBug}
+                      onAnalyzeExternalAgent={handleAnalyzeExternalAgent}
                       focusedId={focusedBugId}
                       expandedId={expandedBugId}
                       onFocus={setFocusedBugId}

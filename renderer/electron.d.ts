@@ -1,5 +1,11 @@
 import type { ManualBugFields } from '../src/pipeline/manualBugBuilder'
-import type { AnalyzedBug, IPCEvent } from '../src/types/index'
+import type {
+  AnalyzedBug,
+  ExternalAgentProgress,
+  ExternalAgentRepository,
+  ExternalAgentResult,
+  IPCEvent,
+} from '../src/types/index'
 
 interface ElectronAPI {
   // Settings
@@ -15,9 +21,13 @@ interface ElectronAPI {
     supabaseDefaultProjectSlug: string
     supabaseDefaultProjectName: string
     supabaseActiveProjectId: string
+    externalAgentCommand: string
+    externalAgentTimeoutMs: number
+    externalAgentWorkingDirectory: string
+    externalAgentRepositories: ExternalAgentRepository[]
     onboarded: boolean
   }>
-  saveSettings(settings: Record<string, string | boolean>): Promise<{ ok: boolean }>
+  saveSettings(settings: Record<string, unknown>): Promise<{ ok: boolean }>
   pickDirectory(): Promise<string | null>
 
   // Supabase team auth
@@ -79,6 +89,8 @@ interface ElectronAPI {
   // Estado de bugs (persistente)
   setBugStatus(bug: AnalyzedBug, status: string): Promise<{ ok: boolean; error?: string }>
   deleteBug(bug: AnalyzedBug): Promise<{ ok: boolean; error?: string }>
+  analyzeWithExternalAgent(bug: AnalyzedBug): Promise<ExternalAgentResult>
+  onExternalAgentProgress(cb: (event: ExternalAgentProgress) => void): () => void
 
   // Cache
   cacheStats(): Promise<{ count: number; sizeKB: number }>

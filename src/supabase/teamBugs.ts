@@ -4,6 +4,8 @@ import type {
   AnalyzedBug,
   BugAnalysis,
   BugStatus,
+  ExternalAgentRepository,
+  ExternalAgentResult,
   GoogleDocContent,
   RawBug,
 } from '../types/index.js'
@@ -46,6 +48,34 @@ function stringArray(value: unknown): string[] {
     : []
 }
 
+function toExternalAgentResult(value: unknown): ExternalAgentResult | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const result = value as Partial<ExternalAgentResult>
+  if (typeof result.ok !== 'boolean') return undefined
+  const repositories = Array.isArray(result.repositories)
+    ? result.repositories
+        .map((repo) => {
+          if (!repo || typeof repo !== 'object') return null
+          const candidate = repo as Partial<ExternalAgentRepository>
+          return {
+            path: typeof candidate.path === 'string' ? candidate.path : '',
+            branch: typeof candidate.branch === 'string' ? candidate.branch : '',
+          }
+        })
+        .filter((repo): repo is ExternalAgentRepository => Boolean(repo?.path))
+    : undefined
+  return {
+    ok: result.ok,
+    output: typeof result.output === 'string' ? result.output : '',
+    error: typeof result.error === 'string' ? result.error : undefined,
+    command: typeof result.command === 'string' ? result.command : '',
+    workingDirectory:
+      typeof result.workingDirectory === 'string' ? result.workingDirectory : undefined,
+    repositories,
+    durationMs: typeof result.durationMs === 'number' ? result.durationMs : 0,
+  }
+}
+
 function toRawBug(row: RemoteBugRow, fallbackId: string): RawBug {
   const raw = row.rawBug ?? {}
   return {
@@ -86,6 +116,7 @@ function toAnalysis(row: RemoteBugRow, raw: RawBug): BugAnalysis {
     },
     missingInformation: stringArray(analysis.missingInformation),
     rawResponse: analysis.rawResponse ?? '',
+    externalAgent: toExternalAgentResult(analysis.externalAgent),
   }
 }
 

@@ -1,15 +1,24 @@
 import React, { useMemo, useState } from 'react'
-import type { AnalyzedBug, BugCategory, BugStatus, DocImage, Severity } from '../../src/types/index'
+import type {
+  AnalyzedBug,
+  BugCategory,
+  BugStatus,
+  DocImage,
+  ExternalAgentProgress,
+  ExternalAgentResult,
+  Severity,
+} from '../../src/types/index'
 import { alpha, col, sz } from '../theme'
-import { ConfirmActionModal } from './ActionModal'
+import { ActionModal, ConfirmActionModal } from './ActionModal'
 import { BugUnderLensMark } from './decor/BugMotifs'
-import { IconCheck, IconHelp, IconWarning, IconX } from './icons'
+import { IconCheck, IconHelp, IconInfo, IconWarning, IconX } from './icons'
 
 interface Props {
   results: AnalyzedBug[]
   analyzing?: boolean
   onSetStatus?: (bug: AnalyzedBug, status: BugStatus) => void
   onDelete?: (bug: AnalyzedBug) => void
+  onAnalyzeExternalAgent?: (bug: AnalyzedBug) => Promise<ExternalAgentResult>
   focusedId?: string | null
   expandedId?: string | null
   onFocus?: (id: string | null) => void
@@ -328,6 +337,66 @@ export function DeleteControl({ onConfirm, title }: { onConfirm: () => void; tit
   )
 }
 
+function ExternalAgentConfirmModal({
+  open,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean
+  busy: boolean
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <ActionModal
+      open={open}
+      title="analizar con agente en la nube"
+      description="BugLens va a enviar este bug al agente externo configurado para pedir una revisión adicional."
+      onClose={onClose}
+    >
+      <div className="space-y-4">
+        <div className="external-agent-consent-grid">
+          <ConsentPoint
+            title="calidad variable"
+            text="La precisión de la respuesta depende del modelo, provider y configuración elegidos por el usuario."
+          />
+          <ConsentPoint
+            title="tiempo variable"
+            text="La velocidad puede cambiar según cola del proveedor, tamaño del repo, timeout y cantidad de contexto."
+          />
+          <ConsentPoint
+            title="acceso al repositorio"
+            text="Si hay un repositorio local configurado, el agente recibirá esa ruta y podrá leer archivos para orientar el análisis."
+          />
+          <ConsentPoint
+            title="revisión humana"
+            text="El resultado se integra al reporte como ayuda de triage; no reemplaza la validación técnica del equipo."
+          />
+        </div>
+
+        <div className="modal-actions">
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={busy}>
+            cancelar
+          </button>
+          <button type="button" className="btn-primary" onClick={onConfirm} disabled={busy}>
+            iniciar análisis
+          </button>
+        </div>
+      </div>
+    </ActionModal>
+  )
+}
+
+function ConsentPoint({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="external-agent-consent-point">
+      <div className="external-agent-consent-title">{title}</div>
+      <p className="external-agent-consent-text">{text}</p>
+    </div>
+  )
+}
+
 export function SectionCard({
   title,
   children,
@@ -373,6 +442,7 @@ export default function BugTable({
   analyzing = false,
   onSetStatus,
   onDelete,
+  onAnalyzeExternalAgent,
   focusedId: focusedIdProp,
   expandedId: expandedIdProp,
   onFocus,
@@ -786,6 +856,8 @@ export default function BugTable({
                           result={r}
                           onClose={() => setExpandedId(null)}
                           onDelete={onDelete ? () => onDelete(r) : undefined}
+                          onSetStatus={onSetStatus ? (status) => onSetStatus(r, status) : undefined}
+                          onAnalyzeExternalAgent={onAnalyzeExternalAgent}
                         />
                       </td>
                     </tr>
@@ -935,16 +1007,95 @@ export function ExpandedDetail({
   result,
   onClose,
   onDelete,
+  onSetStatus,
+  onAnalyzeExternalAgent,
 }: {
   result: AnalyzedBug
   onClose?: () => void
   onDelete?: () => void
+  onSetStatus?: (status: BugStatus) => void
+  onAnalyzeExternalAgent?: (bug: AnalyzedBug) => Promise<ExternalAgentResult>
 }) {
   const { enriched, analysis } = result
   const raw = enriched.raw
   const rw = analysis.rewritten
+  const [externalAgentResult, setExternalAgentResult] = useState<ExternalAgentResult | null>(
+    analysis.externalAgent ?? null,
+  )
+  const [externalAgentRunning, setExternalAgentRunning] = useState(false)
+  const [externalAgentProgress, setExternalAgentProgress] = useState<ExternalAgentProgress | null>(
+    null,
+  )
+  const [externalAgentStartedAt, setExternalAgentStartedAt] = useState<number | null>(null)
+  const [externalAgentElapsedMs, setExternalAgentElapsedMs] = useState(0)
+  const [externalAgentLastOutputAt, setExternalAgentLastOutputAt] = useState<number | null>(null)
+  const [externalAgentConfirmOpen, setExternalAgentConfirmOpen] = useState(false)
+  const [resolvedSuggestionDismissed, setResolvedSuggestionDismissed] = useState(false)
+  const previousBugIdRef = React.useRef(raw.id)
 
   const allImages = enriched.googleDocs.flatMap((d) => d.images ?? [])
+  const runExternalAgent =
+    onAnalyzeExternalAgent ??
+    (typeof window !== 'undefined' ? window.electronAPI?.analyzeWithExternalAgent : undefined)
+
+  React.useEffect(() => {
+    if (externalAgentRunning) return
+    if (previousBugIdRef.current !== raw.id) {
+      previousBugIdRef.current = raw.id
+      setExternalAgentResult(analysis.externalAgent ?? null)
+      setResolvedSuggestionDismissed(false)
+      return
+    }
+    if (analysis.externalAgent) setExternalAgentResult(analysis.externalAgent)
+  }, [analysis.externalAgent, externalAgentRunning, raw.id])
+
+  React.useEffect(() => {
+    if (!externalAgentRunning || !externalAgentStartedAt) return undefined
+    const timer = window.setInterval(() => {
+      setExternalAgentElapsedMs(Date.now() - externalAgentStartedAt)
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [externalAgentRunning, externalAgentStartedAt])
+
+  React.useEffect(() => {
+    if (!externalAgentRunning) return undefined
+    const unsubscribe = window.electronAPI?.onExternalAgentProgress?.((progress) => {
+      if (progress.bugId !== raw.id) return
+      setExternalAgentProgress(progress)
+      setExternalAgentElapsedMs(progress.elapsedMs)
+      setExternalAgentLastOutputAt(Date.now())
+    })
+    return unsubscribe
+  }, [externalAgentRunning, raw.id])
+
+  const handleExternalAgent = async () => {
+    if (!runExternalAgent || externalAgentRunning) return
+    const startedAt = Date.now()
+    setExternalAgentRunning(true)
+    setExternalAgentResult(null)
+    setExternalAgentProgress(null)
+    setExternalAgentStartedAt(startedAt)
+    setExternalAgentElapsedMs(0)
+    setExternalAgentLastOutputAt(null)
+    setResolvedSuggestionDismissed(false)
+    try {
+      setExternalAgentResult(await runExternalAgent(result))
+    } catch (err) {
+      setExternalAgentResult({
+        ok: false,
+        output: '',
+        error: err instanceof Error ? err.message : String(err),
+        command: '',
+        durationMs: 0,
+      })
+    } finally {
+      setExternalAgentRunning(false)
+    }
+  }
+
+  const externalAgentSilenceMs = externalAgentRunning
+    ? Date.now() - (externalAgentLastOutputAt ?? externalAgentStartedAt ?? Date.now())
+    : 0
 
   // Texto plano para copiar la versión reescrita.
   const copyText = [
@@ -961,30 +1112,66 @@ export function ExpandedDetail({
     .filter(Boolean)
     .join('\n')
 
+  const externalAgentRunningOutput = externalAgentProgress?.output.trim()
+  const externalAgentStatusText = externalAgentRunningOutput
+    ? `última salida hace ${formatAgentDuration(externalAgentSilenceMs)}`
+    : `sin salida todavía · ${formatAgentDuration(externalAgentElapsedMs)}`
+  const resolvedSuggestion = externalAgentResult?.ok
+    ? parseResolvedSuggestion(externalAgentResult.output)
+    : null
+
   return (
-    <div className="space-y-4 p-6" style={{ background: alpha(col.base, 0.7) }}>
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="font-medium text-sm" style={{ color: col.fg }}>
-            {raw.title}
+    <div className="bug-detail space-y-4 p-6">
+      <div className="bug-detail-hero">
+        <div className="min-w-0 space-y-2">
+          <div className="bug-detail-meta">
+            <OmBadge style={severityStyle[analysis.severity]}>
+              severidad {severityLabel[analysis.severity]}
+            </OmBadge>
+            <OmBadge style={categoryStyle[analysis.category]}>{analysis.category}</OmBadge>
+            <OmBadge style={statusStyle[result.status]}>{statusStyle[result.status].label}</OmBadge>
+            {analysis.missingInformation.length > 0 && (
+              <OmBadge
+                style={{
+                  text: col.amber,
+                  bg: alpha(col.amberDeep, 0.08),
+                  border: alpha(col.amberDeep, 0.28),
+                }}
+              >
+                faltan {analysis.missingInformation.length} datos
+              </OmBadge>
+            )}
           </div>
-          <div className="mt-0.5 text-sm" style={{ color: col.fgDim }}>
-            {analysis.summary}
+          <div>
+            <h3 className="bug-detail-title">{raw.title}</h3>
+            <p className="bug-detail-summary mt-1 text-sm">{analysis.summary}</p>
           </div>
         </div>
-        <div className="flex flex-shrink-0 items-center gap-2">
-          {/* Acción destructiva apartada de las seguras (copy/cerrar) con un
-              divisor, y lejos de "cerrar" para evitar clicks accidentales. */}
-          {onDelete && (
-            <>
-              <DeleteControl onConfirm={onDelete} title={raw.title} />
-              <span
-                aria-hidden="true"
-                style={{ width: '1px', height: '1.1rem', background: alpha(col.border, 0.3) }}
-              />
-            </>
-          )}
+        <div className="bug-detail-actions">
+          {onDelete && <DeleteControl onConfirm={onDelete} title={raw.title} />}
+          <button
+            type="button"
+            onClick={() => setExternalAgentConfirmOpen(true)}
+            className="btn-mini flex-shrink-0"
+            disabled={externalAgentRunning || !runExternalAgent}
+            title="analizar con agente externo"
+            style={{
+              color: externalAgentRunning ? col.fgDim : col.cream,
+              borderColor: alpha(col.cream, 0.28),
+              background: externalAgentRunning ? alpha(col.cream, 0.08) : 'transparent',
+            }}
+          >
+            {externalAgentRunning ? 'analizando...' : 'Analizar'}
+          </button>
+          <ExternalAgentConfirmModal
+            open={externalAgentConfirmOpen}
+            busy={externalAgentRunning}
+            onClose={() => setExternalAgentConfirmOpen(false)}
+            onConfirm={() => {
+              setExternalAgentConfirmOpen(false)
+              void handleExternalAgent()
+            }}
+          />
           <CopyButton text={copyText} />
           {onClose && (
             <button
@@ -1000,88 +1187,137 @@ export function ExpandedDetail({
         </div>
       </div>
 
-      {/* Reescritura — el output principal */}
-      <SectionCard title="reporte reescrito" accent>
-        {rw.problemCount > 1 && (
-          <div
-            role="status"
-            className="mb-3 inline-flex items-center gap-1.5 rounded px-2 py-1 font-mono text-xs"
-            style={{
-              color: col.amber,
-              border: `1px solid ${alpha(col.amberDeep, 0.3)}`,
-              background: alpha(col.amberDeep, 0.06),
-            }}
-          >
-            <IconWarning size={12} className="flex-shrink-0" />
-            este reporte junta {rw.problemCount} problemas distintos
-          </div>
-        )}
-        <div className="grid grid-cols-2 gap-x-5 gap-y-4">
-          {/* Distinción semántica tipo diff: rojo = qué pasa (defecto), verde = qué debería pasar. */}
-          <RewriteColumn label="qué pasa" text={rw.observed} tone={col.red} Icon={IconX} />
-          <RewriteColumn
-            label="qué debería pasar"
-            text={rw.expected}
-            tone={col.green}
-            Icon={IconCheck}
-          />
+      <div className="bug-detail-layout">
+        <div className="bug-detail-main">
+          <SectionCard title="reporte reescrito" accent>
+            <div className="space-y-4">
+              {rw.problemCount > 1 && (
+                <div
+                  role="status"
+                  className="inline-flex items-center gap-1.5 rounded px-2 py-1 font-mono text-xs"
+                  style={{
+                    color: col.amber,
+                    border: `1px solid ${alpha(col.amberDeep, 0.3)}`,
+                    background: alpha(col.amberDeep, 0.06),
+                  }}
+                >
+                  <IconWarning size={12} className="flex-shrink-0" />
+                  este reporte junta {rw.problemCount} problemas distintos
+                </div>
+              )}
+              <div className="bug-rewrite-grid">
+                <RewriteColumn label="qué pasa" text={rw.observed} tone={col.red} Icon={IconX} />
+                <RewriteColumn
+                  label="qué debería pasar"
+                  text={rw.expected}
+                  tone={col.green}
+                  Icon={IconCheck}
+                />
+              </div>
 
-          {rw.steps.length > 0 && (
-            <div className="col-span-2">
-              <div className="label">pasos para reproducir</div>
-              <ol className="space-y-1.5">
-                {rw.steps.map((s, i) => (
-                  <li key={i} className="flex items-start gap-2.5">
-                    <span
-                      className="mt-px flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full font-mono text-2xs"
-                      style={{ border: `1px solid ${alpha(col.border, 0.4)}`, color: col.fgMuted }}
-                    >
-                      {i + 1}
-                    </span>
-                    <span className="text-sm leading-relaxed" style={{ color: col.fgDim }}>
-                      {s.replace(/^\d+[.)]\s*/, '')}
-                    </span>
-                  </li>
-                ))}
-              </ol>
+              {rw.steps.length > 0 && (
+                <div>
+                  <div className="label">pasos para reproducir</div>
+                  <ol className="space-y-2">
+                    {rw.steps.map((s, i) => (
+                      <li key={i} className="bug-step">
+                        <span className="bug-step-number">{i + 1}</span>
+                        <span className="bug-step-text">{s.replace(/^\d+[.)]\s*/, '')}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
             </div>
+          </SectionCard>
+
+          {(externalAgentResult || externalAgentRunning) && (
+            <ExternalAgentPanel
+              running={externalAgentRunning}
+              result={externalAgentResult}
+              progress={externalAgentProgress}
+              elapsedMs={externalAgentElapsedMs}
+              statusText={externalAgentStatusText}
+              runningOutput={externalAgentRunningOutput}
+            />
           )}
 
-          <div className="col-span-2 flex flex-wrap items-center gap-2 pt-1">
-            <MetaChip
-              label="ambiente"
-              value={rw.environment}
-              muted={rw.environment === 'No informado'}
-            />
-            <MetaChip label="tipo" value={analysis.bugType ?? '—'} />
-          </div>
+          {resolvedSuggestion &&
+            !resolvedSuggestionDismissed &&
+            result.status !== 'solucionado' && (
+              <ResolvedSuggestionCard
+                reason={resolvedSuggestion.reason}
+                onConfirm={() => {
+                  onSetStatus?.('solucionado')
+                  setResolvedSuggestionDismissed(true)
+                }}
+                onDismiss={() => setResolvedSuggestionDismissed(true)}
+                canConfirm={Boolean(onSetStatus)}
+              />
+            )}
+
+          {allImages.length > 0 && (
+            <SectionCard title={`capturas (${allImages.length})`}>
+              <DocImageGallery images={allImages} />
+            </SectionCard>
+          )}
         </div>
-      </SectionCard>
 
-      {/* Qué falta */}
-      {analysis.missingInformation.length > 0 && (
-        <SectionCard title="datos que faltan en el reporte">
-          <ul className="space-y-1.5">
-            {analysis.missingInformation.map((m, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <span className="mt-0.5 flex-shrink-0" style={{ color: col.amber }}>
-                  <IconHelp size={12} />
-                </span>
-                <span className="text-sm leading-relaxed" style={{ color: col.fgDim }}>
-                  {m}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </SectionCard>
-      )}
+        <aside className="bug-detail-rail" aria-label="contexto del reporte">
+          <SectionCard title="contexto">
+            <div className="grid gap-2">
+              <DetailStat
+                label="pantalla"
+                value={analysis.affectedArea || 'No informado'}
+                muted={!analysis.affectedArea}
+              />
+              <DetailStat
+                label="ambiente"
+                value={rw.environment}
+                muted={rw.environment === 'No informado'}
+              />
+              <DetailStat label="tipo" value={analysis.bugType ?? 'No informado'} />
+              <DetailStat label="confianza" value={`${Math.round(analysis.confidence * 100)}%`} />
+            </div>
+          </SectionCard>
 
-      {/* Capturas del documento */}
-      {allImages.length > 0 && (
-        <SectionCard title={`capturas (${allImages.length})`}>
-          <DocImageGallery images={allImages} />
-        </SectionCard>
-      )}
+          {analysis.missingInformation.length > 0 && (
+            <SectionCard title="datos que faltan">
+              <ul className="missing-list">
+                {analysis.missingInformation.map((m, i) => (
+                  <li key={i} className="missing-item">
+                    <span style={{ color: col.amber }}>
+                      <IconHelp size={12} />
+                    </span>
+                    <span>{m}</span>
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          )}
+
+          {!externalAgentResult && !externalAgentRunning && (
+            <SectionCard title="agente configurado">
+              <div
+                className="flex items-start gap-2 text-sm leading-relaxed"
+                style={{ color: col.fgMuted }}
+              >
+                <span
+                  className="mt-0.5"
+                  style={{ color: runExternalAgent ? col.cream : col.muted }}
+                >
+                  <IconInfo size={12} />
+                </span>
+                <span>
+                  {runExternalAgent
+                    ? 'Podés pedir un análisis adicional desde la acción Analizar.'
+                    : 'No hay agente externo disponible para este entorno.'}
+                </span>
+              </div>
+            </SectionCard>
+          )}
+        </aside>
+      </div>
 
       {/* Reporte original (colapsable, para auditar la reescritura) */}
       <details className="group">
@@ -1127,6 +1363,810 @@ export function ExpandedDetail({
   )
 }
 
+function ExternalAgentPanel({
+  running,
+  result,
+  elapsedMs,
+  statusText,
+  runningOutput,
+}: {
+  running: boolean
+  result: ExternalAgentResult | null
+  progress: ExternalAgentProgress | null
+  elapsedMs: number
+  statusText: string
+  runningOutput?: string
+}) {
+  const ok = result?.ok
+  const duration = running ? elapsedMs : (result?.durationMs ?? 0)
+  const agentOutput = running
+    ? runningOutput || 'Esperando salida del agente externo. El proceso sigue activo.'
+    : result?.output || 'El agente no devolvió salida.'
+  const accessIssue = parseAgentAccessIssue(agentOutput)
+
+  return (
+    <SectionCard title="análisis del agente en la nube">
+      <div className="cloud-agent-panel">
+        <div className="cloud-agent-header">
+          <div className="min-w-0">
+            <div className="cloud-agent-kicker">
+              <span className="cloud-agent-mark" aria-hidden="true" />
+              aporte integrado al reporte
+            </div>
+            <p className="cloud-agent-lead">
+              Revisión adicional hecha por el agente configurado en la nube sobre este bug.
+            </p>
+          </div>
+          <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
+            <OmBadge
+              style={
+                running
+                  ? {
+                      text: col.cream,
+                      bg: alpha(col.cream, 0.08),
+                      border: alpha(col.cream, 0.24),
+                    }
+                  : ok
+                    ? {
+                        text: col.green,
+                        bg: alpha(col.green, 0.08),
+                        border: alpha(col.green, 0.24),
+                      }
+                    : {
+                        text: col.red,
+                        bg: alpha(col.red, 0.08),
+                        border: alpha(col.red, 0.24),
+                      }
+              }
+            >
+              {running ? 'ejecutando' : ok ? 'completado' : 'error'}
+            </OmBadge>
+            <span className="font-mono text-xs" style={{ color: col.muted }}>
+              {formatAgentDuration(duration)}
+            </span>
+          </div>
+        </div>
+
+        <div className="cloud-agent-body">
+          {running && (
+            <div className="font-mono text-xs" style={{ color: col.fgMuted }}>
+              proceso activo · {statusText}
+            </div>
+          )}
+          {result?.error && (
+            <div className="whitespace-pre-line text-sm leading-relaxed" style={{ color: col.red }}>
+              {result.error}
+            </div>
+          )}
+
+          {accessIssue ? (
+            <AgentAccessIssueCard path={accessIssue.path} />
+          ) : running ? (
+            <AgentRunningProgress output={agentOutput} />
+          ) : ok ? (
+            <CloudAgentReport>{agentOutput}</CloudAgentReport>
+          ) : null}
+
+          {!ok && result?.output && result.error && (
+            <div className="p-3 pt-0">
+              <div className="mb-2 font-mono text-xs uppercase" style={{ color: col.fgMuted }}>
+                salida técnica
+              </div>
+              <CloudAgentReport>{result.output}</CloudAgentReport>
+            </div>
+          )}
+        </div>
+      </div>
+    </SectionCard>
+  )
+}
+
+function DetailStat({
+  label,
+  value,
+  muted = false,
+}: {
+  label: string
+  value: string
+  muted?: boolean
+}) {
+  return (
+    <div className="detail-stat">
+      <span className="detail-stat-label">{label}</span>
+      <span className="detail-stat-value" style={{ color: muted ? col.muted : undefined }}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function AgentRunningProgress({ output }: { output: string }) {
+  const tasks = parseAgentTodoProgress(output)
+
+  return (
+    <div className="agent-running-progress">
+      <div className="agent-running-title">el agente está revisando el bug</div>
+      <p className="agent-running-text">
+        La salida parcial se mantiene como progreso interno hasta que el agente termine el informe.
+      </p>
+      {tasks.length > 0 && (
+        <ul className="agent-running-tasks" aria-label="progreso del agente">
+          {tasks.map((task, index) => (
+            <li key={`${task.text}-${index}`} className="agent-running-task">
+              <span className={`agent-running-task-dot agent-running-task-${task.status}`} />
+              <span>{task.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function parseAgentTodoProgress(output: string): Array<{ status: string; text: string }> {
+  const todoIndex = output.search(/\bTODOS\b/i)
+  if (todoIndex < 0) return []
+  const text = output.slice(todoIndex).replace(/\s+/g, ' ')
+  const markerRegex = /\[([•xX✓ ])\]\s*/g
+  const matches = [...text.matchAll(markerRegex)]
+  return matches
+    .map((match, index) => {
+      const start = (match.index ?? 0) + match[0].length
+      const end = matches[index + 1]?.index ?? text.length
+      const marker = match[1]
+      const taskText = cleanAgentReportText(text.slice(start, end))
+      const status = marker === ' ' ? 'pending' : marker === '•' ? 'active' : 'done'
+      return { status, text: taskText }
+    })
+    .filter((task) => task.text)
+}
+
+function AgentAccessIssueCard({ path }: { path?: string }) {
+  return (
+    <div className="agent-access-issue">
+      <div className="agent-access-issue-title">el agente no pudo acceder al repositorio</div>
+      <p className="agent-access-issue-text">
+        El comando externo pidió permiso para leer {path ? `“${path}”` : 'el repositorio'} y el
+        agente lo rechazó automáticamente. No llegó a hacer un análisis útil de código.
+      </p>
+      <p className="agent-access-issue-hint">
+        Revisá que el repositorio configurado sea el directorio de trabajo permitido por el agente o
+        ajustá sus permisos/sandbox para ejecuciones no interactivas.
+      </p>
+    </div>
+  )
+}
+
+function parseAgentAccessIssue(output: string): { path?: string } | null {
+  if (!/permission requested:/i.test(output)) return null
+  if (!/(auto-rejecting|rejected permission|user rejected permission)/i.test(output)) return null
+  const path = output.match(/external_directory\s+\(([^)]+)\)/i)?.[1]
+  return { path }
+}
+
+function ResolvedSuggestionCard({
+  reason,
+  canConfirm,
+  onConfirm,
+  onDismiss,
+}: {
+  reason: string
+  canConfirm: boolean
+  onConfirm: () => void
+  onDismiss: () => void
+}) {
+  return (
+    <div className="resolved-suggestion-card">
+      <div className="min-w-0">
+        <div className="resolved-suggestion-title">parece que está resuelto</div>
+        <p className="resolved-suggestion-text">
+          {reason ||
+            'El agente encontró indicios de que el problema podría estar corregido en el código revisado.'}
+        </p>
+        <p className="resolved-suggestion-warning">
+          Esta inferencia puede ser incorrecta: depende del modelo, la rama revisada y el contexto
+          disponible. Confirmalo antes de cerrar el bug.
+        </p>
+      </div>
+      <fieldset className="resolved-suggestion-actions">
+        <legend className="sr-only">marcar bug como resuelto</legend>
+        <button
+          type="button"
+          className="btn-primary text-xs"
+          onClick={onConfirm}
+          disabled={!canConfirm}
+          title={canConfirm ? 'marcar como solucionado' : 'no hay handler de estado disponible'}
+        >
+          sí
+        </button>
+        <button type="button" className="btn-secondary text-xs" onClick={onDismiss}>
+          no
+        </button>
+      </fieldset>
+    </div>
+  )
+}
+
+function parseResolvedSuggestion(output: string): { reason: string } | null {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => cleanAgentReportText(line))
+    .filter(Boolean)
+  const expectsStructuredStatus = lines.some((line) =>
+    /^(?:#{1,6}\s*)?(coincide con el bug reportado|estado probable\s*:|hallazgos laterales)$/i.test(
+      line,
+    ),
+  )
+
+  const explicitLineIndex = lines.findIndex((line) => {
+    const status = parseAgentResolvedStatusLine(line, expectsStructuredStatus)
+    return status !== 'unknown'
+  })
+  if (explicitLineIndex >= 0) {
+    if (
+      parseAgentResolvedStatusLine(lines[explicitLineIndex], expectsStructuredStatus) !== 'resolved'
+    ) {
+      return null
+    }
+    const reasonLine = lines
+      .slice(explicitLineIndex + 1, explicitLineIndex + 4)
+      .find((line) => /^motivo\s*:/i.test(line))
+    return { reason: reasonLine?.replace(/^motivo\s*:\s*/i, '').trim() ?? '' }
+  }
+
+  const clearPositive = lines.find(
+    (line) =>
+      !isNegatedResolvedLine(line) &&
+      /\b(parece|probablemente|aparentemente)\s+(que\s+)?(ya\s+)?est[aá]\s+resuelto\b/i.test(line),
+  )
+  return clearPositive ? { reason: clearPositive } : null
+}
+
+function parseAgentResolvedStatusLine(
+  line: string,
+  expectsStructuredStatus: boolean,
+): 'resolved' | 'not_resolved' | 'unknown' {
+  const explicitResolved = line.match(/^parece resuelto\s*:\s*(.+)$/i)
+  const explicitStatus = line.match(/^estado probable(?: del bug)?\s*:\s*(.+)$/i)
+  if (expectsStructuredStatus && explicitResolved && !explicitStatus) return 'unknown'
+  const value = normalizeAgentStatusValue(explicitResolved?.[1] ?? explicitStatus?.[1] ?? '')
+  if (!value) return 'unknown'
+  if (/\b(parcial|parcialmente|no determinable)\b/.test(value)) return 'not_resolved'
+  if (/^(si|yes|true|resuelto)\b/.test(value)) return 'resolved'
+  if (
+    /^(no|false|parcial|parcialmente|no resuelto|no_resuelto|no determinable|no_determinable)\b/.test(
+      value,
+    )
+  ) {
+    return 'not_resolved'
+  }
+  return 'unknown'
+}
+
+function normalizeAgentStatusValue(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[_-]+/g, ' ')
+    .toLowerCase()
+    .trim()
+}
+
+function isNegatedResolvedLine(line: string): boolean {
+  const normalizedLine = normalizeAgentStatusValue(line)
+  return /\b(no|sin evidencia|no hay evidencia|no se observa|no pude confirmar)\b.*\bresuelt/.test(
+    normalizedLine,
+  )
+}
+
+type AgentReportBlock =
+  | { type: 'heading'; text: string }
+  | { type: 'paragraph'; text: string }
+  | { type: 'list'; items: string[] }
+  | { type: 'coverage'; items: AgentCoverageItem[] }
+  | { type: 'insights'; items: AgentInsight[] }
+  | { type: 'references'; items: AgentFileReference[] }
+
+interface AgentCoverageItem {
+  status: 'covered' | 'partial' | 'failed' | 'unknown' | 'side'
+  statusLabel: string
+  step: string
+  detail: string
+}
+
+interface AgentInsight {
+  title: string
+  body: string
+}
+
+interface AgentFileReference {
+  file: string
+  line: string
+  relevance: string
+}
+
+function CloudAgentReport({ children }: { children: string }) {
+  const blocks = parseAgentReport(children)
+
+  return (
+    <div className="cloud-agent-report">
+      {blocks.map((block, index) => {
+        if (block.type === 'heading') {
+          return (
+            <h4 key={`${block.type}-${index}`} className="cloud-agent-heading">
+              {block.text}
+            </h4>
+          )
+        }
+        if (block.type === 'list') {
+          return (
+            <ul key={`${block.type}-${index}`} className="cloud-agent-list">
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex}>{item}</li>
+              ))}
+            </ul>
+          )
+        }
+        if (block.type === 'insights') {
+          return <CloudAgentInsights key={`${block.type}-${index}`} items={block.items} />
+        }
+        if (block.type === 'coverage') {
+          return <CloudAgentCoverage key={`${block.type}-${index}`} items={block.items} />
+        }
+        if (block.type === 'references') {
+          return <CloudAgentReferences key={`${block.type}-${index}`} items={block.items} />
+        }
+        return (
+          <p key={`${block.type}-${index}`} className="cloud-agent-paragraph">
+            {block.text}
+          </p>
+        )
+      })}
+    </div>
+  )
+}
+
+function parseAgentReport(output: string): AgentReportBlock[] {
+  const blocks: AgentReportBlock[] = []
+  let paragraph: string[] = []
+  let listItems: string[] = []
+  let tableRows: string[][] = []
+  let insights: AgentInsight[] = []
+  let coverageItems: AgentCoverageItem[] = []
+  let references: AgentFileReference[] = []
+  let currentSection = ''
+  let skippingTodoBlock = false
+
+  const flushParagraph = () => {
+    if (paragraph.length === 0) return
+    blocks.push({ type: 'paragraph', text: cleanAgentReportText(paragraph.join(' ')) })
+    paragraph = []
+  }
+
+  const flushList = () => {
+    if (listItems.length === 0) return
+    blocks.push({ type: 'list', items: listItems.map(cleanAgentReportText) })
+    listItems = []
+  }
+
+  const flushTable = () => {
+    if (tableRows.length === 0) return
+    const references = tableRowsToReferences(tableRows)
+    if (references.length > 0) blocks.push({ type: 'references', items: references })
+    else {
+      blocks.push({
+        type: 'paragraph',
+        text: tableRows.map((row) => row.map(cleanAgentReportText).join(' · ')).join(' · '),
+      })
+    }
+    tableRows = []
+  }
+
+  const flushInsights = () => {
+    if (insights.length === 0) return
+    blocks.push({ type: 'insights', items: insights })
+    insights = []
+  }
+
+  const flushCoverage = () => {
+    if (coverageItems.length === 0) return
+    blocks.push({ type: 'coverage', items: coverageItems })
+    coverageItems = []
+  }
+
+  const flushReferences = () => {
+    if (references.length === 0) return
+    blocks.push({ type: 'references', items: references })
+    references = []
+  }
+
+  for (const rawLine of output.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    const heading = line.match(/^#{1,6}\s+(.+)$/)
+    if (/^TODOS$/i.test(line)) {
+      flushParagraph()
+      flushList()
+      flushTable()
+      flushInsights()
+      flushCoverage()
+      flushReferences()
+      skippingTodoBlock = true
+      continue
+    }
+    if (skippingTodoBlock && !heading) continue
+    if (heading) skippingTodoBlock = false
+    if (isAgentOperationalTrace(line) || isAgentFillerLine(line)) {
+      flushParagraph()
+      flushList()
+      flushTable()
+      flushInsights()
+      flushCoverage()
+      flushReferences()
+      continue
+    }
+    if (!line) {
+      flushParagraph()
+      flushList()
+      flushTable()
+      flushInsights()
+      flushCoverage()
+      flushReferences()
+      continue
+    }
+
+    const tableRow = parseMarkdownTableRow(line)
+    if (tableRow) {
+      flushParagraph()
+      flushList()
+      flushInsights()
+      flushCoverage()
+      flushReferences()
+      tableRows.push(tableRow)
+      continue
+    }
+
+    if (heading) {
+      flushParagraph()
+      flushList()
+      flushTable()
+      flushInsights()
+      flushCoverage()
+      flushReferences()
+      const headingText = cleanAgentReportText(heading[1])
+      currentSection = normalizeAgentSection(headingText)
+      blocks.push({ type: 'heading', text: headingText })
+      continue
+    }
+
+    const listItem = line.match(/^(?:[-*]|\d+[.)])\s+(.+)$/)
+    if (listItem) {
+      flushParagraph()
+      flushTable()
+      const reference = parseAgentReferenceLine(listItem[1])
+      if (reference) {
+        flushList()
+        flushInsights()
+        references.push(reference)
+        continue
+      }
+      const insight = parseAgentInsightLine(listItem[1], currentSection)
+      if (insight) {
+        flushList()
+        flushCoverage()
+        flushReferences()
+        insights.push(insight)
+        continue
+      }
+      const coverage = parseAgentCoverageLine(listItem[1], currentSection)
+      if (coverage) {
+        flushList()
+        flushInsights()
+        flushReferences()
+        coverageItems.push(coverage)
+        continue
+      }
+      flushReferences()
+      flushInsights()
+      flushCoverage()
+      listItems.push(listItem[1])
+      continue
+    }
+
+    const reference = parseAgentReferenceLine(line)
+    if (reference) {
+      flushParagraph()
+      flushList()
+      flushTable()
+      flushInsights()
+      flushCoverage()
+      references.push(reference)
+      continue
+    }
+
+    const insight = parseAgentInsightLine(line, currentSection)
+    if (insight) {
+      flushParagraph()
+      flushList()
+      flushTable()
+      flushCoverage()
+      flushReferences()
+      insights.push(insight)
+      continue
+    }
+
+    const coverage = parseAgentCoverageLine(line, currentSection)
+    if (coverage) {
+      flushParagraph()
+      flushList()
+      flushTable()
+      flushInsights()
+      flushReferences()
+      coverageItems.push(coverage)
+      continue
+    }
+
+    if (shouldRenderLineAsListItem(line, currentSection)) {
+      flushParagraph()
+      flushTable()
+      flushInsights()
+      flushCoverage()
+      flushReferences()
+      listItems.push(line)
+      continue
+    }
+
+    flushList()
+    flushTable()
+    flushInsights()
+    flushCoverage()
+    flushReferences()
+    paragraph.push(line)
+  }
+
+  flushParagraph()
+  flushList()
+  flushTable()
+  flushInsights()
+  flushCoverage()
+  flushReferences()
+
+  if (blocks.length === 0) {
+    return [{ type: 'paragraph', text: 'El agente no devolvió salida.' }]
+  }
+  return blocks
+}
+
+function isAgentOperationalTrace(line: string): boolean {
+  if (!line) return false
+  if (/^>\s*build\s*[·-]/i.test(line)) return true
+  if (/^[→✱✓•]\s+/.test(line)) return true
+  if (/\b(Read|Glob|Grep|Explore Agent)\b/.test(line) && /[→✱✓•]/.test(line)) return true
+  if (/^✗\s*Invalid Tool\b/i.test(line)) return true
+  if (/^The arguments provided to the tool are invalid:/i.test(line)) return true
+  return false
+}
+
+function isAgentFillerLine(line: string): boolean {
+  return (
+    /^ahora tengo suficiente información/i.test(line) ||
+    /^(now let me|let me|i(?:'|’)ll|i will|i need to|next,? i|first,? i)\b/i.test(line)
+  )
+}
+
+function normalizeAgentSection(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+function parseAgentInsightLine(line: string, section: string): AgentInsight | null {
+  if (!['evidencia', 'diagnostico probable'].includes(section)) return null
+  const cleanedLine = cleanAgentReportText(line)
+  const separator = cleanedLine.includes(' — ') ? ' — ' : cleanedLine.includes(': ') ? ': ' : ''
+  if (!separator) return null
+  const [title = '', ...bodyParts] = cleanedLine.split(separator)
+  const body = bodyParts.join(separator).trim()
+  if (!title.trim() || !body) return null
+  return { title: title.trim(), body }
+}
+
+function parseAgentCoverageLine(line: string, section: string): AgentCoverageItem | null {
+  if (section !== 'cobertura de los pasos reportados') return null
+  const cleanedLine = cleanAgentReportText(line)
+  const match = cleanedLine.match(
+    /^(.+?)\s*(?:→|=>|:|-)\s*(cubierto|parcial|parcialmente cubierto|cubierto parcialmente|no cubierto|falla|fallando|no verificable|no_verificable|hallazgo lateral|lateral)\.?\s*(.*)$/i,
+  )
+  if (!match) return null
+  const statusText = normalizeAgentStatusValue(match[2] ?? '')
+  const detailText = normalizeAgentStatusValue(match[3] ?? '')
+  const hasPartialDetail =
+    /\b(no verificado|no verificada|sin verificar|no valida|no validado|no validada|backend no|solo frontend)\b/.test(
+      detailText,
+    )
+  const status = statusText.includes('hallazgo')
+    ? 'side'
+    : statusText === 'lateral'
+      ? 'side'
+      : statusText.includes('no verificable')
+        ? 'unknown'
+        : statusText.includes('parcial') || (statusText === 'cubierto' && hasPartialDetail)
+          ? 'partial'
+          : statusText.includes('no cubierto') || statusText.includes('falla')
+            ? 'failed'
+            : 'covered'
+  const statusLabel =
+    status === 'covered'
+      ? 'cubierto'
+      : status === 'partial'
+        ? 'parcial'
+        : status === 'failed'
+          ? 'falla'
+          : status === 'unknown'
+            ? 'no verificable'
+            : 'lateral'
+  return {
+    status,
+    statusLabel,
+    step: cleanAgentReportText(match[1] ?? ''),
+    detail: cleanAgentReportText(match[3] ?? ''),
+  }
+}
+
+function shouldRenderLineAsListItem(line: string, section: string): boolean {
+  if (!['proximos pasos', 'informacion faltante'].includes(section)) return false
+  return cleanAgentReportText(line).length > 0
+}
+
+function CloudAgentCoverage({ items }: { items: AgentCoverageItem[] }) {
+  const markerByStatus: Record<AgentCoverageItem['status'], string> = {
+    covered: '✓',
+    partial: '~',
+    failed: '!',
+    unknown: '?',
+    side: '·',
+  }
+
+  return (
+    <div className="cloud-agent-coverage">
+      {items.map((item, index) => (
+        <div
+          key={`${item.step}-${index}`}
+          className={`cloud-agent-coverage-item cloud-agent-coverage-${item.status}`}
+        >
+          <span className="cloud-agent-coverage-mark" aria-hidden="true">
+            {markerByStatus[item.status]}
+          </span>
+          <div className="cloud-agent-coverage-copy">
+            <div className="cloud-agent-coverage-title">
+              <span>{item.step}</span>
+              <span className="cloud-agent-coverage-status">{item.statusLabel}</span>
+            </div>
+            {item.detail && <p className="cloud-agent-coverage-detail">{item.detail}</p>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function CloudAgentInsights({ items }: { items: AgentInsight[] }) {
+  return (
+    <div className="cloud-agent-insights">
+      {items.map((item, index) => (
+        <div key={`${item.title}-${index}`} className="cloud-agent-insight">
+          <div className="cloud-agent-insight-title">{item.title}</div>
+          <p className="cloud-agent-insight-body">{item.body}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function CloudAgentReferences({ items }: { items: AgentFileReference[] }) {
+  return (
+    <div className="cloud-agent-references">
+      {items.map((item, index) => (
+        <div key={`${item.file}-${item.line}-${index}`} className="cloud-agent-reference">
+          <div className="cloud-agent-reference-main">
+            <span className="cloud-agent-reference-file">{item.file}</span>
+            {item.line && <span className="cloud-agent-reference-line">línea {item.line}</span>}
+          </div>
+          {item.relevance && <p className="cloud-agent-reference-note">{item.relevance}</p>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function parseAgentReferenceLine(line: string): AgentFileReference | null {
+  const cleanedLine = cleanAgentReportText(line)
+  const parts = cleanedLine.split(/\s+[—-]\s+/)
+  const target = parts[0]?.trim() ?? ''
+  const relevance = parts.slice(1).join(' — ').trim()
+  if (!isLikelyAgentReferenceTarget(target)) return null
+
+  const lineMatch = target.match(/^(.*?)(?::|\s+línea\s+)(\d+(?:-\d+)?)$/i)
+  return {
+    file: lineMatch ? lineMatch[1].trim() : target,
+    line: lineMatch ? lineMatch[2] : '',
+    relevance,
+  }
+}
+
+function isLikelyAgentReferenceTarget(value: string): boolean {
+  if (!value) return false
+  if (/^(backend|frontend|api|servicio|endpoint|configuración|configuracion):/i.test(value)) {
+    return true
+  }
+  return /(?:^|\/)[\w.-]+\.(?:ts|tsx|js|jsx|html|css|scss|java|kt|cs|go|py|rb|php|sql|json|yml|yaml|properties|xml|md)$/i.test(
+    value,
+  )
+}
+
+function parseMarkdownTableRow(line: string): string[] | null {
+  if (!line.includes('|')) return null
+  const cells = line
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim())
+  if (cells.length < 2) return null
+  if (cells.every((cell) => /^:?-{2,}:?$/.test(cell))) return []
+  return cells
+}
+
+function tableRowsToReferences(rows: string[][]): AgentFileReference[] {
+  const meaningfulRows = rows.filter((row) => row.length > 0)
+  if (meaningfulRows.length === 0) return []
+
+  const firstRow = meaningfulRows[0].map((cell) => normalizeAgentTableHeader(cell))
+  const hasHeader = firstRow.some((cell) => ['archivo', 'file', 'ruta', 'path'].includes(cell))
+  const bodyRows = hasHeader ? meaningfulRows.slice(1) : meaningfulRows
+  const fileIndex = hasHeader
+    ? firstRow.findIndex((cell) => ['archivo', 'file', 'ruta', 'path'].includes(cell))
+    : 0
+  const lineIndex = hasHeader
+    ? firstRow.findIndex((cell) => ['linea', 'line', 'lineas', 'lines'].includes(cell))
+    : 1
+  const relevanceIndex = hasHeader
+    ? firstRow.findIndex((cell) =>
+        ['relevancia', 'motivo', 'razon', 'detalle', 'descripcion'].includes(cell),
+      )
+    : 2
+
+  return bodyRows
+    .map((row) => ({
+      file: cleanAgentReportText(row[fileIndex] ?? row[0] ?? ''),
+      line: cleanAgentReportText(row[lineIndex] ?? ''),
+      relevance: cleanAgentReportText(row[relevanceIndex] ?? row.slice(2).join(' ')),
+    }))
+    .filter((item) => item.file)
+}
+
+function normalizeAgentTableHeader(text: string): string {
+  return cleanAgentReportText(text)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+function cleanAgentReportText(text: string): string {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function formatAgentDuration(durationMs: number): string {
+  const totalSeconds = Math.max(0, Math.round(durationMs / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (minutes === 0) return `${seconds}s`
+  return `${minutes}m ${seconds}s`
+}
+
 // Columna de la reescritura con acento semántico (tipo diff): el ícono + el borde
 // izquierdo + el color del label comunican el rol (defecto vs. esperado); el cuerpo
 // queda en el color de lectura normal.
@@ -1143,7 +2183,7 @@ function RewriteColumn({
 }) {
   const isEmpty = text === 'No informado'
   return (
-    <div style={{ borderLeft: `2px solid ${alpha(tone, 0.4)}`, paddingLeft: '0.65rem' }}>
+    <div className="rewrite-panel" style={{ borderLeftColor: alpha(tone, 0.58) }}>
       <div
         className="label"
         style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: tone }}
@@ -1152,33 +2192,11 @@ function RewriteColumn({
         {label}
       </div>
       <p
-        className="whitespace-pre-wrap text-sm leading-relaxed"
-        style={{ color: isEmpty ? col.muted : col.fgDim }}
+        className={`rewrite-panel-body whitespace-pre-wrap ${isEmpty ? 'rewrite-panel-body-muted' : ''}`}
       >
         {text}
       </p>
     </div>
-  )
-}
-
-// Metadata compacta (ambiente / tipo) como chip etiqueta+valor.
-function MetaChip({
-  label,
-  value,
-  muted = false,
-}: {
-  label: string
-  value: string
-  muted?: boolean
-}) {
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded px-2 py-1 font-mono text-2xs"
-      style={{ border: `1px solid ${alpha(col.border, 0.25)}`, background: alpha(col.muted, 0.12) }}
-    >
-      <span style={{ color: col.border }}>{label}</span>
-      <span style={{ color: muted ? col.muted : col.fgMuted }}>{value}</span>
-    </span>
   )
 }
 

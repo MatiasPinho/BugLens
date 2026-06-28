@@ -198,6 +198,13 @@ describe('teamBugs', () => {
             },
             missingInformation: [],
             rawResponse: '{}',
+            externalAgent: {
+              ok: true,
+              output: 'Revisar src/filtros.ts',
+              command: 'opencode run',
+              workingDirectory: '/repo/app',
+              durationMs: 1200,
+            },
           },
           googleDocs: [],
           processingMs: 12,
@@ -211,6 +218,8 @@ describe('teamBugs', () => {
     expect(results).toHaveLength(1)
     expect(results[0].status).toBe('en_progreso')
     expect(results[0].enriched.raw.title).toBe('Filtro roto')
+    expect(results[0].analysis.externalAgent?.output).toBe('Revisar src/filtros.ts')
+    expect(results[0].analysis.externalAgent?.workingDirectory).toBe('/repo/app')
     expect(rpc).toHaveBeenCalledWith('list_project_bugs', {
       target_project_id: 'project-1',
       result_limit: 500,

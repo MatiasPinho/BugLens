@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { AnalyzedBug, BugStatus } from '../../src/types/index'
@@ -204,5 +204,394 @@ describe('BugTable — borrar bug', () => {
     expect(screen.queryByRole('dialog', { name: 'borrar bug' })).not.toBeInTheDocument()
     const trigger = screen.getByRole('button', { name: 'borrar' })
     expect(trigger).toBeInTheDocument()
+  })
+})
+
+describe('BugTable — agente externo', () => {
+  it('envía el bug al agente externo y muestra la salida en el detalle', async () => {
+    const bug = makeBug({ id: 'a', title: 'Activo nuevo' })
+    const onAnalyzeExternalAgent = vi.fn().mockResolvedValue({
+      ok: true,
+      output: 'Revisar src/login.ts',
+      command: 'codex exec',
+      durationMs: 1200,
+    })
+
+    render(<BugTable results={[bug]} onAnalyzeExternalAgent={onAnalyzeExternalAgent} />)
+    await userEvent.click(screen.getByText('Activo nuevo'))
+    await userEvent.click(screen.getByRole('button', { name: 'Analizar' }))
+
+    expect(
+      screen.getByRole('dialog', { name: 'analizar con agente en la nube' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('calidad variable')).toBeInTheDocument()
+    expect(screen.getByText('acceso al repositorio')).toBeInTheDocument()
+    expect(onAnalyzeExternalAgent).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'iniciar análisis' }))
+
+    expect(onAnalyzeExternalAgent).toHaveBeenCalledTimes(1)
+    expect(onAnalyzeExternalAgent.mock.calls[0][0].enriched.raw.id).toBe('a')
+    expect(await screen.findByText('Revisar src/login.ts')).toBeInTheDocument()
+    expect(screen.getByText('completado')).toBeInTheDocument()
+    expect(screen.getByText('aporte integrado al reporte')).toBeInTheDocument()
+    expect(screen.queryByText('codex exec')).not.toBeInTheDocument()
+  })
+
+  it('permite cancelar el aviso antes de ejecutar el agente externo', async () => {
+    const onAnalyzeExternalAgent = vi.fn()
+
+    render(
+      <BugTable
+        results={[makeBug({ id: 'a', title: 'Activo nuevo' })]}
+        onAnalyzeExternalAgent={onAnalyzeExternalAgent}
+      />,
+    )
+    await userEvent.click(screen.getByText('Activo nuevo'))
+    await userEvent.click(screen.getByRole('button', { name: 'Analizar' }))
+    await userEvent.click(screen.getByRole('button', { name: 'cancelar' }))
+
+    expect(onAnalyzeExternalAgent).not.toHaveBeenCalled()
+    expect(
+      screen.queryByRole('dialog', { name: 'analizar con agente en la nube' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('muestra los TODOS parciales del agente como progreso interno mientras ejecuta', async () => {
+    const previousApi = window.electronAPI
+    let progressHandler:
+      | ((event: {
+          bugId: string
+          output: string
+          chunk: string
+          stream: 'stdout' | 'stderr'
+          command: string
+          elapsedMs: number
+          silentMs: number
+        }) => void)
+      | undefined
+    ;(window as unknown as { electronAPI: Partial<typeof window.electronAPI> }).electronAPI = {
+      ...previousApi,
+      onExternalAgentProgress: (handler) => {
+        progressHandler = handler
+        return () => {}
+      },
+    }
+    const onAnalyzeExternalAgent = vi.fn(() => new Promise<never>(() => {}))
+
+    try {
+      render(
+        <BugTable
+          results={[makeBug({ id: 'a', title: 'Activo nuevo' })]}
+          onAnalyzeExternalAgent={onAnalyzeExternalAgent}
+        />,
+      )
+      await userEvent.click(screen.getByText('Activo nuevo'))
+      await userEvent.click(screen.getByRole('button', { name: 'Analizar' }))
+      await userEvent.click(screen.getByRole('button', { name: 'iniciar análisis' }))
+
+      act(() => {
+        progressHandler?.({
+          bugId: 'a',
+          output:
+            'TODOS\n\n[•] Explorar estructura del frontend [ ] Analizar validaciones del formulario [ ] Sintetizar evidencia',
+          chunk: 'TODOS',
+          stream: 'stdout',
+          command: 'opencode run',
+          elapsedMs: 1000,
+          silentMs: 100,
+        })
+      })
+
+      expect(screen.getByText('el agente está revisando el bug')).toBeInTheDocument()
+      expect(screen.getByText('Explorar estructura del frontend')).toBeInTheDocument()
+      expect(screen.getByText('Analizar validaciones del formulario')).toBeInTheDocument()
+      expect(screen.queryByText('TODOS')).not.toBeInTheDocument()
+    } finally {
+      window.electronAPI = previousApi
+    }
+  })
+
+  it('muestra el último resultado persistido del agente externo al abrir el detalle', async () => {
+    const bug = makeBug({ id: 'a', title: 'Activo nuevo' })
+    bug.analysis.externalAgent = {
+      ok: true,
+      output: 'Resultado guardado del agente',
+      command: 'opencode run',
+      workingDirectory: '/repo/app',
+      durationMs: 3000,
+    }
+    const onAnalyzeExternalAgent = vi.fn()
+
+    render(<BugTable results={[bug]} onAnalyzeExternalAgent={onAnalyzeExternalAgent} />)
+    await userEvent.click(screen.getByText('Activo nuevo'))
+
+    expect(screen.getByText('Resultado guardado del agente')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Revisión adicional hecha por el agente configurado en la nube sobre este bug.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('opencode run')).not.toBeInTheDocument()
+    expect(screen.queryByText(/cwd:/)).not.toBeInTheDocument()
+    expect(onAnalyzeExternalAgent).not.toHaveBeenCalled()
+  })
+
+  it('muestra un error claro cuando el agente no puede acceder al repositorio', async () => {
+    const bug = makeBug({ id: 'a', title: 'Activo nuevo' })
+    bug.analysis.externalAgent = {
+      ok: true,
+      output:
+        '$ git branch --show-current merge\n\n! permission requested: external_directory (/repo/back/*); auto-rejecting\nThe user rejected permission to use this specific tool call.',
+      command: 'codex exec',
+      durationMs: 10000,
+    }
+
+    render(<BugTable results={[bug]} onAnalyzeExternalAgent={vi.fn()} />)
+    await userEvent.click(screen.getByText('Activo nuevo'))
+
+    expect(screen.getByText('el agente no pudo acceder al repositorio')).toBeInTheDocument()
+    expect(screen.getByText(/No llegó a hacer un análisis útil de código/)).toBeInTheDocument()
+    expect(screen.queryByText(/git branch/)).not.toBeInTheDocument()
+  })
+
+  it('muestra los archivos a revisar como referencias legibles', async () => {
+    const bug = makeBug({ id: 'a', title: 'Activo nuevo' })
+    bug.analysis.externalAgent = {
+      ok: true,
+      output:
+        '## Archivos o áreas a revisar\n| Archivo | Línea | Relevancia |\n| --- | --- | --- |\n| src/login.ts | 42 | Manejo del submit |\n| src/session.ts | 18 | Endpoint de sesión |\n\n## Próximos pasos\n- validar el error',
+      command: 'opencode run',
+      durationMs: 3000,
+    }
+
+    render(<BugTable results={[bug]} onAnalyzeExternalAgent={vi.fn()} />)
+    await userEvent.click(screen.getByText('Activo nuevo'))
+
+    expect(screen.getByText('Archivos o áreas a revisar')).toBeInTheDocument()
+    expect(screen.getByText('src/login.ts')).toBeInTheDocument()
+    expect(screen.getByText('línea 42')).toBeInTheDocument()
+    expect(screen.getByText('Manejo del submit')).toBeInTheDocument()
+    expect(screen.queryByText('| Archivo | Línea | Relevancia |')).not.toBeInTheDocument()
+  })
+
+  it('muestra referencias simples y oculta la traza operativa del agente', async () => {
+    const bug = makeBug({ id: 'a', title: 'Activo nuevo' })
+    bug.analysis.externalAgent = {
+      ok: true,
+      output:
+        '## Archivos o áreas a revisar\nsource/src/app/core/utils/form.utils.ts — toDisplayDecimalPayload y normalizeDecimalPayload\nBackend: endpoint postWeapon / patchWeapon — validación server-side\n\n## Próximos pasos\n- validar el endpoint\n> build · big-pickle\n→ Read source/src/app/core/utils/form.utils.ts\n✱ Grep "weapon" in source/src · 22 matches',
+      command: 'opencode run',
+      durationMs: 3000,
+    }
+
+    render(<BugTable results={[bug]} onAnalyzeExternalAgent={vi.fn()} />)
+    await userEvent.click(screen.getByText('Activo nuevo'))
+
+    expect(screen.getByText('source/src/app/core/utils/form.utils.ts')).toBeInTheDocument()
+    expect(
+      screen.getByText('toDisplayDecimalPayload y normalizeDecimalPayload'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Backend: endpoint postWeapon / patchWeapon')).toBeInTheDocument()
+    expect(screen.queryByText(/big-pickle/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Grep/)).not.toBeInTheDocument()
+  })
+
+  it('estructura evidencia, diagnóstico y próximos pasos del agente', async () => {
+    const bug = makeBug({ id: 'a', title: 'Activo nuevo' })
+    bug.analysis.externalAgent = {
+      ok: true,
+      output:
+        'Now let me check the backend for server-side validation.\nAhora tengo suficiente información para hacer un análisis completo.\n\n## Evidencia\n1. HTTP 200 con datos inválidos — El backend acepta datos incorrectos.\n\n## Diagnóstico probable\nValidación frontend correcta pero backend ausente: el servidor no valida el payload.\n\n## Próximos pasos\nReproducir localmente el flujo.\nVerificar DevTools Network.',
+      command: 'opencode run',
+      durationMs: 3000,
+    }
+
+    render(<BugTable results={[bug]} onAnalyzeExternalAgent={vi.fn()} />)
+    await userEvent.click(screen.getByText('Activo nuevo'))
+
+    expect(screen.queryByText(/Now let me/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Ahora tengo suficiente/)).not.toBeInTheDocument()
+    expect(screen.getByText('HTTP 200 con datos inválidos')).toBeInTheDocument()
+    expect(screen.getByText('El backend acepta datos incorrectos.')).toBeInTheDocument()
+    expect(
+      screen.getByText('Validación frontend correcta pero backend ausente'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('el servidor no valida el payload.')).toBeInTheDocument()
+    expect(screen.getByText('Reproducir localmente el flujo.')).toBeInTheDocument()
+    expect(screen.getByText('Verificar DevTools Network.')).toBeInTheDocument()
+  })
+
+  it('muestra la cobertura de pasos con estado visual por ítem', async () => {
+    const bug = makeBug({ id: 'a', title: 'Activo nuevo' })
+    bug.analysis.externalAgent = {
+      ok: true,
+      output:
+        '## Cobertura de los pasos reportados\nNº serie > 20 caracteres → Cubierto. maxInputLength bloquea el input.\nCUIL inválido → Cubierto en frontend, no verificado en backend.\nCampos obligatorios → parcial. Falta required en un campo.\nOrganismo registrante < 5 caracteres → No cubierto. Falta mensaje visible.\nFecha adquisición año 4000 → No verificable. Requiere correr la app.\nBug de persistencia → Hallazgo lateral. No corresponde al paso UI.\n✗ Invalid Tool\nThe arguments provided to the tool are invalid: Model tried to call unavailable tool bash.',
+      command: 'opencode run',
+      durationMs: 3000,
+    }
+
+    render(<BugTable results={[bug]} onAnalyzeExternalAgent={vi.fn()} />)
+    await userEvent.click(screen.getByText('Activo nuevo'))
+
+    expect(screen.getByText('Cobertura de los pasos reportados')).toBeInTheDocument()
+    expect(screen.getByText('Nº serie > 20 caracteres')).toBeInTheDocument()
+    expect(screen.getByText('cubierto')).toBeInTheDocument()
+    expect(screen.getByText('CUIL inválido')).toBeInTheDocument()
+    expect(screen.getAllByText('parcial')).toHaveLength(2)
+    expect(screen.getByText('Campos obligatorios')).toBeInTheDocument()
+    expect(screen.getByText('Organismo registrante < 5 caracteres')).toBeInTheDocument()
+    expect(screen.getByText('falla')).toBeInTheDocument()
+    expect(screen.getByText('Fecha adquisición año 4000')).toBeInTheDocument()
+    expect(screen.getByText('no verificable')).toBeInTheDocument()
+    expect(screen.getByText('Bug de persistencia')).toBeInTheDocument()
+    expect(screen.getByText('lateral')).toBeInTheDocument()
+    expect(screen.queryByText(/Invalid Tool/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/unavailable tool/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/→ Cubierto/)).not.toBeInTheDocument()
+  })
+
+  it('permite marcar como solucionado cuando el agente indica que parece resuelto', async () => {
+    const bug = makeBug({ id: 'a', title: 'Activo nuevo' })
+    bug.analysis.externalAgent = {
+      ok: true,
+      output:
+        '## Estado probable del bug\nEstado probable: resuelto\nCoincide con el bug reportado: sí\nMotivo: el validador ya rechaza el payload inválido en la rama revisada.',
+      command: 'opencode run',
+      durationMs: 3000,
+    }
+    const onSetStatus = vi.fn()
+
+    render(<BugTable results={[bug]} onSetStatus={onSetStatus} onAnalyzeExternalAgent={vi.fn()} />)
+    await userEvent.click(screen.getByText('Activo nuevo'))
+
+    expect(screen.getByText('parece que está resuelto')).toBeInTheDocument()
+    expect(screen.getByText(/Esta inferencia puede ser incorrecta/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'sí' }))
+
+    expect(onSetStatus).toHaveBeenCalledWith(bug, 'solucionado')
+  })
+
+  it('no sugiere cerrar cuando el agente indica estado parcial o no resuelto', async () => {
+    const partialBug = makeBug({ id: 'a', title: 'Parcial' })
+    partialBug.analysis.externalAgent = {
+      ok: true,
+      output:
+        '## Estado probable del bug\nEstado probable: parcialmente_resuelto\nCoincide con el bug reportado: parcial\nMotivo: algunos pasos están cubiertos y otros requieren verificación.',
+      command: 'opencode run',
+      durationMs: 3000,
+    }
+    const notResolvedBug = makeBug({ id: 'b', title: 'No resuelto' })
+    notResolvedBug.analysis.externalAgent = {
+      ok: true,
+      output:
+        '## Estado probable del bug\nParece resuelto: no\nMotivo: no hay evidencia suficiente.',
+      command: 'opencode run',
+      durationMs: 3000,
+    }
+
+    const { rerender } = render(
+      <BugTable results={[partialBug]} onSetStatus={vi.fn()} onAnalyzeExternalAgent={vi.fn()} />,
+    )
+    await userEvent.click(screen.getByText('Parcial'))
+
+    expect(screen.queryByText('parece que está resuelto')).not.toBeInTheDocument()
+
+    rerender(
+      <BugTable
+        results={[notResolvedBug]}
+        onSetStatus={vi.fn()}
+        onAnalyzeExternalAgent={vi.fn()}
+      />,
+    )
+    await userEvent.click(screen.getByText('No resuelto'))
+
+    expect(screen.queryByText('parece que está resuelto')).not.toBeInTheDocument()
+  })
+
+  it('no sugiere cerrar por frases negadas sobre resolución', async () => {
+    const bug = makeBug({ id: 'a', title: 'Negado' })
+    bug.analysis.externalAgent = {
+      ok: true,
+      output:
+        '## Estado probable del bug\nNo parece que esté resuelto: falta validar el pegado de texto.',
+      command: 'opencode run',
+      durationMs: 3000,
+    }
+
+    render(<BugTable results={[bug]} onSetStatus={vi.fn()} onAnalyzeExternalAgent={vi.fn()} />)
+    await userEvent.click(screen.getByText('Negado'))
+
+    expect(screen.queryByText('parece que está resuelto')).not.toBeInTheDocument()
+  })
+
+  it('ignora el formato viejo de resolución cuando la respuesta usa el contrato estructurado', async () => {
+    const bug = makeBug({ id: 'a', title: 'Contrato nuevo' })
+    bug.analysis.externalAgent = {
+      ok: true,
+      output:
+        '## Hallazgos laterales\nninguno\n\n## Estado probable del bug\nParece resuelto: sí\nMotivo: formato viejo mezclado por el agente.',
+      command: 'opencode run',
+      durationMs: 3000,
+    }
+
+    render(<BugTable results={[bug]} onSetStatus={vi.fn()} onAnalyzeExternalAgent={vi.fn()} />)
+    await userEvent.click(screen.getByText('Contrato nuevo'))
+
+    expect(screen.queryByText('parece que está resuelto')).not.toBeInTheDocument()
+  })
+
+  it('muestra el error del agente externo dentro del detalle', async () => {
+    const onAnalyzeExternalAgent = vi.fn().mockResolvedValue({
+      ok: false,
+      output: '',
+      error: 'Configurá un comando de agente externo en Settings.',
+      command: '',
+      durationMs: 0,
+    })
+
+    render(
+      <BugTable
+        results={[makeBug({ id: 'a', title: 'Activo nuevo' })]}
+        onAnalyzeExternalAgent={onAnalyzeExternalAgent}
+      />,
+    )
+    await userEvent.click(screen.getByText('Activo nuevo'))
+    await userEvent.click(screen.getByRole('button', { name: 'Analizar' }))
+    await userEvent.click(screen.getByRole('button', { name: 'iniciar análisis' }))
+
+    expect(
+      await screen.findByText('Configurá un comando de agente externo en Settings.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('error')).toBeInTheDocument()
+  })
+
+  it('muestra la salida técnica cuando el agente externo falla', async () => {
+    const onAnalyzeExternalAgent = vi.fn().mockResolvedValue({
+      ok: false,
+      output: 'stack interno del agente',
+      error: 'El agente externo está instalado, pero su provider no está configurado.',
+      command: 'opencode run',
+      durationMs: 5000,
+    })
+
+    render(
+      <BugTable
+        results={[makeBug({ id: 'a', title: 'Activo nuevo' })]}
+        onAnalyzeExternalAgent={onAnalyzeExternalAgent}
+      />,
+    )
+    await userEvent.click(screen.getByText('Activo nuevo'))
+    await userEvent.click(screen.getByRole('button', { name: 'Analizar' }))
+    await userEvent.click(screen.getByRole('button', { name: 'iniciar análisis' }))
+
+    expect(
+      await screen.findByText(
+        'El agente externo está instalado, pero su provider no está configurado.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('salida técnica')).toBeInTheDocument()
+    expect(screen.getByText('stack interno del agente')).toBeInTheDocument()
+    expect(screen.getByText('salida técnica').closest('details')).toBeNull()
   })
 })
