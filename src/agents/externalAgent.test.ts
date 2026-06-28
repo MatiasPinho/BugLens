@@ -64,9 +64,13 @@ describe('externalAgent', () => {
     expect(prompt).toContain('Tratá el reporte como una observación histórica de QA')
     expect(prompt).toContain('no como prueba de que el código actual sigue fallando')
     expect(prompt).toContain('Evaluá los pasos reportados uno por uno')
-    expect(prompt).toContain('cualquier campo del mismo formulario que tenga asterisco pero no validación required')
+    expect(prompt).toContain(
+      'cualquier campo del mismo formulario que tenga asterisco pero no validación required',
+    )
     expect(prompt).toContain('Si el reporte describe una reproducción por UI')
-    expect(prompt).toContain('La falta de validación redundante en backend/API directa es hallazgo lateral')
+    expect(prompt).toContain(
+      'La falta de validación redundante en backend/API directa es hallazgo lateral',
+    )
     expect(prompt).toContain('No uses el formato viejo "Parece resuelto: sí/no"')
     expect(prompt).toContain('Hallazgos laterales')
     expect(prompt).toContain('Separá evidencia comprobada de hipótesis')
@@ -78,7 +82,9 @@ describe('externalAgent', () => {
       'Estado probable: resuelto | parcialmente_resuelto | no_resuelto | no_determinable',
     )
     expect(prompt).toContain('Coincide con el bug reportado: sí | parcial | no')
-    expect(prompt).toContain('Usá no_resuelto solo si al menos un paso reportado no tiene validación/bloqueo')
+    expect(prompt).toContain(
+      'Usá no_resuelto solo si al menos un paso reportado no tiene validación/bloqueo',
+    )
     expect(prompt).toContain('## Próximos pasos')
   })
 

@@ -1,8 +1,8 @@
 import type { ManualBugFields } from '../src/pipeline/manualBugBuilder'
 import type {
   AnalyzedBug,
-  ExternalAgentRepository,
   ExternalAgentProgress,
+  ExternalAgentRepository,
   ExternalAgentResult,
   IPCEvent,
 } from '../src/types/index'

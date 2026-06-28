@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useEffect, useState } from 'react'
-import type { LogLine } from '../App'
 import type { ExternalAgentRepository } from '../../src/types/index'
+import type { LogLine } from '../App'
 import { defaultModelFor, LLM_OPTIONS } from '../llmOptions'
 import { alpha, col } from '../theme'
 import { IconCheck, IconX } from './icons'

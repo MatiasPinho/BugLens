@@ -498,7 +498,11 @@ describe('BugTable — agente externo', () => {
     expect(screen.queryByText('parece que está resuelto')).not.toBeInTheDocument()
 
     rerender(
-      <BugTable results={[notResolvedBug]} onSetStatus={vi.fn()} onAnalyzeExternalAgent={vi.fn()} />,
+      <BugTable
+        results={[notResolvedBug]}
+        onSetStatus={vi.fn()}
+        onAnalyzeExternalAgent={vi.fn()}
+      />,
     )
     await userEvent.click(screen.getByText('No resuelto'))
 

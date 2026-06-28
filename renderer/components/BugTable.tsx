@@ -1490,14 +1490,14 @@ function AgentRunningProgress({ output }: { output: string }) {
         La salida parcial se mantiene como progreso interno hasta que el agente termine el informe.
       </p>
       {tasks.length > 0 && (
-        <div className="agent-running-tasks" aria-label="progreso del agente">
+        <ul className="agent-running-tasks" aria-label="progreso del agente">
           {tasks.map((task, index) => (
-            <div key={`${task.text}-${index}`} className="agent-running-task">
+            <li key={`${task.text}-${index}`} className="agent-running-task">
               <span className={`agent-running-task-dot agent-running-task-${task.status}`} />
               <span>{task.text}</span>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   )
@@ -1568,7 +1568,8 @@ function ResolvedSuggestionCard({
           disponible. Confirmalo antes de cerrar el bug.
         </p>
       </div>
-      <div className="resolved-suggestion-actions" aria-label="marcar bug como resuelto">
+      <fieldset className="resolved-suggestion-actions">
+        <legend className="sr-only">marcar bug como resuelto</legend>
         <button
           type="button"
           className="btn-primary text-xs"
@@ -1581,7 +1582,7 @@ function ResolvedSuggestionCard({
         <button type="button" className="btn-secondary text-xs" onClick={onDismiss}>
           no
         </button>
-      </div>
+      </fieldset>
     </div>
   )
 }
@@ -1602,7 +1603,9 @@ function parseResolvedSuggestion(output: string): { reason: string } | null {
     return status !== 'unknown'
   })
   if (explicitLineIndex >= 0) {
-    if (parseAgentResolvedStatusLine(lines[explicitLineIndex], expectsStructuredStatus) !== 'resolved') {
+    if (
+      parseAgentResolvedStatusLine(lines[explicitLineIndex], expectsStructuredStatus) !== 'resolved'
+    ) {
       return null
     }
     const reasonLine = lines
@@ -1614,9 +1617,7 @@ function parseResolvedSuggestion(output: string): { reason: string } | null {
   const clearPositive = lines.find(
     (line) =>
       !isNegatedResolvedLine(line) &&
-      /\b(parece|probablemente|aparentemente)\s+(que\s+)?(ya\s+)?est[aá]\s+resuelto\b/i.test(
-        line,
-      ),
+      /\b(parece|probablemente|aparentemente)\s+(que\s+)?(ya\s+)?est[aá]\s+resuelto\b/i.test(line),
   )
   return clearPositive ? { reason: clearPositive } : null
 }
@@ -1632,7 +1633,11 @@ function parseAgentResolvedStatusLine(
   if (!value) return 'unknown'
   if (/\b(parcial|parcialmente|no determinable)\b/.test(value)) return 'not_resolved'
   if (/^(si|yes|true|resuelto)\b/.test(value)) return 'resolved'
-  if (/^(no|false|parcial|parcialmente|no resuelto|no_resuelto|no determinable|no_determinable)\b/.test(value)) {
+  if (
+    /^(no|false|parcial|parcialmente|no resuelto|no_resuelto|no determinable|no_determinable)\b/.test(
+      value,
+    )
+  ) {
     return 'not_resolved'
   }
   return 'unknown'
@@ -1984,22 +1989,22 @@ function parseAgentCoverageLine(line: string, section: string): AgentCoverageIte
     : statusText === 'lateral'
       ? 'side'
       : statusText.includes('no verificable')
-      ? 'unknown'
-      : statusText.includes('parcial') || (statusText === 'cubierto' && hasPartialDetail)
-        ? 'partial'
-        : statusText.includes('no cubierto') || statusText.includes('falla')
-          ? 'failed'
-          : 'covered'
+        ? 'unknown'
+        : statusText.includes('parcial') || (statusText === 'cubierto' && hasPartialDetail)
+          ? 'partial'
+          : statusText.includes('no cubierto') || statusText.includes('falla')
+            ? 'failed'
+            : 'covered'
   const statusLabel =
     status === 'covered'
       ? 'cubierto'
       : status === 'partial'
         ? 'parcial'
-      : status === 'failed'
-        ? 'falla'
-        : status === 'unknown'
-          ? 'no verificable'
-          : 'lateral'
+        : status === 'failed'
+          ? 'falla'
+          : status === 'unknown'
+            ? 'no verificable'
+            : 'lateral'
   return {
     status,
     statusLabel,

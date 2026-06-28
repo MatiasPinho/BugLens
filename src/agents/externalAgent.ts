@@ -528,7 +528,7 @@ export function runExternalAgent(
       if (timedOut || bufferExceeded || code !== 0) {
         const message = bufferExceeded
           ? 'El agente externo devolvió demasiada salida y BugLens detuvo la lectura.'
-            : externalAgentErrorMessage(
+          : externalAgentErrorMessage(
               {
                 message:
                   code === null
