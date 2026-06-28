@@ -44,6 +44,39 @@ const bugs: AnalyzedBug[] = [
   }),
 ]
 
+const agentCoverageOutput = `## Resumen
+El formulario de armas tiene validaciones implementadas para los pasos reportados, pero queda una inconsistencia lateral entre frontend y backend.
+
+## Cobertura de los pasos reportados
+✓ Nº de serie > 20 caracteres — cubierto. maxInputLength limita a 20 y el validador exige longitud exacta.
+△ Organismo registrante < 5 caracteres — parcial. El frontend lo valida, pero falta confirmar el mensaje visual.
+? Fecha adquisición año 4000 — no verificable. El código tiene max de fecha, falta prueba manual en navegador.
+! Guardar sin otra moneda — falla. El control se habilita, pero no se encontró required aplicado.
+→ Backend acepta 100 caracteres para organismo registrante mientras el frontend limita a 50.
+
+## Estado probable del bug
+Estado probable: parcialmente_resuelto
+Coincide con el bug reportado: parcial`
+
+const agentResolvedOutput = `## Resumen
+Todos los pasos reportados tienen validación o bloqueo explícito en el código actual.
+
+## Cobertura de los pasos reportados
+✓ Nº de serie > 20 caracteres — cubierto.
+✓ Organismo registrante < 5 caracteres — cubierto.
+✓ Fecha adquisición año 4000 — cubierto.
+✓ Texto en campos numéricos — cubierto.
+
+## Estado probable del bug
+Estado probable: resuelto
+Coincide con el bug reportado: sí`
+
+const agentErrorOutput = `TODOS
+[•] Explorar frontend [ ] Revisar backend [ ] Sintetizar evidencia
+
+✗ Invalid Tool
+The arguments provided to the tool are invalid: Model tried to call unavailable tool 'bash'.`
+
 const meta: Meta<typeof BugTable> = {
   title: 'buglens/BugTable',
   component: BugTable,
@@ -64,3 +97,96 @@ export const Default: Story = {
 export const MultiProblema: Story = { args: { results: [bugs[1]], onSetStatus: () => {} } }
 
 export const SinResultados: Story = { args: { results: [] } }
+
+export const ConAgenteExterno: Story = {
+  args: {
+    results: [
+      (() => {
+        const bug = makeBug({
+          id: 'b6',
+          title: 'Form armas',
+          summary: 'validaciones reportadas en el formulario de armas',
+          status: 'nuevo',
+          observed:
+            '1. número de serie acepta más de 20 caracteres\n2. organismo registrante acepta menos de 5\n3. fecha de adquisición permite año 4000\n4. guardar sin otra moneda',
+          expected: 'los campos deberían bloquear valores inválidos y mostrar errores claros',
+          steps: ['abrir /form', 'ingresar datos inválidos', 'guardar'],
+          missing: ['captura actual del mensaje visual'],
+        })
+        bug.analysis.externalAgent = {
+          ok: true,
+          command: 'codex exec',
+          durationMs: 141000,
+          output: agentCoverageOutput,
+        }
+        return bug
+      })(),
+    ],
+    expandedId: 'b6',
+    onSetStatus: () => {},
+    onAnalyzeExternalAgent: async () => ({
+      ok: true,
+      command: 'codex exec',
+      durationMs: 141000,
+      output: agentCoverageOutput,
+    }),
+  },
+}
+
+export const AgenteSugiereResuelto: Story = {
+  args: {
+    results: [
+      (() => {
+        const bug = makeBug({
+          id: 'b7',
+          title: 'Depósitos bancarios',
+          summary: 'validaciones históricas en depósitos bancarios',
+          status: 'nuevo',
+          observed: 'el índice de cotización permite letras y el CUIL inválido muestra error Java',
+          expected: 'debería bloquear letras y mostrar un mensaje amigable',
+          steps: ['abrir /form', 'ingresar letras en índice', 'ingresar CUIL inválido'],
+        })
+        bug.analysis.externalAgent = {
+          ok: true,
+          command: 'opencode run',
+          durationMs: 125000,
+          output: agentResolvedOutput,
+        }
+        return bug
+      })(),
+    ],
+    expandedId: 'b7',
+    onSetStatus: () => {},
+  },
+}
+
+export const AgenteConErrorYLogs: Story = {
+  args: {
+    results: [
+      (() => {
+        const bug = makeBug({
+          id: 'b8',
+          title: 'Login queda cargando',
+          summary: 'el agente no pudo completar el análisis',
+          status: 'en_progreso',
+        })
+        bug.analysis.externalAgent = {
+          ok: false,
+          command: 'codex exec',
+          durationMs: 90000,
+          error: 'El agente externo quedó en progreso interno sin entregar un informe durante 90s.',
+          output: agentErrorOutput,
+        }
+        return bug
+      })(),
+    ],
+    expandedId: 'b8',
+    onAnalyzeExternalAgent: async () => ({
+      ok: false,
+      command: 'codex exec',
+      durationMs: 90000,
+      error: 'El agente externo quedó en progreso interno sin entregar un informe durante 90s.',
+      output: agentErrorOutput,
+    }),
+  },
+}
