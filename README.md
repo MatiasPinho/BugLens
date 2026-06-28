@@ -27,7 +27,11 @@ trabajar en equipo.
    cerrado / no replicado) con un control de pestañas (navegable con flechas).
 5. Filtrás/agrupás/buscás/**borrás** bugs, y exportás un Excel enriquecido (incluso sin Excel original)
    o un JSON con los **datos completos** recopilados.
-6. Al reabrir la app, la tabla se restaura desde el proyecto compartido en Supabase.
+6. Opcionalmente ejecutás un **agente externo por bug** (Codex CLI, OpenCode, Claude Code
+   u otro comando local) para contrastar el reporte con repositorios configurados. El aporte
+   se guarda junto al bug, muestra logs técnicos cuando falla y puede sugerir, con confirmación
+   manual, si el bug parece resuelto.
+7. Al reabrir la app, la tabla se restaura desde el proyecto compartido en Supabase.
 
 ---
 
@@ -206,22 +210,24 @@ La primera base de esta migración está documentada en
 [`docs/supabase-migration.md`](docs/supabase-migration.md), con el schema inicial en
 [`supabase/migrations/0001_initial_team_schema.sql`](supabase/migrations/0001_initial_team_schema.sql).
 
-MCP es un tema separado: serviría para una feature avanzada de **investigación de código**
-por bug, delegando en una herramienta externa que el usuario ya tenga configurada
-(opencode, Codex CLI, Claude Code u otra). No debería volver al enfoque forense removido
-de embeddings/onnxruntime ni correr en batch automático sobre todos los bugs.
+El análisis de código es una acción explícita **por bug**, delegada en una herramienta externa
+que el usuario ya tenga configurada (Codex CLI, OpenCode, Claude Code u otra). No vuelve al
+enfoque forense removido de embeddings/onnxruntime ni corre en batch automático sobre todos
+los bugs.
 
-Arquitectura posible:
+Arquitectura actual:
 
 ```text
-buglens -> MCP client -> buglens-code-investigator -> agente externo -> repo local
+buglens -> comando local configurado -> agente externo -> repo local
 ```
 
-El contrato esperado sería por bug seleccionado: buglens envía el reporte reescrito y el
-repo elegido; el agente devuelve una respuesta estructurada con archivos relevantes,
-commits relacionados, tests sugeridos, hallazgos, nivel de confianza y limitaciones.
-Si el agente usa modelos cloud, debe advertirse explícitamente que puede consumir tokens
-del usuario y enviar fragmentos del repo al proveedor configurado.
+BugLens arma un prompt con el reporte reescrito, los pasos reportados, las capturas y los
+repositorios configurados. El agente debe responder en español, contrastar cada paso del bug
+reportado, separar hallazgos laterales de fallas reales y distinguir evidencia comprobada de
+hipótesis. El resultado se persiste en Supabase como parte del análisis del bug.
+
+Si el agente usa modelos cloud, puede consumir tokens del usuario y enviar fragmentos del repo
+al proveedor configurado. BugLens muestra esa advertencia antes de ejecutar el análisis.
 
 ## Atajos de teclado
 
@@ -266,6 +272,13 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | `runtimeConfig.resolveConcurrency / resolveOllamaTimeoutMs` | Paralelismo y timeout efectivos. Precedencia: env var > modo de rendimiento (cpu → 1 / 240 s) > default del proveedor. |
 | `analysisCache.makeCacheKey / load / save` | Caché por **contenido** (bug + docs + modelo + versión de prompt): re-correr el mismo Excel = 0 llamadas. |
 
+### `src/agents/` — agente externo
+
+| Función | Qué hace |
+|---|---|
+| `externalAgent.buildExternalAgentPrompt(...)` | Construye el prompt por bug: reporte reescrito, evidencia, repositorios y reglas para evaluar pasos reportados vs. hallazgos laterales. |
+| `externalAgent.runExternalAgent(...)` | Ejecuta el comando configurado sin TTY, streamea progreso al renderer, aplica timeout y devuelve salida/error normalizados. |
+
 ### `electron/main.ts` — proceso main
 
 | Handler | Qué hace |
@@ -276,6 +289,7 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | `export:full-data` | Exporta un `.json` completo con todos los bugs analizados y la data recopilada sin aplanar. |
 | `bugs:load-remote` / `bugs:watch-remote` | Carga la tabla desde Supabase y escucha cambios realtime del proyecto. |
 | `bug:set-status` / `bug:delete` | Persiste cambios de estado y soft-delete remoto. |
+| `bug:analyze-external-agent` | Ejecuta el agente externo para un bug seleccionado y guarda el aporte integrado al reporte. |
 | `ensureOllamaRunning(baseUrl)` | Levanta Ollama si no corre (con el override de GPU AMD y paralelismo). |
 | `hardware:probe` | Sondea si el modelo corre en GPU o CPU: lo carga con una generación mínima y lee `size_vram` de `/api/ps`. Alimenta el wizard / config (recomendado + aviso). |
 
@@ -284,12 +298,12 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | Pieza | Qué hace |
 |---|---|
 | `App.tsx` | Estado global, eventos IPC, atajos de teclado, cambio de estado, borrado y restore remoto desde Supabase. |
-| `BugTable.tsx` | Tabla con pestañas **activos/históricos/todos** (navegables con flechas), filtros, búsqueda, agrupación por pantalla, detalle con el reporte reescrito, selector de estado inline y **borrado con confirmación**. |
+| `BugTable.tsx` | Tabla con pestañas **activos/históricos/todos** (navegables con flechas), filtros, búsqueda, agrupación por pantalla, detalle con el reporte reescrito, selector de estado inline, **borrado con confirmación** y panel del agente externo. |
 | `ManualBugForm.tsx` | Modal para cargar un bug a mano (Esc/Tab-trap/autofocus, ⌘/Ctrl+Enter). |
 | `decor/BugMotifs.tsx` | Motivos decorativos temáticos (line-art mono): `BeetleMark` (escarabajo, ambiente) y `BugUnderLensMark` (lupa+bicho, marca/búsqueda). Usados en EmptyState, vacíos de la tabla y el panel izquierdo. |
 | `Onboarding.tsx` | Wizard de primer arranque (rendimiento → modelo → Google Docs). Se muestra hasta que `onboarded` queda en `true`. |
 | `PerformanceModePicker.tsx` | Selector GPU/CPU con "analizar mi equipo" (sondea Ollama, marca recomendado, avisa si es CPU). Usado por el wizard y Settings. |
-| `Settings.tsx` | Modelo LLM, rendimiento (GPU/CPU), acceso a Google, caché y proyectos Supabase. |
+| `Settings.tsx` | Modelo LLM, rendimiento (GPU/CPU), acceso a Google, agente externo, caché y proyectos Supabase. |
 
 ---
 
@@ -316,6 +330,8 @@ buglens/
 │   │   ├── client.ts             # Config de LLM (ollama / anthropic / gemini / openai)
 │   │   ├── runtimeConfig.ts      # Paralelismo + timeout efectivos (modo GPU/CPU + env)
 │   │   └── analysisCache.ts      # Caché de análisis por contenido
+│   ├── agents/
+│   │   └── externalAgent.ts      # Prompt + ejecución del agente externo por bug
 │   └── types/index.ts            # Tipos TypeScript compartidos
 ├── renderer/
 │   ├── components/        # BugTable, ManualBugForm, Settings, Onboarding, PerformanceModePicker, FileUpload, ProgressLog, EmptyState
@@ -340,8 +356,10 @@ npm run test:watch  # modo watch
 
 La suite (Vitest + React Testing Library) cubre la **lógica de negocio**: identidad por
 contenido, parsing del Excel, construcción del bug manual, mapeo Supabase, parseo robusto
-del LLM, caché, selección de sección de doc, dedup de docs, y las interacciones de la tabla
-(estados + pestañas activos/históricos). La integración (LLM real, IPC, lectores de docs,
+del LLM, caché, selección de sección de doc, dedup de docs, prompt/ejecución del agente
+externo, persistencia del aporte externo y las interacciones de la tabla (estados, pestañas
+activos/históricos, panel del agente, progreso, errores, cobertura por pasos y sugerencia
+manual de "resuelto"). La integración (LLM real, IPC, comandos externos, lectores de docs,
 auth/red/realtime de Supabase) se verifica corriendo la app.
 
 El **CI** (`.github/workflows/ci.yml`) corre `lint → typecheck → test → build` en cada push
