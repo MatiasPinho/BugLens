@@ -10,6 +10,7 @@ const envPath = app.isPackaged
   : path.join(__dirname, '..', '..', '.env')
 dotenv.config({ path: envPath })
 
+import { runExternalAgent } from '../src/agents/externalAgent.js'
 import { clearCache, getCacheStats } from '../src/llm/analysisCache.js'
 import { getLLMConfig } from '../src/llm/client.js'
 import { analyzeBug } from '../src/llm/fastTriage.js'
@@ -39,6 +40,7 @@ import {
 import type {
   AnalyzedBug,
   BugStatus,
+  ExternalAgentRepository,
   LLMConfig,
   PerformanceMode,
   RawBug,
@@ -68,12 +70,44 @@ interface AppSettings {
   supabaseDefaultProjectSlug: string
   supabaseDefaultProjectName: string
   supabaseActiveProjectId: string
+  externalAgentCommand: string
+  externalAgentTimeoutMs: number
+  externalAgentWorkingDirectory: string
+  externalAgentRepositories: ExternalAgentRepository[]
   // Marca de primer arranque: false hasta que el usuario completa el wizard inicial.
   onboarded: boolean
 }
 
 function getConfigPath(): string {
   return path.join(app.getPath('userData'), 'settings.json')
+}
+
+function normalizeExternalAgentTimeoutMs(value: unknown): number {
+  const fallback = 20 * 60 * 1000
+  const timeoutMs = Number(value)
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 60 * 1000) return fallback
+  return timeoutMs
+}
+
+function normalizeExternalAgentRepositories(
+  value: unknown,
+  legacyWorkingDirectory?: string,
+): ExternalAgentRepository[] {
+  const repositories = Array.isArray(value)
+    ? value
+        .map((item) => {
+          if (!item || typeof item !== 'object') return null
+          const repo = item as Partial<ExternalAgentRepository>
+          return {
+            path: typeof repo.path === 'string' ? repo.path.trim() : '',
+            branch: typeof repo.branch === 'string' ? repo.branch.trim() : '',
+          }
+        })
+        .filter((repo): repo is ExternalAgentRepository => Boolean(repo?.path))
+    : []
+  if (repositories.length > 0) return repositories
+  const legacyPath = legacyWorkingDirectory?.trim()
+  return legacyPath ? [{ path: legacyPath, branch: '' }] : []
 }
 
 function loadSettings(): AppSettings {
@@ -90,6 +124,15 @@ function loadSettings(): AppSettings {
     supabaseDefaultProjectSlug: process.env['SUPABASE_DEFAULT_PROJECT_SLUG'] ?? 'buglens-default',
     supabaseDefaultProjectName: process.env['SUPABASE_DEFAULT_PROJECT_NAME'] ?? 'buglens',
     supabaseActiveProjectId: process.env['SUPABASE_ACTIVE_PROJECT_ID'] ?? '',
+    externalAgentCommand: process.env['EXTERNAL_AGENT_COMMAND'] ?? '',
+    externalAgentTimeoutMs: normalizeExternalAgentTimeoutMs(
+      process.env['EXTERNAL_AGENT_TIMEOUT_MS'],
+    ),
+    externalAgentWorkingDirectory: process.env['EXTERNAL_AGENT_WORKING_DIRECTORY'] ?? '',
+    externalAgentRepositories: normalizeExternalAgentRepositories(
+      undefined,
+      process.env['EXTERNAL_AGENT_WORKING_DIRECTORY'],
+    ),
     onboarded: false,
   }
 
@@ -98,7 +141,16 @@ function loadSettings(): AppSettings {
 
   try {
     const saved = JSON.parse(fs.readFileSync(configPath, 'utf8')) as Partial<AppSettings>
-    return { ...defaults, ...saved }
+    const settings = { ...defaults, ...saved }
+    settings.externalAgentTimeoutMs = normalizeExternalAgentTimeoutMs(
+      settings.externalAgentTimeoutMs,
+    )
+    settings.externalAgentRepositories = normalizeExternalAgentRepositories(
+      settings.externalAgentRepositories,
+      settings.externalAgentWorkingDirectory,
+    )
+    settings.externalAgentWorkingDirectory = settings.externalAgentRepositories[0]?.path ?? ''
+    return settings
   } catch {
     return defaults
   }
@@ -717,6 +769,58 @@ ipcMain.handle('analyze:manual-bug', async (_e, fields: ManualBugFields) => {
     const message = err instanceof Error ? err.message : String(err)
     log('error', `Error en bug manual: ${message}`)
     return { ok: false, error: message }
+  }
+})
+
+ipcMain.handle('bug:analyze-external-agent', async (event, { bug }: { bug: AnalyzedBug }) => {
+  try {
+    const { externalAgentCommand, externalAgentTimeoutMs, externalAgentRepositories } =
+      loadSettings()
+    log('info', `Enviando bug a agente externo: ${bug.enriched.raw.title}`)
+    const result = await runExternalAgent(
+      externalAgentCommand,
+      bug,
+      externalAgentTimeoutMs,
+      (progress) => {
+        event.sender.send('external-agent-progress', progress)
+      },
+      externalAgentRepositories,
+    )
+    if (result.ok) {
+      log('info', `Agente externo terminó en ${Math.round(result.durationMs / 1000)}s`)
+    } else {
+      log('error', `Error en agente externo: ${result.error ?? 'sin detalle'}`)
+    }
+    try {
+      const client = makeSupabaseTeamClient()
+      if (!client) throw new Error('Supabase no está configurado.')
+      await saveRemoteAnalysisResult(
+        client,
+        loadSupabaseTeamConfig(),
+        { ...bug, analysis: { ...bug.analysis, externalAgent: result } },
+        {
+          importId: null,
+          sourceType: bug.enriched.raw.id.startsWith('manual-') ? 'manual' : 'excel',
+          provider: 'external-agent',
+          model: result.command,
+          promptVersion: 'external-agent-v1',
+        },
+      )
+      log('info', `Resultado del agente externo guardado: ${bug.enriched.raw.title}`)
+    } catch (err) {
+      log('warn', `No se pudo guardar el resultado del agente externo: ${errorMessage(err)}`)
+    }
+    return result
+  } catch (err) {
+    const message = errorMessage(err)
+    log('error', `Error ejecutando agente externo: ${message}`)
+    return {
+      ok: false,
+      output: '',
+      error: message,
+      command: loadSettings().externalAgentCommand,
+      durationMs: 0,
+    }
   }
 })
 

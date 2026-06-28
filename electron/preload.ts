@@ -1,5 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AnalyzedBug, IPCEvent } from '../src/types/index.js'
+import type {
+  AnalyzedBug,
+  ExternalAgentProgress,
+  ExternalAgentResult,
+  IPCEvent,
+} from '../src/types/index.js'
 
 // Expose a typed API to the renderer via window.electronAPI
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -39,6 +44,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setBugStatus: (bug: AnalyzedBug, status: string) =>
     ipcRenderer.invoke('bug:set-status', { bug, status }),
   deleteBug: (bug: AnalyzedBug) => ipcRenderer.invoke('bug:delete', { bug }),
+  analyzeWithExternalAgent: (bug: AnalyzedBug): Promise<ExternalAgentResult> =>
+    ipcRenderer.invoke('bug:analyze-external-agent', { bug }),
+  onExternalAgentProgress: (cb: (event: ExternalAgentProgress) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, data: ExternalAgentProgress) => cb(data)
+    ipcRenderer.on('external-agent-progress', handler)
+    return () => ipcRenderer.removeListener('external-agent-progress', handler)
+  },
 
   // Cache
   cacheStats: () => ipcRenderer.invoke('cache:stats'),

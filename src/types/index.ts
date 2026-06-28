@@ -73,6 +73,38 @@ export interface BugAnalysis {
   missingInformation: string[] // qué dato falta (para pedírselo al QA)
 
   rawResponse: string
+  externalAgent?: ExternalAgentResult
+}
+
+// ─── Análisis delegado a agente externo ──────────────────────────────────────
+// BugLens no interpreta este resultado ni analiza código: ejecuta el comando
+// configurado por el usuario y muestra su salida dentro de la app.
+
+export interface ExternalAgentRepository {
+  path: string
+  branch: string
+}
+
+export interface ExternalAgentResult {
+  ok: boolean
+  output: string
+  error?: string
+  command: string
+  workingDirectory?: string
+  repositories?: ExternalAgentRepository[]
+  durationMs: number
+}
+
+export interface ExternalAgentProgress {
+  bugId: string
+  output: string
+  chunk: string
+  stream: 'stdout' | 'stderr'
+  command: string
+  workingDirectory?: string
+  repositories?: ExternalAgentRepository[]
+  elapsedMs: number
+  silentMs: number
 }
 
 // Estado del ciclo de vida del bug (workflow del equipo, NO el LLM).

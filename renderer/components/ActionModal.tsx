@@ -73,7 +73,7 @@ export function ActionModal({
         <div className="modal-header">
           <div className="min-w-0">
             <div className="modal-title-row">
-              {tone === 'danger' && <IconWarning size={16} className="self-center flex-shrink-0" />}
+              {tone === 'danger' && <IconWarning size={16} className="flex-shrink-0 self-center" />}
               <h2
                 id={titleId}
                 className="font-semibold text-sm leading-5"

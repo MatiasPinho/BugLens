@@ -4,6 +4,7 @@ import type {
   AnalyzedBug,
   BugResultEvent,
   BugStatus,
+  ExternalAgentResult,
   IPCEvent,
   LogEvent,
   ProgressEvent,
@@ -364,6 +365,21 @@ export default function App() {
     [addLog, results],
   )
 
+  const handleAnalyzeExternalAgent = useCallback(
+    async (bug: AnalyzedBug): Promise<ExternalAgentResult> => {
+      const result = await window.electronAPI.analyzeWithExternalAgent(bug)
+      setResults((prev) =>
+        prev.map((item) =>
+          item.enriched.raw.id === bug.enriched.raw.id
+            ? { ...item, analysis: { ...item.analysis, externalAgent: result } }
+            : item,
+        ),
+      )
+      return result
+    },
+    [],
+  )
+
   // ─── Keyboard shortcuts ────────────────────────────────────────────────────
   // j/k: next/prev bug, Enter: expandir, Esc: cerrar, /: focus search, d: deep analysis del bug abierto, ?: help
   useEffect(() => {
@@ -718,6 +734,7 @@ export default function App() {
                       analyzing={phase === 'analyzing'}
                       onSetStatus={handleSetStatus}
                       onDelete={handleDeleteBug}
+                      onAnalyzeExternalAgent={handleAnalyzeExternalAgent}
                       focusedId={focusedBugId}
                       expandedId={expandedBugId}
                       onFocus={setFocusedBugId}
