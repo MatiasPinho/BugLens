@@ -12,6 +12,11 @@ export function getLLMConfig(override?: Partial<LLMConfig>): LLMConfig {
   return {
     provider,
     model: override?.model ?? process.env['LLM_MODEL'] ?? getDefaultModel(provider),
+    visionModel:
+      override?.visionModel ??
+      process.env['LLM_VISION_MODEL'] ??
+      process.env['OLLAMA_VISION_MODEL'] ??
+      'qwen2.5vl:7b',
     baseUrl: override?.baseUrl ?? process.env['OLLAMA_BASE_URL'] ?? 'http://localhost:11434',
     apiKey: override?.apiKey ?? getApiKey(provider),
     temperature: override?.temperature ?? 0.1,

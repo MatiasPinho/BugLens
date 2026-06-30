@@ -552,7 +552,7 @@ export default function App() {
                 }
               }}
             >
-              {t === 'main' ? 'principal' : 'config'}
+              {t === 'main' ? 'principal' : 'configuración'}
             </button>
           ))}
           <button
@@ -576,7 +576,7 @@ export default function App() {
         </nav>
       </header>
 
-      <main className="flex-1 overflow-hidden">
+      <main className="min-h-0 flex-1 overflow-hidden">
         {tab === 'settings' ? (
           <Settings addLog={addLog} onTeamStatusChange={setTeamStatus} />
         ) : (

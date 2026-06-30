@@ -2,7 +2,7 @@
  * analysisCache.ts
  *
  * Cache de resultados del análisis (clasificación + reescritura).
- * Clave: SHA-256 de (bug content + doc content + model + provider + prompt version).
+ * Clave: SHA-256 de (bug content + doc content + images + model + provider + prompt version).
  *
  * Si nada del input cambió, no llamamos al LLM:
  *  - Re-correr el mismo Excel → 0 llamadas LLM
@@ -16,7 +16,7 @@ import * as path from 'node:path'
 import type { BugAnalysis, EnrichedBug, LLMConfig } from '../types/index.js'
 
 // Bump cuando cambia el prompt — invalida cache vieja para forzar recálculo.
-const PROMPT_VERSION = 'v10-2026-06-steps-vs-problems'
+const PROMPT_VERSION = 'v11-2026-06-vision-images'
 
 const SUBDIR = 'analysis'
 
@@ -47,9 +47,15 @@ export function makeCacheKey(enriched: EnrichedBug, config: LLMConfig): string {
     .map((d) => `${d.title}::${d.text}`)
     .join('||')
 
+  const imageParts = enriched.googleDocs
+    .filter((d) => d.accessible)
+    .flatMap((d) => d.images ?? [])
+    .map((img) => `${img.mimeType}:${sha256(img.data)}`)
+    .join('||')
+
   const modelKey = `${config.provider}/${config.model ?? 'default'}`
 
-  return sha256([PROMPT_VERSION, modelKey, bugParts, docParts].join('|'))
+  return sha256([PROMPT_VERSION, modelKey, bugParts, docParts, imageParts].join('|'))
 }
 
 // ─── Storage ──────────────────────────────────────────────────────────────────

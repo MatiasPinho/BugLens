@@ -16,6 +16,8 @@ reescribe el reporte en texto claro y estructurado, y lleva un **estado** por bu
 
 - `npm run dev` — Electron + Vite. Hot reload del **renderer**; el **main NO recarga** →
   reiniciar para cambios en `electron/` o `src/`.
+- `npm run lint` — Biome check
+- `npm run lint:fix` — Biome check con autofix (`--write`)
 - `npm test` · `npm run test:watch` — Vitest
 - `npm run typecheck` — `tsc --noEmit`
 - `npm run build` — renderer (vite) + main (tsc)
@@ -45,10 +47,11 @@ imports y corridas se persisten en Supabase; al reabrir se restaura desde el pro
 
 ## Convenciones y constraints
 
-- **LLM por defecto: Ollama `qwen2.5:7b`** (local, gratis). 4 proveedores soportados
-  (ollama/anthropic/gemini/openai) en `fastTriage.ts`. El parseo del LLM debe ser
-  **robusto** (`parseAnalysis` tolera ` ```fences``` ` y campos faltantes) — nunca asumir
-  JSON perfecto del modelo.
+- **LLM de producto: Ollama local**. La UI expone solo dos modos: `qwen2.5:7b`
+  para texto y `qwen2.5vl:7b` para texto + capturas. Puede quedar soporte legacy
+  interno de otros providers, pero no exponerlo ni documentarlo como feature probada.
+  El parseo del LLM debe ser **robusto** (`parseAnalysis` tolera ` ```fences``` ` y
+  campos faltantes) — nunca asumir JSON perfecto del modelo.
 - **El análisis SIEMPRE produce salida útil** — nunca "información insuficiente" ni rechazo:
   reescribe lo que haya y lo que falta va en `missingInformation`. El parser cae a defaults
   seguros ante campos faltantes/inválidos. (No existe la categoría `insufficient_info`.)
@@ -112,8 +115,8 @@ imports y corridas se persisten en Supabase; al reabrir se restaura desde el pro
 
 ## Disciplina de trabajo
 
-- **Verificar antes de decir "listo"**: correr `typecheck` + `test` (y `build` si se tocó la UI
-  o `main`). Distinguir lo verificado por unit de lo que necesita correrse de verdad
+- **Verificar antes de decir "listo"**: correr `lint` + `typecheck` + `test`
+  (y `build` si se tocó la UI o `main`). Distinguir lo verificado por unit de lo que necesita correrse de verdad
   (integración/E2E) y **decirlo explícitamente**.
 - **Cambios grandes o destructivos** (borrar features, refactors masivos, renombrar/mover
   archivos): **proponer y confirmar antes** de ejecutar.

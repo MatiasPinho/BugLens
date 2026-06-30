@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { defaultModelFor, LLM_OPTIONS } from '../llmOptions'
+import { DEFAULT_OLLAMA_TEXT_MODEL, DEFAULT_OLLAMA_VISION_MODEL } from '../llmOptions'
 import { alpha, col } from '../theme'
 import { BugUnderLensMark } from './decor/BugMotifs'
 import { IconCheck } from './icons'
@@ -13,6 +13,7 @@ interface WizardState {
   performanceMode: PerformanceMode
   llmProvider: string
   llmModel: string
+  llmVisionModel: string
   ollamaBaseUrl: string
 }
 
@@ -30,18 +31,21 @@ export default function Onboarding({ onDone }: Props) {
     performanceMode: 'gpu',
     llmProvider: 'ollama',
     llmModel: '',
+    llmVisionModel: DEFAULT_OLLAMA_VISION_MODEL,
     ollamaBaseUrl: 'http://localhost:11434',
   })
   const [browserAuth, setBrowserAuth] = useState<{ authenticated: boolean } | null>(null)
   const [authLoading, setAuthLoading] = useState(false)
+  const analyzeImages = state.llmVisionModel.trim().length > 0
 
   useEffect(() => {
     window.electronAPI.getSettings().then((s) =>
       setState((prev) => ({
         ...prev,
         performanceMode: s.performanceMode ?? 'gpu',
-        llmProvider: s.llmProvider || 'ollama',
-        llmModel: s.llmModel || '',
+        llmProvider: 'ollama',
+        llmModel: DEFAULT_OLLAMA_TEXT_MODEL,
+        llmVisionModel: s.llmVisionModel ?? DEFAULT_OLLAMA_VISION_MODEL,
         ollamaBaseUrl: s.ollamaBaseUrl || 'http://localhost:11434',
       })),
     )
@@ -60,7 +64,13 @@ export default function Onboarding({ onDone }: Props) {
 
   const finish = async () => {
     setSaving(true)
-    await window.electronAPI.saveSettings({ ...state, onboarded: true })
+    await window.electronAPI.saveSettings({
+      ...state,
+      llmProvider: 'ollama',
+      llmModel: DEFAULT_OLLAMA_TEXT_MODEL,
+      ollamaBaseUrl: 'http://localhost:11434',
+      onboarded: true,
+    })
     setSaving(false)
     onDone()
   }
@@ -132,78 +142,62 @@ export default function Onboarding({ onDone }: Props) {
 
           {step === 1 && (
             <Section title="modelo llm" hint="dónde corre el análisis.">
-              <div className="space-y-1.5">
-                {LLM_OPTIONS.map((opt) => {
-                  const isSelected = state.llmProvider === opt.id
-                  return (
-                    <label
-                      key={opt.id}
-                      className="choice-card flex cursor-pointer items-start gap-3 rounded p-2.5 transition-colors duration-200"
-                      style={{
-                        border: `1px solid ${isSelected ? alpha(col.cream, 0.3) : alpha(col.border, 0.22)}`,
-                        background: isSelected ? alpha(col.cream, 0.05) : 'transparent',
-                      }}
-                    >
-                      <div
-                        className="mt-0.5 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full border transition-all"
-                        style={{
-                          borderColor: isSelected ? col.cream : alpha(col.border, 0.45),
-                          background: isSelected ? col.cream : 'transparent',
-                        }}
-                      >
-                        {isSelected && (
-                          <div
-                            className="h-1.5 w-1.5 rounded-full"
-                            style={{ background: col.base }}
-                          />
-                        )}
-                      </div>
-                      <input
-                        type="radio"
-                        name="onboarding-llm"
-                        value={opt.id}
-                        checked={isSelected}
-                        onChange={() =>
-                          // Resetear el modelo al default del proveedor (campo único compartido).
-                          setState((prev) => ({
-                            ...prev,
-                            llmProvider: opt.id,
-                            llmModel: defaultModelFor(opt.id),
-                          }))
-                        }
-                        className="sr-only"
-                      />
-                      <div className="flex-1">
-                        <div
-                          className="font-medium text-xs"
-                          style={{ color: isSelected ? col.fg : col.fgMuted }}
-                        >
-                          {opt.name}
-                        </div>
-                        <div className="mt-0.5 text-xs" style={{ color: col.fgMuted }}>
-                          {opt.description}
-                        </div>
-                      </div>
-                    </label>
-                  )
-                })}
-              </div>
-
-              {state.llmProvider === 'ollama' && (
-                <div className="mt-3">
-                  <label className="label" htmlFor="onboarding-ollama-model">
-                    modelo
+              <div className="space-y-3">
+                <div
+                  className="grid gap-2 md:grid-cols-2"
+                  role="radiogroup"
+                  aria-label="modo de análisis"
+                >
+                  <label
+                    className="cursor-pointer rounded p-2 text-left transition-all"
+                    style={{
+                      border: `1px solid ${!analyzeImages ? alpha(col.cream, 0.35) : alpha(col.border, 0.22)}`,
+                      background: !analyzeImages ? alpha(col.cream, 0.06) : 'transparent',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="onboarding-analysis-mode"
+                      checked={!analyzeImages}
+                      className="sr-only"
+                      onChange={() => set('llmVisionModel', '')}
+                    />
+                    <span className="block font-medium text-xs" style={{ color: col.fg }}>
+                      Solo texto
+                    </span>
+                    <span className="mt-1 block text-xs" style={{ color: col.fgMuted }}>
+                      ignora capturas al analizar
+                    </span>
+                    <span className="mt-1 block font-mono text-xs" style={{ color: col.border }}>
+                      {DEFAULT_OLLAMA_TEXT_MODEL}
+                    </span>
                   </label>
-                  <input
-                    id="onboarding-ollama-model"
-                    type="text"
-                    className="input text-xs"
-                    placeholder="qwen2.5:7b, qwen2.5:14b…"
-                    value={state.llmModel}
-                    onChange={(e) => set('llmModel', e.target.value)}
-                  />
+                  <label
+                    className="cursor-pointer rounded p-2 text-left transition-all"
+                    style={{
+                      border: `1px solid ${analyzeImages ? alpha(col.cream, 0.35) : alpha(col.border, 0.22)}`,
+                      background: analyzeImages ? alpha(col.cream, 0.06) : 'transparent',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="onboarding-analysis-mode"
+                      checked={analyzeImages}
+                      className="sr-only"
+                      onChange={() => set('llmVisionModel', DEFAULT_OLLAMA_VISION_MODEL)}
+                    />
+                    <span className="block font-medium text-xs" style={{ color: col.fg }}>
+                      Texto + capturas
+                    </span>
+                    <span className="mt-1 block text-xs" style={{ color: col.fgMuted }}>
+                      usa visión si el bug trae imágenes
+                    </span>
+                    <span className="mt-1 block font-mono text-xs" style={{ color: col.border }}>
+                      {DEFAULT_OLLAMA_TEXT_MODEL} + {DEFAULT_OLLAMA_VISION_MODEL}
+                    </span>
+                  </label>
                 </div>
-              )}
+              </div>
             </Section>
           )}
 
