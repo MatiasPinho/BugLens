@@ -23,6 +23,10 @@ supabase/migrations/0001_initial_team_schema.sql
 supabase/migrations/0002_default_project_rpc.sql
 supabase/migrations/0003_bug_status_rpc.sql
 supabase/migrations/0004_analysis_persistence_rpc.sql
+supabase/migrations/0005_list_project_bugs_rpc.sql
+supabase/migrations/0006_delete_project_bug_rpc.sql
+supabase/migrations/0007_enable_bugs_realtime.sql
+supabase/migrations/0008_create_project_rpc.sql
 ```
 
 La idea central es separar:
@@ -49,6 +53,37 @@ proyecto:
 
 La app cliente nunca debería usar una service key. Electron debe operar con sesión de usuario
 normal de Supabase Auth.
+
+## Configuración local
+
+Copiá `.env.example` a `.env` y completá Supabase con los valores del dashboard:
+
+```env
+SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxx
+SUPABASE_DEFAULT_PROJECT_SLUG=buglens-default
+SUPABASE_DEFAULT_PROJECT_NAME=buglens
+SUPABASE_ACTIVE_PROJECT_ID=
+```
+
+`SUPABASE_URL` es la **Project URL base** de **Project Settings -> API**. No usar la URL
+REST con `/rest/v1`.
+
+`SUPABASE_PUBLISHABLE_KEY` es la publishable key pública. No usar `service_role`, secret keys
+ni claves privilegiadas: la app corre con sesión de usuario y RLS.
+
+`SUPABASE_ACTIVE_PROJECT_ID` es opcional. Cuando se usa, debe ser el UUID de una fila
+`public.projects`, no el ref del proyecto Supabase del dashboard. En el flujo normal lo guarda
+la UI al crear o seleccionar un proyecto.
+
+Para Google Auth vía Supabase, configurar una Redirect URL permitida:
+
+```text
+http://127.0.0.1:*/auth/callback
+```
+
+La app crea un callback local con puerto dinámico, por eso el wildcard es necesario en
+desarrollo. Electron carga `.env` al arrancar; reiniciar la app después de modificarlo.
 
 ## Datos grandes
 

@@ -50,8 +50,41 @@ una ubicación no estándar, indicá la ruta con las env vars `OLLAMA_BIN` y/o `
 git clone <repo>
 cd buglens
 npm install
-cp .env.example .env   # opcional: credenciales de Google / API keys cloud
+cp .env.example .env   # completar Supabase y, opcionalmente, Google/Ollama/agente externo
 ```
+
+### Configuración de `.env`
+
+Supabase es necesario para la sincronización de equipo. En el dashboard del proyecto,
+copiá estos valores desde **Project Settings → API**:
+
+```env
+SUPABASE_URL=https://tu-proyecto.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxx
+```
+
+Usá la **Project URL base**, sin `/rest/v1`, y la **Publishable key**. No pegues la
+`service_role` ni una secret key en la app. El proyecto compartido inicial puede quedar con
+los defaults:
+
+```env
+SUPABASE_DEFAULT_PROJECT_SLUG=buglens-default
+SUPABASE_DEFAULT_PROJECT_NAME=buglens
+SUPABASE_ACTIVE_PROJECT_ID=
+```
+
+`SUPABASE_ACTIVE_PROJECT_ID` no es el ref del proyecto del dashboard; es el UUID de una fila
+`public.projects`, y normalmente lo guarda la UI cuando creás o seleccionás un proyecto.
+
+Para el login con Google vía Supabase Auth, agregá en Supabase una Redirect URL permitida
+para desarrollo:
+
+```text
+http://127.0.0.1:*/auth/callback
+```
+
+Electron lee `.env` al iniciar. Si cambiás variables, cerrá la app y volvé a correr
+`npm run dev`.
 
 ## Scripts
 
