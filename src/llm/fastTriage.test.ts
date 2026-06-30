@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parseAnalysis } from './fastTriage'
+import type { EnrichedBug, LLMConfig } from '../types/index'
+import { parseAnalysis, selectLLMConfigForBug } from './fastTriage'
 
 const FULL = JSON.stringify({
   category: 'frontend',
@@ -97,5 +98,48 @@ describe('parseAnalysis', () => {
 
   it('JSON inválido lanza (lo cual dispara el reintento en analyzeBug)', () => {
     expect(() => parseAnalysis('esto no es json')).toThrow()
+  })
+})
+
+function enrichedBug(imageData?: string): EnrichedBug {
+  return {
+    raw: {
+      id: 'b1',
+      rowIndex: 1,
+      title: 'Login roto',
+      description: 'no anda',
+      rawRow: {},
+      googleDocLinks: [],
+    },
+    googleDocs: [
+      {
+        url: 'u',
+        title: 'doc',
+        text: 'detalle',
+        accessible: true,
+        images: imageData ? [{ data: imageData, mimeType: 'image/png' }] : [],
+      },
+    ],
+  }
+}
+
+describe('selectLLMConfigForBug', () => {
+  const cfg: LLMConfig = {
+    provider: 'ollama',
+    model: 'qwen2.5:7b',
+    visionModel: 'qwen2.5vl:7b',
+  }
+
+  it('mantiene el modelo de texto cuando no hay imágenes', () => {
+    expect(selectLLMConfigForBug(enrichedBug(), cfg).model).toBe('qwen2.5:7b')
+  })
+
+  it('usa el modelo vision cuando el bug trae imágenes', () => {
+    expect(selectLLMConfigForBug(enrichedBug('base64'), cfg).model).toBe('qwen2.5vl:7b')
+  })
+
+  it('no cambia providers cloud en esta integración local', () => {
+    const cloud: LLMConfig = { provider: 'openai', model: 'gpt-4o-mini', visionModel: 'x' }
+    expect(selectLLMConfigForBug(enrichedBug('base64'), cloud)).toBe(cloud)
   })
 })

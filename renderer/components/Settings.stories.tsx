@@ -6,6 +6,7 @@ const configuredSettings = {
   googleClientSecret: '',
   llmProvider: 'ollama',
   llmModel: 'qwen2.5:7b',
+  llmVisionModel: 'qwen2.5vl:7b',
   ollamaBaseUrl: 'http://localhost:11434',
   performanceMode: 'gpu' as const,
   supabaseUrl: '',

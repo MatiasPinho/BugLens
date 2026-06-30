@@ -47,6 +47,13 @@
     font-family: "Iosevka Nerd Font Mono", "Iosevka Nerd Font", monospace;
   }
 
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
     background: rgb(var(--c-base));
     color: rgb(var(--c-fg));

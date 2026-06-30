@@ -4,8 +4,8 @@
  * El único pipeline de la app: por cada bug, clasifica + REESCRIBE el reporte
  * (a veces incoherente) del QA en texto claro + lista qué datos faltan.
  *
- * No toca el repositorio, no usa agente, no procesa imágenes. Una sola llamada
- * LLM corta por bug. Objetivo: rápido y confiable con qwen2.5:7b local.
+ * No toca el repositorio ni usa agente. Una sola llamada LLM corta por bug:
+ * texto con qwen2.5:7b, y capturas con un modelo vision local si está configurado.
  */
 
 import type { BugAnalysis, EnrichedBug, LLMConfig, RawBug } from '../types/index.js'
@@ -44,6 +44,7 @@ REGLAS:
 - PASOS NO SON PROBLEMAS (IMPORTANTE): los pasos para reproducir, el flujo de uso, y la separación "qué pasa" vs "qué debería pasar" de UN MISMO bug NO son problemas distintos. Los pasos van SIEMPRE en "steps", NUNCA numerados dentro de "observed"/"expected". Un bug con muchos pasos o varios síntomas del mismo origen sigue siendo UN problema.
 - VARIOS PROBLEMAS EN UN MISMO REPORTE: numerá "observed"/"expected" SOLO si el reporte mezcla defectos INDEPENDIENTES, cada uno arreglable por separado (ej: "no guarda" + "se ve mal en mobile"). En ese caso escribí UN problema por línea, numerados ("1. ...\\n2. ..."), en el MISMO orden en ambos campos (el punto 2 de observed se corresponde con el punto 2 de expected), y poné "problemCount" con la cantidad de defectos. Si es UN solo bug (aunque tenga varios pasos), "observed"/"expected" en una sola línea SIN numerar y "problemCount": 1.
 - No inventes archivos, rutas, roles ni endpoints.
+- Si recibís capturas, usalas solo para extraer hechos visibles: texto de errores, pantalla afectada, estado de UI, campos, botones y diferencias visibles. No inventes nada que no esté en el texto o en la imagen.
 - "steps" en orden lógico, con los pasos que el reporte mencione. Si no hay pasos, dejá [].
 
 CATEGORÍAS:
@@ -123,9 +124,40 @@ export function extractRelevantDocSection(bug: RawBug, docText: string, maxChars
 
 // ─── Prompt builder ──────────────────────────────────────────────────────────
 
-function buildPrompt(enriched: EnrichedBug): string {
+const MAX_IMAGES_FOR_ANALYSIS = 3
+
+interface AnalysisRequest {
+  prompt: string
+  images: string[]
+}
+
+function collectAnalysisImages(enriched: EnrichedBug): string[] {
+  return enriched.googleDocs
+    .filter((d) => d.accessible)
+    .flatMap((d) => d.images ?? [])
+    .filter((img) => img.data && img.mimeType.startsWith('image/'))
+    .slice(0, MAX_IMAGES_FOR_ANALYSIS)
+    .map((img) => img.data)
+}
+
+function hasAnalysisImages(enriched: EnrichedBug): boolean {
+  return collectAnalysisImages(enriched).length > 0
+}
+
+export function selectLLMConfigForBug(enriched: EnrichedBug, config: LLMConfig): LLMConfig {
+  if (config.provider !== 'ollama') return config
+  if (!config.visionModel?.trim()) return config
+  if (!hasAnalysisImages(enriched)) return config
+  return { ...config, model: config.visionModel.trim() }
+}
+
+function buildAnalysisRequest(enriched: EnrichedBug, config: LLMConfig): AnalysisRequest {
   const { raw, googleDocs } = enriched
   const sections: string[] = []
+  const images =
+    config.provider === 'ollama' && config.visionModel && config.model === config.visionModel
+      ? collectAnalysisImages(enriched)
+      : []
 
   sections.push('=== BUG REPORTADO (fuente: excel) ===')
   sections.push(`Título: ${raw.title}`)
@@ -162,21 +194,31 @@ function buildPrompt(enriched: EnrichedBug): string {
     for (const doc of accessible) {
       sections.push(extractRelevantDocSection(raw, doc.text))
       const imgCount = doc.images?.length ?? 0
-      if (imgCount > 0) sections.push(`[El documento tiene ${imgCount} captura(s) adjunta(s)]`)
+      if (imgCount > 0) {
+        sections.push(
+          images.length > 0
+            ? `[El documento tiene ${imgCount} captura(s); se enviaron hasta ${MAX_IMAGES_FOR_ANALYSIS} al modelo de visión.]`
+            : `[El documento tiene ${imgCount} captura(s) adjunta(s), pero este modelo no las recibe.]`,
+        )
+      }
     }
   }
 
   sections.push('\nClasificá y reescribí el bug. Solo JSON.')
-  return sections.join('\n')
+  return { prompt: sections.join('\n'), images }
 }
 
 // ─── LLM calls ─────────────────────────────────────────────────────────────────
 
 const MAX_TOKENS = 1024
 
-async function callOllama(prompt: string, config: LLMConfig): Promise<string> {
+async function callOllama(request: AnalysisRequest, config: LLMConfig): Promise<string> {
   const baseUrl = config.baseUrl ?? 'http://localhost:11434'
   const model = config.model ?? 'qwen2.5:7b'
+  const userMessage =
+    request.images.length > 0
+      ? { role: 'user', content: request.prompt, images: request.images }
+      : { role: 'user', content: request.prompt }
 
   const response = await fetch(`${baseUrl}/api/chat`, {
     method: 'POST',
@@ -186,10 +228,7 @@ async function callOllama(prompt: string, config: LLMConfig): Promise<string> {
       stream: false,
       format: 'json',
       options: { temperature: 0.1, num_predict: MAX_TOKENS },
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: prompt },
-      ],
+      messages: [{ role: 'system', content: SYSTEM_PROMPT }, userMessage],
     }),
     signal: AbortSignal.timeout(
       resolveOllamaTimeoutMs({ performanceMode: config.performanceMode }),
@@ -201,7 +240,8 @@ async function callOllama(prompt: string, config: LLMConfig): Promise<string> {
   return (data.message?.content ?? '').trim()
 }
 
-async function callCloud(prompt: string, config: LLMConfig): Promise<string> {
+async function callCloud(request: AnalysisRequest, config: LLMConfig): Promise<string> {
+  const { prompt } = request
   if (config.provider === 'anthropic') {
     if (!config.apiKey) throw new Error('ANTHROPIC_API_KEY no configurada')
     const { Anthropic } = await import('@anthropic-ai/sdk')
@@ -340,23 +380,25 @@ export async function analyzeBug(
   config: LLMConfig,
   cacheDir?: string,
 ): Promise<{ analysis: BugAnalysis; fromCache: boolean }> {
+  const effectiveConfig = selectLLMConfigForBug(enriched, config)
+
   if (cacheDir) {
-    const cached = loadCachedAnalysis(makeCacheKey(enriched, config), cacheDir)
+    const cached = loadCachedAnalysis(makeCacheKey(enriched, effectiveConfig), cacheDir)
     if (cached) return { analysis: cached, fromCache: true }
   }
 
-  const prompt = buildPrompt(enriched)
+  const request = buildAnalysisRequest(enriched, effectiveConfig)
 
   let lastErr: Error | null = null
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const raw =
-        config.provider === 'ollama'
-          ? await callOllama(prompt, config)
-          : await callCloud(prompt, config)
+        effectiveConfig.provider === 'ollama'
+          ? await callOllama(request, effectiveConfig)
+          : await callCloud(request, effectiveConfig)
       const analysis = parseAnalysis(raw)
 
-      if (cacheDir) saveCachedAnalysis(makeCacheKey(enriched, config), cacheDir, analysis)
+      if (cacheDir) saveCachedAnalysis(makeCacheKey(enriched, effectiveConfig), cacheDir, analysis)
       return { analysis, fromCache: false }
     } catch (err) {
       lastErr = err instanceof Error ? err : new Error(String(err))

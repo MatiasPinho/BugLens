@@ -130,6 +130,7 @@ export type PerformanceMode = 'gpu' | 'cpu'
 export interface LLMConfig {
   provider: LLMProvider
   model?: string
+  visionModel?: string
   baseUrl?: string
   apiKey?: string
   temperature?: number

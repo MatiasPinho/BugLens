@@ -2,11 +2,10 @@ import type React from 'react'
 import { useEffect, useState } from 'react'
 import type { ExternalAgentRepository } from '../../src/types/index'
 import type { LogLine } from '../App'
-import { defaultModelFor, LLM_OPTIONS } from '../llmOptions'
+import { DEFAULT_OLLAMA_TEXT_MODEL, DEFAULT_OLLAMA_VISION_MODEL } from '../llmOptions'
 import { alpha, col } from '../theme'
 import { IconCheck, IconX } from './icons'
 import PerformanceModePicker, { type PerformanceMode } from './PerformanceModePicker'
-import ResetControls from './ResetControls'
 import type { TeamAuthStatus } from './TeamLogin'
 
 interface SettingsData {
@@ -14,6 +13,7 @@ interface SettingsData {
   googleClientSecret: string
   llmProvider: string
   llmModel: string
+  llmVisionModel: string
   ollamaBaseUrl: string
   performanceMode: PerformanceMode
   supabaseUrl: string
@@ -30,16 +30,6 @@ interface SettingsData {
 interface Props {
   addLog: (level: LogLine['level'], message: string) => void
   onTeamStatusChange?: (status: TeamAuthStatus) => void
-}
-
-// Pistas cortas para modelos Ollama conocidos (tradeoff velocidad/calidad).
-// Match por nombre exacto o por familia (antes del ':').
-const MODEL_HINTS: Record<string, string> = {
-  'qwen2.5:7b': 'rápido',
-  'qwen2.5:14b': 'mejor calidad, más lento',
-  'qwen2.5:32b': 'máxima calidad, pesado',
-  'qwen2.5-coder': 'orientado a código',
-  'qwen2.5': 'recomendado',
 }
 
 interface ExternalAgentPreset {
@@ -116,6 +106,7 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
     googleClientSecret: '',
     llmProvider: 'ollama',
     llmModel: '',
+    llmVisionModel: DEFAULT_OLLAMA_VISION_MODEL,
     ollamaBaseUrl: 'http://localhost:11434',
     performanceMode: 'gpu',
     supabaseUrl: '',
@@ -144,6 +135,7 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
     models?: string[]
   } | null>(null)
   const [showOAuth, setShowOAuth] = useState(false)
+  const analyzeImages = settings.llmVisionModel.trim().length > 0
 
   useEffect(() => {
     window.electronAPI.getSettings().then((s: SettingsData) => {
@@ -151,6 +143,10 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
       const externalAgentRepositories = normalizeExternalAgentRepositories(s)
       setSettings({
         ...s,
+        llmProvider: 'ollama',
+        llmModel: DEFAULT_OLLAMA_TEXT_MODEL,
+        llmVisionModel: s.llmVisionModel ?? DEFAULT_OLLAMA_VISION_MODEL,
+        ollamaBaseUrl: 'http://localhost:11434',
         externalAgentCommand,
         externalAgentRepositories,
         externalAgentWorkingDirectory: externalAgentRepositories[0]?.path ?? '',
@@ -181,6 +177,9 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
     const externalAgentRepositories = normalizeExternalAgentRepositories(settings)
     await window.electronAPI.saveSettings({
       ...settings,
+      llmProvider: 'ollama',
+      llmModel: DEFAULT_OLLAMA_TEXT_MODEL,
+      ollamaBaseUrl: 'http://localhost:11434',
       externalAgentRepositories,
       externalAgentWorkingDirectory: externalAgentRepositories[0]?.path ?? '',
     })
@@ -334,662 +333,637 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
   }
 
   return (
-    <div className="mx-auto h-full max-w-2xl overflow-y-auto p-6 font-mono">
-      <div className="mb-6 flex items-center gap-2">
-        <div className="font-mono text-xs uppercase tracking-wider" style={{ color: col.border }}>
-          ~/buglens/config
-        </div>
-      </div>
-
-      {/* ── Equipo / Supabase ── */}
-      <Section title="equipo">
-        <p className="mb-3 text-xs" style={{ color: col.fgMuted }}>
-          Sincronización compartida con Supabase. Usa Google Auth y un proyecto compartido por
-          defecto.
-        </p>
-
-        <div className="space-y-3">
-          <div>
-            <label className="label" htmlFor="settings-supabase-url">
-              supabase url
-            </label>
-            <input
-              id="settings-supabase-url"
-              type="text"
-              className="input text-xs"
-              placeholder="https://xxxx.supabase.co"
-              value={settings.supabaseUrl}
-              onChange={update('supabaseUrl')}
-            />
-          </div>
-
-          <div>
-            <label className="label" htmlFor="settings-supabase-publishable-key">
-              publishable key
-            </label>
-            <input
-              id="settings-supabase-publishable-key"
-              type="password"
-              className="input text-xs"
-              placeholder="sb_publishable_..."
-              value={settings.supabasePublishableKey}
-              onChange={update('supabasePublishableKey')}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
+    <div className="h-full min-h-0 overflow-y-auto p-4 font-mono">
+      <div className="mx-auto grid max-w-6xl gap-3">
+        <div className="panel-card p-4">
+          <div className="section-label mb-2">~/buglens/configuración</div>
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <label className="label" htmlFor="settings-supabase-project-name">
-                proyecto inicial
-              </label>
-              <input
-                id="settings-supabase-project-name"
-                type="text"
-                className="input text-xs"
-                value={settings.supabaseDefaultProjectName}
-                onChange={update('supabaseDefaultProjectName')}
-              />
+              <h1 className="font-semibold text-sm" style={{ color: col.fg }}>
+                Configuración
+              </h1>
+              <p className="mt-1 max-w-2xl text-xs" style={{ color: col.fgMuted }}>
+                Configurá el proyecto compartido, la evidencia de Google Docs, el modelo local y el
+                agente externo sin salir del flujo principal.
+              </p>
             </div>
-            <div>
-              <label className="label" htmlFor="settings-supabase-project-slug">
-                slug
-              </label>
-              <input
-                id="settings-supabase-project-slug"
-                type="text"
-                className="input text-xs"
-                value={settings.supabaseDefaultProjectSlug}
-                onChange={update('supabaseDefaultProjectSlug')}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {supabaseStatus?.authenticated ? (
-              <>
+            <span className="font-mono text-xs" style={{ color: col.border }}>
+              ollama · supabase · docs
+            </span>
+            <div className="flex items-center gap-3">
+              <button type="button" className="btn-primary" onClick={save} disabled={saving}>
+                {saving ? 'guardando...' : 'guardar cambios'}
+              </button>
+              {saved && (
                 <span
                   className="inline-flex items-center gap-1.5 text-xs"
                   style={{ color: col.fgDim }}
                 >
                   <IconCheck size={12} />
-                  {supabaseStatus.user?.email ?? 'conectado'}
+                  guardado
                 </span>
-                {supabaseStatus.project && (
-                  <span className="text-xs" style={{ color: col.fgMuted }}>
-                    proyecto: {supabaseStatus.project.name}
-                  </span>
-                )}
-                <button type="button" className="btn-danger text-xs" onClick={signOutSupabase}>
-                  cerrar sesión
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={startSupabaseGoogleAuth}
-                disabled={
-                  supabaseAuthLoading || !settings.supabaseUrl || !settings.supabasePublishableKey
-                }
-              >
-                {supabaseAuthLoading ? 'esperando login...' : 'conectar con google'}
-              </button>
-            )}
-          </div>
-
-          {supabaseStatus?.error && (
-            <div className="text-xs" style={{ color: col.red }}>
-              {supabaseStatus.error}
+              )}
             </div>
-          )}
-        </div>
-      </Section>
-
-      {/* ── Google Docs ── */}
-      <Section title="acceso a google docs">
-        <div className="mb-4">
-          <div className="mb-1 flex items-center gap-2">
-            <span className="text-xs" style={{ color: col.fg }}>
-              login con navegador
-            </span>
-            <span
-              className="rounded px-1.5 py-0.5 font-mono text-xs"
-              style={{ color: col.fgMuted, border: `1px solid ${alpha(col.fgMuted, 0.3)}` }}
-            >
-              recomendado
-            </span>
           </div>
-          <p className="mb-3 text-xs" style={{ color: col.fgMuted }}>
-            Abre una ventana de Chromium. Las cookies se guardan localmente. No requiere admin.
-          </p>
-
-          {browserAuth?.authenticated ? (
-            <div className="flex items-center gap-3">
-              <span
-                className="inline-flex items-center gap-1.5 text-xs"
-                style={{ color: col.fgDim }}
-              >
-                <IconCheck size={12} />
-                sesión activa
-              </span>
-              <button type="button" className="btn-danger text-xs" onClick={revokeBrowserAuth}>
-                cerrar sesión
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={startBrowserLogin}
-              disabled={browserAuthLoading}
-            >
-              {browserAuthLoading ? 'esperando login...' : 'conectar con navegador'}
-            </button>
-          )}
         </div>
 
-        <div className="pt-3" style={{ borderTop: `1px solid ${alpha(col.border, 0.18)}` }}>
-          <button
-            type="button"
-            className="flex cursor-pointer items-center gap-1.5 text-xs transition-colors"
-            style={{ color: col.muted }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = col.fgMuted)}
-            onMouseLeave={(e) => (e.currentTarget.style.color = col.muted)}
-            onClick={() => setShowOAuth((v) => !v)}
-          >
-            <svg
-              aria-hidden="true"
-              width="8"
-              height="8"
-              viewBox="0 0 8 8"
-              fill="currentColor"
-              style={{
-                transform: showOAuth ? 'rotate(90deg)' : 'none',
-                transition: 'transform 0.15s',
-              }}
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]">
+          <div className="grid content-start gap-3">
+            <Section
+              id="settings-team"
+              title="equipo"
+              description="Sincronización compartida con Supabase. Usa Google Auth y un proyecto compartido por defecto."
             >
-              <path d="M2 1l4 3-4 3V1z" />
-            </svg>
-            oauth avanzado
-          </button>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor="settings-supabase-url">
+                    supabase url
+                  </label>
+                  <input
+                    id="settings-supabase-url"
+                    type="text"
+                    className="input text-xs"
+                    placeholder="https://xxxx.supabase.co"
+                    value={settings.supabaseUrl}
+                    onChange={update('supabaseUrl')}
+                  />
+                </div>
 
-          {showOAuth && (
-            <div className="mt-3 space-y-3">
-              <p className="text-xs" style={{ color: col.border }}>
-                Requiere Google Cloud Console con Docs API + Drive API habilitadas.
-              </p>
-              <div>
-                <label className="label" htmlFor="settings-google-client-id">
-                  client id
-                </label>
-                <input
-                  id="settings-google-client-id"
-                  type="text"
-                  className="input text-xs"
-                  placeholder="1234...apps.googleusercontent.com"
-                  value={settings.googleClientId}
-                  onChange={update('googleClientId')}
-                />
+                <div>
+                  <label className="label" htmlFor="settings-supabase-publishable-key">
+                    publishable key
+                  </label>
+                  <input
+                    id="settings-supabase-publishable-key"
+                    type="password"
+                    className="input text-xs"
+                    placeholder="sb_publishable_..."
+                    value={settings.supabasePublishableKey}
+                    onChange={update('supabasePublishableKey')}
+                  />
+                </div>
+
+                <div>
+                  <label className="label" htmlFor="settings-supabase-project-name">
+                    proyecto inicial
+                  </label>
+                  <input
+                    id="settings-supabase-project-name"
+                    type="text"
+                    className="input text-xs"
+                    value={settings.supabaseDefaultProjectName}
+                    onChange={update('supabaseDefaultProjectName')}
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor="settings-supabase-project-slug">
+                    slug
+                  </label>
+                  <input
+                    id="settings-supabase-project-slug"
+                    type="text"
+                    className="input text-xs"
+                    value={settings.supabaseDefaultProjectSlug}
+                    onChange={update('supabaseDefaultProjectSlug')}
+                  />
+                </div>
               </div>
-              <div>
-                <label className="label" htmlFor="settings-google-client-secret">
-                  client secret
-                </label>
-                <input
-                  id="settings-google-client-secret"
-                  type="password"
-                  className="input text-xs"
-                  placeholder="GOCSPX-..."
-                  value={settings.googleClientSecret}
-                  onChange={update('googleClientSecret')}
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                {googleAuth?.authenticated ? (
+
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                {supabaseStatus?.authenticated ? (
                   <>
                     <span
                       className="inline-flex items-center gap-1.5 text-xs"
                       style={{ color: col.fgDim }}
                     >
                       <IconCheck size={12} />
-                      oauth autenticado
+                      {supabaseStatus.user?.email ?? 'conectado'}
                     </span>
-                    <button type="button" className="btn-danger text-xs" onClick={revokeAuth}>
-                      desconectar
+                    {supabaseStatus.project && (
+                      <span className="text-xs" style={{ color: col.fgMuted }}>
+                        proyecto: {supabaseStatus.project.name}
+                      </span>
+                    )}
+                    <button type="button" className="btn-danger text-xs" onClick={signOutSupabase}>
+                      cerrar sesión
                     </button>
                   </>
                 ) : (
                   <button
                     type="button"
-                    className="btn-secondary text-xs"
-                    onClick={startAuth}
-                    disabled={authLoading}
+                    className="btn-primary"
+                    onClick={startSupabaseGoogleAuth}
+                    disabled={
+                      supabaseAuthLoading ||
+                      !settings.supabaseUrl ||
+                      !settings.supabasePublishableKey
+                    }
                   >
-                    {authLoading ? 'esperando...' : 'conectar con oauth'}
+                    {supabaseAuthLoading ? 'esperando login...' : 'conectar con google'}
                   </button>
                 )}
               </div>
-            </div>
-          )}
-        </div>
-      </Section>
 
-      {/* ── LLM ── */}
-      <Section title="modelo llm">
-        <div className="mb-4 space-y-1.5">
-          {LLM_OPTIONS.map((opt) => {
-            const isSelected = settings.llmProvider === opt.id
-            return (
-              <label
-                key={opt.id}
-                className="flex cursor-pointer items-start gap-3 rounded p-2.5 transition-all"
-                style={{
-                  border: `1px solid ${isSelected ? alpha(col.cream, 0.3) : alpha(col.border, 0.22)}`,
-                  background: isSelected ? alpha(col.cream, 0.05) : 'transparent',
-                }}
-              >
-                <div
-                  className="mt-0.5 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full border transition-all"
-                  style={{
-                    borderColor: isSelected ? col.cream : alpha(col.border, 0.45),
-                    background: isSelected ? col.cream : 'transparent',
-                  }}
-                >
-                  {isSelected && (
-                    <div className="h-1.5 w-1.5 rounded-full" style={{ background: col.base }} />
-                  )}
+              {supabaseStatus?.error && (
+                <div className="mt-3 text-xs" style={{ color: col.red }}>
+                  {supabaseStatus.error}
                 </div>
-                <input
-                  type="radio"
-                  name="llmProvider"
-                  value={opt.id}
-                  checked={isSelected}
-                  onChange={() =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      llmProvider: opt.id,
-                      // Resetear el modelo al default del proveedor: si no, arrastraba el
-                      // modelo del proveedor anterior (ej: gemini → ollama mostraba el de gemini).
-                      llmModel: defaultModelFor(opt.id),
-                    }))
-                  }
-                  className="sr-only"
-                />
-                <div className="flex-1">
-                  <div
-                    className="font-medium text-xs"
-                    style={{ color: isSelected ? col.fg : col.fgMuted }}
+              )}
+            </Section>
+
+            <Section
+              id="settings-docs"
+              title="acceso a google docs"
+              description="Trae texto y capturas desde los documentos adjuntos a los bugs."
+            >
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                <div>
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-xs" style={{ color: col.fg }}>
+                      login con navegador
+                    </span>
+                    <span
+                      className="rounded px-1.5 py-0.5 font-mono text-xs"
+                      style={{
+                        color: col.fgMuted,
+                        border: `1px solid ${alpha(col.fgMuted, 0.3)}`,
+                      }}
+                    >
+                      recomendado
+                    </span>
+                  </div>
+                  <p className="text-xs" style={{ color: col.fgMuted }}>
+                    Abre una ventana de Chromium. Las cookies se guardan localmente. No requiere
+                    admin.
+                  </p>
+                </div>
+
+                {browserAuth?.authenticated ? (
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="inline-flex items-center gap-1.5 text-xs"
+                      style={{ color: col.fgDim }}
+                    >
+                      <IconCheck size={12} />
+                      sesión activa
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-danger text-xs"
+                      onClick={revokeBrowserAuth}
+                    >
+                      cerrar sesión
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={startBrowserLogin}
+                    disabled={browserAuthLoading}
                   >
-                    {opt.name}
-                  </div>
-                  <div className="mt-0.5 text-xs" style={{ color: col.fgMuted }}>
-                    {opt.description}
-                  </div>
-                </div>
-              </label>
-            )
-          })}
-        </div>
+                    {browserAuthLoading ? 'esperando login...' : 'conectar con navegador'}
+                  </button>
+                )}
+              </div>
 
-        {settings.llmProvider === 'ollama' && (
-          <div className="space-y-3">
-            <div>
-              <label className="label" htmlFor="settings-ollama-base-url">
-                base url
-              </label>
-              <input
-                id="settings-ollama-base-url"
-                type="text"
-                className="input text-xs"
-                value={settings.ollamaBaseUrl}
-                onChange={update('ollamaBaseUrl')}
-              />
-            </div>
-            <div>
-              <label className="label" htmlFor="settings-ollama-model">
-                modelo
-              </label>
-              <input
-                id="settings-ollama-model"
-                type="text"
-                className="input text-xs"
-                placeholder="qwen2.5:7b, qwen2.5:14b..."
-                value={settings.llmModel}
-                onChange={update('llmModel')}
-              />
-              {ollamaStatus?.models && ollamaStatus.models.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {ollamaStatus.models.map((m, i) => {
-                    const isSelected = settings.llmModel === m
-                    const hint = MODEL_HINTS[m] ?? MODEL_HINTS[m.split(':')[0]]
+              <div
+                className="mt-4 pt-3"
+                style={{ borderTop: `1px solid ${alpha(col.border, 0.18)}` }}
+              >
+                <button
+                  type="button"
+                  className="flex cursor-pointer items-center gap-1.5 text-xs transition-colors"
+                  style={{ color: col.muted }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = col.fgMuted)}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = col.muted)}
+                  onClick={() => setShowOAuth((v) => !v)}
+                >
+                  <svg
+                    aria-hidden="true"
+                    width="8"
+                    height="8"
+                    viewBox="0 0 8 8"
+                    fill="currentColor"
+                    style={{
+                      transform: showOAuth ? 'rotate(90deg)' : 'none',
+                      transition: 'transform 0.15s',
+                    }}
+                  >
+                    <path d="M2 1l4 3-4 3V1z" />
+                  </svg>
+                  oauth avanzado
+                </button>
+
+                {showOAuth && (
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <p className="text-xs md:col-span-2" style={{ color: col.border }}>
+                      Requiere Google Cloud Console con Docs API + Drive API habilitadas.
+                    </p>
+                    <div>
+                      <label className="label" htmlFor="settings-google-client-id">
+                        client id
+                      </label>
+                      <input
+                        id="settings-google-client-id"
+                        type="text"
+                        className="input text-xs"
+                        placeholder="1234...apps.googleusercontent.com"
+                        value={settings.googleClientId}
+                        onChange={update('googleClientId')}
+                      />
+                    </div>
+                    <div>
+                      <label className="label" htmlFor="settings-google-client-secret">
+                        client secret
+                      </label>
+                      <input
+                        id="settings-google-client-secret"
+                        type="password"
+                        className="input text-xs"
+                        placeholder="GOCSPX-..."
+                        value={settings.googleClientSecret}
+                        onChange={update('googleClientSecret')}
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 md:col-span-2">
+                      {googleAuth?.authenticated ? (
+                        <>
+                          <span
+                            className="inline-flex items-center gap-1.5 text-xs"
+                            style={{ color: col.fgDim }}
+                          >
+                            <IconCheck size={12} />
+                            oauth autenticado
+                          </span>
+                          <button type="button" className="btn-danger text-xs" onClick={revokeAuth}>
+                            desconectar
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-secondary text-xs"
+                          onClick={startAuth}
+                          disabled={authLoading}
+                        >
+                          {authLoading ? 'esperando...' : 'conectar con oauth'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Section>
+
+            <Section
+              id="settings-agent"
+              title="agente externo"
+              description="Ejecuta el agente instalado en la terminal del usuario y muestra la salida en el detalle del bug."
+            >
+              <div className="grid gap-3">
+                <div>
+                  <label className="label" htmlFor="settings-external-agent-preset">
+                    agente
+                  </label>
+                  <select
+                    id="settings-external-agent-preset"
+                    className="input text-xs"
+                    value={externalAgentMode}
+                    onChange={(event) => {
+                      setExternalAgentMode(event.target.value)
+                      const preset = EXTERNAL_AGENT_PRESETS.find(
+                        (item) => item.id === event.target.value,
+                      )
+                      if (preset) {
+                        setSettings((prev) => ({ ...prev, externalAgentCommand: preset.command }))
+                        return
+                      }
+                      if (event.target.value === '') {
+                        setSettings((prev) => ({ ...prev, externalAgentCommand: '' }))
+                      }
+                    }}
+                  >
+                    <option value="">sin agente configurado</option>
+                    {EXTERNAL_AGENT_PRESETS.map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.name} · {preset.command}
+                      </option>
+                    ))}
+                    <option value={CUSTOM_EXTERNAL_AGENT_ID}>personalizado</option>
+                  </select>
+                </div>
+
+                <div className="grid gap-2 md:grid-cols-2">
+                  {EXTERNAL_AGENT_PRESETS.map((preset) => {
+                    const selected = settings.externalAgentCommand === preset.command
                     return (
                       <button
+                        key={preset.id}
                         type="button"
-                        key={i}
-                        className="cursor-pointer rounded px-2 py-1 text-xs transition-all"
+                        className="rounded p-2 text-left transition-all"
                         style={{
-                          border: `1px solid ${isSelected ? alpha(col.cream, 0.35) : alpha(col.border, 0.25)}`,
-                          background: isSelected ? alpha(col.cream, 0.08) : 'transparent',
-                          color: isSelected ? col.fg : col.fgMuted,
+                          border: `1px solid ${selected ? alpha(col.cream, 0.35) : alpha(col.border, 0.22)}`,
+                          background: selected ? alpha(col.cream, 0.06) : 'transparent',
                         }}
-                        onClick={() => setSettings((prev) => ({ ...prev, llmModel: m }))}
+                        onClick={() => {
+                          setExternalAgentMode(preset.id)
+                          setSettings((prev) => ({
+                            ...prev,
+                            externalAgentCommand: preset.command,
+                          }))
+                        }}
                       >
-                        {m}
-                        {hint ? <span style={{ color: col.border }}> · {hint}</span> : null}
+                        <span className="block font-medium text-xs" style={{ color: col.fg }}>
+                          {preset.name}
+                        </span>
+                        <span className="mt-1 block text-xs" style={{ color: col.fgMuted }}>
+                          {preset.description}
+                        </span>
+                        <span
+                          className="mt-1 block truncate font-mono text-xs"
+                          style={{ color: col.border }}
+                        >
+                          {preset.command}
+                        </span>
                       </button>
                     )
                   })}
                 </div>
-              )}
-              <div className="mt-1.5 text-xs" style={{ color: col.border }}>
-                modelos más grandes razonan mejor (ej. detectar bugs ya resueltos) pero son más
-                lentos y piden más VRAM/RAM.
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className="btn-secondary text-xs" onClick={checkOllama}>
-                verificar ollama
-              </button>
-              {ollamaStatus !== null && !ollamaStatus.available && (
-                <button type="button" className="btn-primary text-xs" onClick={startOllama}>
-                  iniciar ollama
-                </button>
-              )}
-              {ollamaStatus !== null && (
-                <span
-                  className="inline-flex items-center gap-1.5 text-xs"
-                  style={{ color: ollamaStatus.available ? col.fgDim : col.red }}
-                >
-                  {ollamaStatus.available ? <IconCheck size={12} /> : <IconX size={12} />}
-                  {ollamaStatus.available ? 'disponible' : 'no disponible'}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
 
-        {settings.llmProvider !== 'ollama' && (
-          <div>
-            <label className="label" htmlFor="settings-cloud-model">
-              modelo (opcional)
-            </label>
-            <input
-              id="settings-cloud-model"
-              type="text"
-              className="input text-xs"
-              placeholder="ej: gpt-4o, claude-opus-4-7, gemini-1.5-pro"
-              value={settings.llmModel}
-              onChange={update('llmModel')}
-            />
-            <div className="mt-1 text-xs" style={{ color: col.border }}>
-              configurá la api key en el archivo .env
-            </div>
-          </div>
-        )}
-      </Section>
-
-      {/* ── Agente externo ── */}
-      <Section title="agente externo">
-        <p className="mb-3 text-xs" style={{ color: col.fgMuted }}>
-          BugLens ejecuta el agente instalado en la terminal del usuario y muestra la salida en el
-          detalle del bug.
-        </p>
-        <div className="space-y-3">
-          <label className="label" htmlFor="settings-external-agent-preset">
-            agente
-          </label>
-          <select
-            id="settings-external-agent-preset"
-            className="input text-xs"
-            value={externalAgentMode}
-            onChange={(event) => {
-              setExternalAgentMode(event.target.value)
-              const preset = EXTERNAL_AGENT_PRESETS.find((item) => item.id === event.target.value)
-              if (preset) {
-                setSettings((prev) => ({ ...prev, externalAgentCommand: preset.command }))
-                return
-              }
-              if (event.target.value === '') {
-                setSettings((prev) => ({ ...prev, externalAgentCommand: '' }))
-              }
-            }}
-          >
-            <option value="">sin agente configurado</option>
-            {EXTERNAL_AGENT_PRESETS.map((preset) => (
-              <option key={preset.id} value={preset.id}>
-                {preset.name} · {preset.command}
-              </option>
-            ))}
-            <option value={CUSTOM_EXTERNAL_AGENT_ID}>personalizado</option>
-          </select>
-
-          <div className="grid grid-cols-2 gap-2">
-            {EXTERNAL_AGENT_PRESETS.map((preset) => {
-              const selected = settings.externalAgentCommand === preset.command
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  className="rounded p-2 text-left transition-all"
-                  style={{
-                    border: `1px solid ${selected ? alpha(col.cream, 0.35) : alpha(col.border, 0.22)}`,
-                    background: selected ? alpha(col.cream, 0.06) : 'transparent',
-                  }}
-                  onClick={() => {
-                    setExternalAgentMode(preset.id)
-                    setSettings((prev) => ({ ...prev, externalAgentCommand: preset.command }))
-                  }}
-                >
-                  <span className="block font-medium text-xs" style={{ color: col.fg }}>
-                    {preset.name}
-                  </span>
-                  <span className="mt-1 block text-xs" style={{ color: col.fgMuted }}>
-                    {preset.description}
-                  </span>
-                  <span
-                    className="mt-1 block truncate font-mono text-xs"
-                    style={{ color: col.border }}
-                  >
-                    {preset.command}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          {externalAgentMode === CUSTOM_EXTERNAL_AGENT_ID && (
-            <div>
-              <label className="label" htmlFor="settings-external-agent-command">
-                comando personalizado
-              </label>
-              <input
-                id="settings-external-agent-command"
-                type="text"
-                className="input text-xs"
-                placeholder="mi-agente --prompt-file {promptFile}"
-                value={settings.externalAgentCommand}
-                onChange={update('externalAgentCommand')}
-              />
-            </div>
-          )}
-
-          <div>
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div>
-                <div className="label mb-0">repositorios locales</div>
-                <p className="mt-1 text-xs" style={{ color: col.fgMuted }}>
-                  Agregá todos los repos que el agente puede consultar y la rama objetivo de cada
-                  uno.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="btn-secondary flex-shrink-0 text-xs"
-                onClick={addExternalAgentRepository}
-              >
-                + repo
-              </button>
-            </div>
-
-            {settings.externalAgentRepositories.length === 0 ? (
-              <button
-                type="button"
-                className="external-agent-empty-repo"
-                onClick={addExternalAgentRepository}
-              >
-                agregar primer repositorio
-              </button>
-            ) : (
-              <div className="external-agent-repo-list">
-                {settings.externalAgentRepositories.map((repo, index) => (
-                  <div key={index} className="external-agent-repo-row">
-                    <div className="external-agent-repo-index">
-                      {index === 0 ? 'principal' : `repo ${index + 1}`}
-                    </div>
-                    <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_10rem]">
-                      <input
-                        type="text"
-                        className="input text-xs"
-                        aria-label={`ruta del repositorio ${index + 1}`}
-                        placeholder="/ruta/al/repositorio"
-                        value={repo.path}
-                        onChange={(event) =>
-                          updateExternalAgentRepository(index, 'path', event.target.value)
-                        }
-                      />
-                      <input
-                        type="text"
-                        className="input text-xs"
-                        aria-label={`rama del repositorio ${index + 1}`}
-                        placeholder="rama"
-                        value={repo.branch}
-                        onChange={(event) =>
-                          updateExternalAgentRepository(index, 'branch', event.target.value)
-                        }
-                      />
-                    </div>
-                    <div className="external-agent-repo-actions">
-                      <button
-                        type="button"
-                        className="btn-secondary text-xs"
-                        onClick={() => pickExternalAgentRepository(index)}
-                      >
-                        elegir
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary text-xs"
-                        onClick={() => removeExternalAgentRepository(index)}
-                      >
-                        quitar
-                      </button>
-                    </div>
+                {externalAgentMode === CUSTOM_EXTERNAL_AGENT_ID && (
+                  <div>
+                    <label className="label" htmlFor="settings-external-agent-command">
+                      comando personalizado
+                    </label>
+                    <input
+                      id="settings-external-agent-command"
+                      type="text"
+                      className="input text-xs"
+                      placeholder="mi-agente --prompt-file {promptFile}"
+                      value={settings.externalAgentCommand}
+                      onChange={update('externalAgentCommand')}
+                    />
                   </div>
-                ))}
+                )}
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div>
+                      <div className="label mb-0">repositorios locales</div>
+                      <p className="mt-1 text-xs" style={{ color: col.fgMuted }}>
+                        Agregá todos los repos que el agente puede consultar y la rama objetivo de
+                        cada uno.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-secondary flex-shrink-0 text-xs"
+                      onClick={addExternalAgentRepository}
+                    >
+                      + repo
+                    </button>
+                  </div>
+
+                  {settings.externalAgentRepositories.length === 0 ? (
+                    <button
+                      type="button"
+                      className="external-agent-empty-repo"
+                      onClick={addExternalAgentRepository}
+                    >
+                      agregar primer repositorio
+                    </button>
+                  ) : (
+                    <div className="external-agent-repo-list">
+                      {settings.externalAgentRepositories.map((repo, index) => (
+                        <div key={index} className="external-agent-repo-row">
+                          <div className="external-agent-repo-index">
+                            {index === 0 ? 'principal' : `repo ${index + 1}`}
+                          </div>
+                          <div className="grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_10rem]">
+                            <input
+                              type="text"
+                              className="input text-xs"
+                              aria-label={`ruta del repositorio ${index + 1}`}
+                              placeholder="/ruta/al/repositorio"
+                              value={repo.path}
+                              onChange={(event) =>
+                                updateExternalAgentRepository(index, 'path', event.target.value)
+                              }
+                            />
+                            <input
+                              type="text"
+                              className="input text-xs"
+                              aria-label={`rama del repositorio ${index + 1}`}
+                              placeholder="rama"
+                              value={repo.branch}
+                              onChange={(event) =>
+                                updateExternalAgentRepository(index, 'branch', event.target.value)
+                              }
+                            />
+                          </div>
+                          <div className="external-agent-repo-actions">
+                            <button
+                              type="button"
+                              className="btn-secondary text-xs"
+                              onClick={() => pickExternalAgentRepository(index)}
+                            >
+                              elegir
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-secondary text-xs"
+                              onClick={() => removeExternalAgentRepository(index)}
+                            >
+                              quitar
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="label" htmlFor="settings-external-agent-timeout">
+                    timeout
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="settings-external-agent-timeout"
+                      type="number"
+                      min={60}
+                      step={60}
+                      className="input text-xs"
+                      value={Math.round(settings.externalAgentTimeoutMs / 1000)}
+                      onChange={(event) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          externalAgentTimeoutMs: Number(event.target.value) * 1000,
+                        }))
+                      }
+                    />
+                    <span className="font-mono text-xs" style={{ color: col.fgMuted }}>
+                      segundos
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-xs" style={{ color: col.border }}>
+                  Los presets usan {'{promptFile}'} para pasar el bug sin TTY. BugLens ejecuta el
+                  agente desde el primer repositorio y le informa toda la lista con sus ramas
+                  objetivo; no hace checkout ni cambia ramas por su cuenta.
+                </div>
               </div>
-            )}
+            </Section>
           </div>
 
-          <div>
-            <label className="label" htmlFor="settings-external-agent-timeout">
-              timeout
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                id="settings-external-agent-timeout"
-                type="number"
-                min={60}
-                step={60}
-                className="input text-xs"
-                value={Math.round(settings.externalAgentTimeoutMs / 1000)}
-                onChange={(event) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    externalAgentTimeoutMs: Number(event.target.value) * 1000,
-                  }))
-                }
+          <div className="grid content-start gap-3">
+            <Section
+              id="settings-model"
+              title="modelo llm"
+              description="BugLens usa Ollama local. Elegí si el análisis ignora o lee capturas."
+            >
+              <div className="space-y-3">
+                <div className="grid gap-2" role="radiogroup" aria-label="modo de análisis">
+                  <label
+                    className="choice-card cursor-pointer rounded p-2 text-left transition-all"
+                    style={{
+                      border: `1px solid ${!analyzeImages ? alpha(col.cream, 0.35) : alpha(col.border, 0.22)}`,
+                      background: !analyzeImages ? alpha(col.cream, 0.06) : 'transparent',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="llm-analysis-mode"
+                      checked={!analyzeImages}
+                      className="sr-only"
+                      onChange={() => setSettings((prev) => ({ ...prev, llmVisionModel: '' }))}
+                    />
+                    <span className="block font-medium text-xs" style={{ color: col.fg }}>
+                      Solo texto
+                    </span>
+                    <span className="mt-1 block text-xs" style={{ color: col.fgMuted }}>
+                      ignora capturas al analizar
+                    </span>
+                    <span className="mt-1 block font-mono text-xs" style={{ color: col.border }}>
+                      {DEFAULT_OLLAMA_TEXT_MODEL}
+                    </span>
+                  </label>
+                  <label
+                    className="choice-card cursor-pointer rounded p-2 text-left transition-all"
+                    style={{
+                      border: `1px solid ${analyzeImages ? alpha(col.cream, 0.35) : alpha(col.border, 0.22)}`,
+                      background: analyzeImages ? alpha(col.cream, 0.06) : 'transparent',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="llm-analysis-mode"
+                      checked={analyzeImages}
+                      className="sr-only"
+                      onChange={() =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          llmVisionModel: DEFAULT_OLLAMA_VISION_MODEL,
+                        }))
+                      }
+                    />
+                    <span className="block font-medium text-xs" style={{ color: col.fg }}>
+                      Texto + capturas
+                    </span>
+                    <span className="mt-1 block text-xs" style={{ color: col.fgMuted }}>
+                      usa visión si el bug trae imágenes
+                    </span>
+                    <span className="mt-1 block font-mono text-xs" style={{ color: col.border }}>
+                      {DEFAULT_OLLAMA_TEXT_MODEL} + {DEFAULT_OLLAMA_VISION_MODEL}
+                    </span>
+                  </label>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" className="btn-secondary text-xs" onClick={checkOllama}>
+                    verificar ollama
+                  </button>
+                  {ollamaStatus !== null && !ollamaStatus.available && (
+                    <button type="button" className="btn-primary text-xs" onClick={startOllama}>
+                      iniciar ollama
+                    </button>
+                  )}
+                  {ollamaStatus !== null && (
+                    <span
+                      className="inline-flex items-center gap-1.5 text-xs"
+                      style={{ color: ollamaStatus.available ? col.fgDim : col.red }}
+                    >
+                      {ollamaStatus.available ? <IconCheck size={12} /> : <IconX size={12} />}
+                      {ollamaStatus.available ? 'disponible' : 'no disponible'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </Section>
+
+            <Section
+              id="settings-runtime"
+              title="rendimiento"
+              description='Sin placa de video el análisis es lento. "Analizar mi equipo" consulta Ollama y recomienda GPU o CPU.'
+            >
+              <PerformanceModePicker
+                value={settings.performanceMode}
+                onChange={(m) => setSettings((prev) => ({ ...prev, performanceMode: m }))}
               />
-              <span className="font-mono text-xs" style={{ color: col.fgMuted }}>
-                segundos
-              </span>
-            </div>
-          </div>
+            </Section>
 
-          <div className="text-xs" style={{ color: col.border }}>
-            Los presets usan {'{promptFile}'} para pasar el bug sin TTY. BugLens ejecuta el agente
-            desde el primer repositorio y le informa toda la lista con sus ramas objetivo; no hace
-            checkout ni cambia ramas por su cuenta. Credenciales, modelo y límites quedan a cargo
-            del agente local.
+            <Section
+              id="settings-cache"
+              title="caché de análisis"
+              description="Evita re-procesar bugs idénticos con la misma evidencia y modelo."
+            >
+              <div className="flex flex-wrap items-center gap-4">
+                {cacheStats !== null && (
+                  <div className="flex items-center gap-3 font-mono text-xs">
+                    <span style={{ color: col.fgDim }}>{cacheStats.count} análisis</span>
+                    <span style={{ color: col.border }}>·</span>
+                    <span style={{ color: col.fgMuted }}>{cacheStats.sizeKB} KB</span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="btn-danger text-xs"
+                  onClick={handleClearCache}
+                  disabled={clearingCache || (cacheStats !== null && cacheStats.count === 0)}
+                >
+                  {clearingCache ? 'limpiando...' : 'limpiar caché'}
+                </button>
+              </div>
+            </Section>
           </div>
         </div>
-      </Section>
-
-      {/* ── Rendimiento ── */}
-      <Section title="rendimiento">
-        <p className="mb-3 text-xs" style={{ color: col.fgMuted }}>
-          Sin placa de video el análisis es lento y puede cortar por timeout. "Analizar mi equipo"
-          le pregunta a Ollama si el modelo corre en GPU o CPU.
-        </p>
-        <PerformanceModePicker
-          value={settings.performanceMode}
-          onChange={(m) => setSettings((prev) => ({ ...prev, performanceMode: m }))}
-        />
-      </Section>
-
-      {/* ── Cache ── */}
-      <Section title="caché de análisis">
-        <p className="mb-3 text-xs" style={{ color: col.fgMuted }}>
-          Los análisis se guardan para evitar re-procesar bugs idénticos.
-        </p>
-        <div className="flex flex-wrap items-center gap-4">
-          {cacheStats !== null && (
-            <div className="flex items-center gap-3 font-mono text-xs">
-              <span style={{ color: col.fgDim }}>{cacheStats.count} análisis</span>
-              <span style={{ color: col.border }}>·</span>
-              <span style={{ color: col.fgMuted }}>{cacheStats.sizeKB} KB</span>
-            </div>
-          )}
-          <button
-            type="button"
-            className="btn-danger text-xs"
-            onClick={handleClearCache}
-            disabled={clearingCache || (cacheStats !== null && cacheStats.count === 0)}
-          >
-            {clearingCache ? 'limpiando...' : 'limpiar caché'}
-          </button>
-        </div>
-      </Section>
-
-      {/* ── Reset ── */}
-      <Section title="restablecer">
-        <p className="mb-3 text-xs" style={{ color: col.fgMuted }}>
-          Acciones que borran datos y reinician la app. No afectan la caché de análisis ni las
-          sesiones de Google.
-        </p>
-        <ResetControls addLog={addLog} />
-      </Section>
-
-      {/* ── Save ── */}
-      <div className="mt-4 mb-8 flex items-center gap-3">
-        <button type="button" className="btn-primary" onClick={save} disabled={saving}>
-          {saving ? 'guardando...' : 'guardar'}
-        </button>
-        {saved && (
-          <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: col.fgDim }}>
-            <IconCheck size={12} />
-            guardado
-          </span>
-        )}
       </div>
     </div>
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  id,
+  title,
+  description,
+  children,
+}: {
+  id: string
+  title: string
+  description?: string
+  children: React.ReactNode
+}) {
   return (
-    <div className="card mb-3">
+    <section id={id} className="panel-card scroll-mt-4 p-4">
       <div className="section-label mb-3">{title}</div>
+      {description && (
+        <p className="mb-3 text-xs" style={{ color: col.fgMuted }}>
+          {description}
+        </p>
+      )}
       {children}
-    </div>
+    </section>
   )
 }

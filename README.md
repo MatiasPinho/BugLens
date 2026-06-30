@@ -67,17 +67,20 @@ npm run package    # genera el instalador en release/
 
 ## Modelo LLM
 
-Por defecto usa **Ollama local** con `qwen2.5:7b` (rápido, gratis, sin API key).
+BugLens expone **solo Ollama local** en la UI. Por defecto usa `qwen2.5:7b`
+para bugs sin capturas y, si activás el modo con imágenes, `qwen2.5vl:7b`
+para leer capturas adjuntas desde Google Docs.
 
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh   # instalar Ollama
 ollama pull qwen2.5:7b                           # modelo por defecto
-ollama pull qwen2.5:14b                          # opcional: mejor calidad, más lento
+ollama pull qwen2.5vl:7b                         # opcional: capturas/imágenes
 ```
 
-Desde **config → modelo llm** podés cambiar el modelo (chips con hints de
-velocidad/calidad). Modelos más grandes razonan mejor pero son más lentos y piden
-más VRAM/RAM.
+Desde **config → modelo llm** elegís entre dos modos:
+
+- **Solo texto**: ignora capturas al analizar.
+- **Texto + capturas**: usa el modelo vision local solo si el bug trae imágenes.
 
 **GPU AMD (ROCm):** las RX 6600/6650 (gfx1032) necesitan un override. La app lo
 setea sola al levantar Ollama; manualmente:
@@ -104,18 +107,8 @@ que **ganan** sobre el modo:
 
 ```env
 LLM_PERFORMANCE_MODE=cpu   # 'gpu' (default) o 'cpu'
-LLM_CONCURRENCY=1          # bugs simultáneos (cualquier proveedor)
+LLM_CONCURRENCY=1          # bugs simultáneos
 OLLAMA_TIMEOUT_MS=240000   # ms antes de abortar una llamada a Ollama
-```
-
-### Proveedores cloud (opcionales)
-
-Se mantienen 4 proveedores. Configurás uno con `LLM_PROVIDER` en `.env` o desde la UI:
-
-```env
-LLM_PROVIDER=anthropic        # o gemini / openai / ollama
-ANTHROPIC_API_KEY=sk-ant-...
-LLM_MODEL=claude-haiku-4-5-20251001
 ```
 
 ---
@@ -327,7 +320,7 @@ buglens/
 │   │   └── teamBugs.ts           # Persistencia compartida de bugs/análisis
 │   ├── llm/
 │   │   ├── fastTriage.ts         # Pipeline de análisis (clasificar + reescribir)
-│   │   ├── client.ts             # Config de LLM (ollama / anthropic / gemini / openai)
+│   │   ├── client.ts             # Config de LLM local (Ollama)
 │   │   ├── runtimeConfig.ts      # Paralelismo + timeout efectivos (modo GPU/CPU + env)
 │   │   └── analysisCache.ts      # Caché de análisis por contenido
 │   ├── agents/

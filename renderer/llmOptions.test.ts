@@ -4,9 +4,6 @@ import { defaultModelFor, LLM_OPTIONS } from './llmOptions'
 describe('defaultModelFor', () => {
   it('devuelve el modelo por defecto de cada proveedor', () => {
     expect(defaultModelFor('ollama')).toBe('qwen2.5:7b')
-    expect(defaultModelFor('gemini')).toBe('gemini-2.5-flash')
-    expect(defaultModelFor('anthropic')).toBe('claude-haiku-4-5-20251001')
-    expect(defaultModelFor('openai')).toBe('gpt-4o-mini')
   })
 
   it('cae a vacío para un proveedor desconocido', () => {
@@ -17,5 +14,9 @@ describe('defaultModelFor', () => {
     for (const opt of LLM_OPTIONS) {
       expect(defaultModelFor(opt.id)).not.toBe('')
     }
+  })
+
+  it('solo lista ollama como proveedor soportado', () => {
+    expect(LLM_OPTIONS.map((opt) => opt.id)).toEqual(['ollama'])
   })
 })

@@ -14,6 +14,7 @@ interface ElectronAPI {
     googleClientSecret: string
     llmProvider: string
     llmModel: string
+    llmVisionModel: string
     ollamaBaseUrl: string
     performanceMode: 'gpu' | 'cpu'
     supabaseUrl: string

@@ -12,12 +12,23 @@ import {
 } from './analysisCache'
 
 function bug(
-  over: Partial<{ title: string; description: string; docText: string }> = {},
+  over: Partial<{ title: string; description: string; docText: string; imageData: string }> = {},
 ): EnrichedBug {
-  const { title = 'Login roto', description = 'no anda', docText } = over
+  const { title = 'Login roto', description = 'no anda', docText, imageData } = over
   return {
     raw: { id: 'b1', rowIndex: 1, title, description, rawRow: {}, googleDocLinks: [] },
-    googleDocs: docText ? [{ url: 'u', title: 'doc', text: docText, accessible: true }] : [],
+    googleDocs:
+      docText || imageData
+        ? [
+            {
+              url: 'u',
+              title: 'doc',
+              text: docText ?? '',
+              accessible: true,
+              images: imageData ? [{ data: imageData, mimeType: 'image/png' }] : [],
+            },
+          ]
+        : [],
   }
 }
 
@@ -48,6 +59,11 @@ describe('makeCacheKey', () => {
     const a = makeCacheKey(bug(), { provider: 'ollama', model: 'qwen2.5:7b' })
     const b = makeCacheKey(bug(), { provider: 'ollama', model: 'qwen2.5:14b' })
     expect(a).not.toBe(b)
+  })
+  it('cambia con el contenido de las imágenes', () => {
+    expect(makeCacheKey(bug({ imageData: 'captura-a' }), cfg)).not.toBe(
+      makeCacheKey(bug({ imageData: 'captura-b' }), cfg),
+    )
   })
 })
 

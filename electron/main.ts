@@ -13,7 +13,7 @@ dotenv.config({ path: envPath })
 import { runExternalAgent } from '../src/agents/externalAgent.js'
 import { clearCache, getCacheStats } from '../src/llm/analysisCache.js'
 import { getLLMConfig } from '../src/llm/client.js'
-import { analyzeBug } from '../src/llm/fastTriage.js'
+import { analyzeBug, selectLLMConfigForBug } from '../src/llm/fastTriage.js'
 import { resolveConcurrency } from '../src/llm/runtimeConfig.js'
 import { BrowserDocsReader } from '../src/pipeline/browserDocsReader.js'
 import { BugEnricher } from '../src/pipeline/bugEnricher.js'
@@ -62,6 +62,7 @@ interface AppSettings {
   googleClientSecret: string
   llmProvider: string
   llmModel: string
+  llmVisionModel: string
   ollamaBaseUrl: string
   // Rendimiento: 'gpu' (paralelismo/timeout normales) o 'cpu' (serie + timeout largo).
   performanceMode: PerformanceMode
@@ -116,6 +117,8 @@ function loadSettings(): AppSettings {
     googleClientSecret: process.env['GOOGLE_CLIENT_SECRET'] ?? '',
     llmProvider: process.env['LLM_PROVIDER'] ?? 'ollama',
     llmModel: process.env['LLM_MODEL'] ?? process.env['OLLAMA_MODEL'] ?? 'qwen2.5:7b',
+    llmVisionModel:
+      process.env['LLM_VISION_MODEL'] ?? process.env['OLLAMA_VISION_MODEL'] ?? 'qwen2.5vl:7b',
     ollamaBaseUrl: process.env['OLLAMA_BASE_URL'] ?? 'http://localhost:11434',
     performanceMode: process.env['LLM_PERFORMANCE_MODE'] === 'cpu' ? 'cpu' : 'gpu',
     supabaseUrl: process.env['SUPABASE_URL'] ?? '',
@@ -518,6 +521,7 @@ async function analyzeBugs(
     const llmConfig: LLMConfig = getLLMConfig({
       provider: s.llmProvider as LLMConfig['provider'],
       model: s.llmModel,
+      visionModel: s.llmVisionModel,
       baseUrl: s.ollamaBaseUrl,
       performanceMode: s.performanceMode,
     })
@@ -605,7 +609,8 @@ async function analyzeBugs(
         }
 
         // Clasificar + reescribir el bug (una sola llamada LLM, sin tocar repos).
-        const { analysis, fromCache } = await analyzeBug(enriched, llmConfig, getCacheDir())
+        const analysisConfig = selectLLMConfigForBug(enriched, llmConfig)
+        const { analysis, fromCache } = await analyzeBug(enriched, analysisConfig, getCacheDir())
         if (fromCache) log('info', `  ✓ desde cache`)
         const result: AnalyzedBug = {
           enriched,
@@ -615,7 +620,10 @@ async function analyzeBugs(
         }
 
         results[i] = result
-        await saveRemoteAnalysisResult(remoteClient, teamConfig, result, remoteContext)
+        await saveRemoteAnalysisResult(remoteClient, teamConfig, result, {
+          ...remoteContext,
+          model: analysisConfig.model,
+        })
         completed++
 
         log(
