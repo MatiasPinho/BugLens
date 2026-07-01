@@ -71,6 +71,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   checkOllama: () => ipcRenderer.invoke('llm:check-ollama'),
   startOllama: () => ipcRenderer.invoke('llm:start-ollama'),
   probeHardware: () => ipcRenderer.invoke('hardware:probe'),
+  checkOpenCode: () => ipcRenderer.invoke('opencode:check'),
+  repairOpenCode: () => ipcRenderer.invoke('opencode:repair'),
 
   // Event listeners
   onProgress: (cb: (event: IPCEvent) => void) => {

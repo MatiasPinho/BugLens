@@ -21,6 +21,9 @@ const TERMINAL_PATHS = [
   '/usr/sbin',
   '/sbin',
 ]
+const OPENCODE_PROMPT_FILE_MESSAGE =
+  'Analizá el bug adjunto siguiendo las instrucciones del archivo.'
+const OPENCODE_BIG_PICKLE_MODEL = 'opencode/big-pickle'
 // biome-ignore lint/complexity/useRegexLiterals: el literal dispara noControlCharactersInRegex.
 const ANSI_CSI_REGEX = new RegExp(String.raw`\x1B\[[0-?]*[ -/]*[@-~]`, 'g')
 // biome-ignore lint/complexity/useRegexLiterals: el literal dispara noControlCharactersInRegex.
@@ -62,6 +65,10 @@ function commandHasOpenCodeAgent(command: string): boolean {
   return /(?:^|\s)--agent(?:\s|=)/.test(command)
 }
 
+function isLegacyOpenCodeCatPromptCommand(command: string): boolean {
+  return /(?:^|\s)opencode\s+run\b[\s\S]*\$\(\s*cat\b/.test(command)
+}
+
 function withOpenCodeBugLensAgent(command: string): string {
   if (!isOpenCodeRunCommand(command) || commandHasOpenCodeAgent(command)) return command
   return command.replace(/^\s*opencode\s+run\b/, 'opencode run --agent buglens')
@@ -100,10 +107,14 @@ function prepareOpenCodeCommand(
   prepared: PreparedExternalAgentCommand,
   repositories: ExternalAgentRepository[],
 ): PreparedExternalAgentCommand {
-  if (!isOpenCodeRunCommand(prepared.command)) return prepared
+  const command =
+    prepared.promptFile && isLegacyOpenCodeCatPromptCommand(prepared.command)
+      ? `opencode run --model ${OPENCODE_BIG_PICKLE_MODEL} ${shellQuote(OPENCODE_PROMPT_FILE_MESSAGE)} --file ${shellQuote(prepared.promptFile)}`
+      : prepared.command
+  if (!isOpenCodeRunCommand(command)) return { ...prepared, command }
   return {
     ...prepared,
-    command: withOpenCodeBugLensAgent(prepared.command),
+    command: withOpenCodeBugLensAgent(command),
     env: {
       ...prepared.env,
       OPENCODE_CONFIG_CONTENT: buildOpenCodeConfigContent(repositories),
@@ -339,37 +350,52 @@ export function buildExternalAgentPrompt(
     '',
     docs ? `Documentos adjuntos\n${docs}` : 'Documentos adjuntos: ninguno',
     '',
-    'Salida esperada',
-    'Usá este formato, omitiendo secciones que no apliquen:',
+    'Contrato de salida obligatorio',
+    '- Respondé únicamente con Markdown.',
+    '- Usá exactamente las secciones de la plantilla, en el mismo orden y con los mismos títulos.',
+    '- No agregues secciones nuevas, prólogos, epílogos, tablas, emojis ni bloques JSON.',
+    '- No omitas secciones. Si una sección no aplica, escribí "ninguno", "ninguna" o "no_verificable" según corresponda.',
+    '- Usá viñetas con "- " y numeración con "1.". No uses otros estilos de lista.',
+    '- En cobertura, cada línea debe tener exactamente este patrón: "Paso N: <paso> → <estado>. <detalle>".',
+    '- Los estados de cobertura permitidos son: cubierto, parcial, falla, no_verificable, lateral.',
+    '- Si el código actual cubre una parte del paso pero falta otra, usá "parcial". Si el código actual tiene un validador/bloqueo explícito para ese paso, marcá "cubierto" aunque todavía recomiendes una prueba manual. No mezcles hallazgos laterales con el estado del bug original.',
+    '',
+    'Plantilla obligatoria',
     '',
     '## Resumen',
-    'Una conclusión breve sobre qué parece estar pasando.',
+    '<1 a 3 frases con la conclusión principal.>',
     '',
     '## Evidencia',
-    'Datos del reporte, documentos, archivos, logs o resultados de comandos que sostienen el análisis de los pasos reportados.',
+    '- <fuente o dato> - <qué sostiene>',
+    '- ninguno',
     '',
     '## Cobertura de los pasos reportados',
-    'Para cada paso relevante, usá exactamente este formato: Paso → cubierto | parcial | falla | no_verificable | lateral. Si el código actual cubre una parte del paso pero falta otra, usá "parcial". Si el código actual tiene un validador/bloqueo explícito para ese paso, marcá "cubierto" aunque todavía recomiendes una prueba manual. No mezcles hallazgos laterales con el estado del bug original.',
+    '1. Paso 1: <paso reportado> → cubierto | parcial | falla | no_verificable | lateral. <detalle breve>',
+    '2. Paso 2: <paso reportado> → cubierto | parcial | falla | no_verificable | lateral. <detalle breve>',
     '',
     '## Diagnóstico probable',
-    'Causa o zona probable del bug reportado. Marcá explícitamente qué es hipótesis si no está confirmado.',
+    '<causa o zona probable del bug reportado; aclarar si es hipótesis.>',
     '',
     '## Archivos o áreas a revisar',
-    'Lista concreta de módulos, pantallas, servicios, queries, jobs o configuraciones relevantes.',
+    '- <ruta, pantalla, servicio o módulo> - <motivo>',
+    '- ninguno',
     '',
     '## Hallazgos laterales',
-    'Problemas relacionados que no correspondan directamente a los pasos reportados. Si no hay, escribí "ninguno".',
+    '- <hallazgo relacionado pero distinto> - <por qué no cambia el estado del bug original>',
+    '- ninguno',
     '',
     '## Estado probable del bug',
     'Estado probable: resuelto | parcialmente_resuelto | no_resuelto | no_determinable',
     'Coincide con el bug reportado: sí | parcial | no',
-    'Motivo: evidencia breve basada solo en los pasos reportados. Usá no_resuelto solo si al menos un paso reportado no tiene validación/bloqueo o hay evidencia directa de que sigue fallando. Usá no_determinable si solo faltan pruebas de ejecución.',
+    'Motivo: <evidencia breve basada solo en los pasos reportados. Usá no_resuelto solo si al menos un paso reportado no tiene validación/bloqueo o hay evidencia directa de que sigue fallando. Usá no_determinable si solo faltan pruebas de ejecución.>',
     '',
     '## Próximos pasos',
-    'Acciones concretas para reproducir, verificar, corregir o pedir más información.',
+    '- <acción concreta para reproducir, verificar, corregir o pedir más información>',
+    '- ninguno',
     '',
     '## Información faltante',
-    'Preguntas específicas para QA/producto/dev si el reporte no alcanza para confirmar la causa.',
+    '- <pregunta específica para QA/producto/dev>',
+    '- ninguna',
   ]
     .filter((line) => line !== '')
     .join('\n')
