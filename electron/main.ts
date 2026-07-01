@@ -22,6 +22,7 @@ import { writeFullDataJson } from '../src/pipeline/fullDataExport.js'
 import { GoogleDocsReader } from '../src/pipeline/googleDocsReader.js'
 import { buildManualBug, type ManualBugFields } from '../src/pipeline/manualBugBuilder.js'
 import {
+  addRemoteBugComment,
   createRemoteBugImport,
   deleteRemoteBug,
   loadRemoteAnalyzedBugs,
@@ -287,6 +288,30 @@ async function watchRemoteBugChanges(projectId: string): Promise<void> {
         event: '*',
         schema: 'public',
         table: 'bugs',
+        filter: `project_id=eq.${projectId}`,
+      },
+      () => {
+        sendToRenderer('remote-bugs-changed', { type: 'remote-bugs-changed' })
+      },
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'bug_comments',
+        filter: `project_id=eq.${projectId}`,
+      },
+      () => {
+        sendToRenderer('remote-bugs-changed', { type: 'remote-bugs-changed' })
+      },
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'bug_analysis_runs',
         filter: `project_id=eq.${projectId}`,
       },
       () => {
@@ -785,7 +810,7 @@ ipcMain.handle('bug:analyze-external-agent', async (event, { bug }: { bug: Analy
     const { externalAgentCommand, externalAgentTimeoutMs, externalAgentRepositories } =
       loadSettings()
     log('info', `Enviando bug a agente externo: ${bug.enriched.raw.title}`)
-    const result = await runExternalAgent(
+    const externalAgentResult = await runExternalAgent(
       externalAgentCommand,
       bug,
       externalAgentTimeoutMs,
@@ -794,6 +819,7 @@ ipcMain.handle('bug:analyze-external-agent', async (event, { bug }: { bug: Analy
       },
       externalAgentRepositories,
     )
+    const result = { ...externalAgentResult, createdAt: new Date().toISOString() }
     if (result.ok) {
       log('info', `Agente externo terminó en ${Math.round(result.durationMs / 1000)}s`)
     } else {
@@ -805,7 +831,14 @@ ipcMain.handle('bug:analyze-external-agent', async (event, { bug }: { bug: Analy
       await saveRemoteAnalysisResult(
         client,
         loadSupabaseTeamConfig(),
-        { ...bug, analysis: { ...bug.analysis, externalAgent: result } },
+        {
+          ...bug,
+          analysis: {
+            ...bug.analysis,
+            externalAgent: result,
+            externalAgentHistory: [result, ...(bug.analysis.externalAgentHistory ?? [])],
+          },
+        },
         {
           importId: null,
           sourceType: bug.enriched.raw.id.startsWith('manual-') ? 'manual' : 'excel',
@@ -851,6 +884,24 @@ ipcMain.handle(
     }
   },
 )
+
+ipcMain.handle('bug:add-comment', async (_e, { bug, body }: { bug: AnalyzedBug; body: string }) => {
+  try {
+    const client = makeSupabaseTeamClient()
+    if (!client) throw new Error('Supabase no está configurado.')
+    const comment = await addRemoteBugComment(
+      client,
+      loadSupabaseTeamConfig(),
+      bug.enriched.raw,
+      body,
+    )
+    return { ok: true, comment }
+  } catch (err) {
+    const message = errorMessage(err)
+    log('error', `Error guardando comentario remoto: ${message}`)
+    return { ok: false, error: message }
+  }
+})
 
 ipcMain.handle('bugs:load-remote', async () => {
   try {

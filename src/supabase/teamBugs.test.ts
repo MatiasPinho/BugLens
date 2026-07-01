@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { bugRecordKey } from '../pipeline/bugStatusKey'
 import type { AnalyzedBug } from '../types/index'
 import {
+  addRemoteBugComment,
   createRemoteBugImport,
   deleteRemoteBug,
   loadRemoteAnalyzedBugs,
@@ -80,6 +81,55 @@ describe('teamBugs', () => {
     expect(rpc).toHaveBeenCalledWith('delete_project_bug', {
       target_project_id: 'project-1',
       target_content_key: bugRecordKey(raw),
+    })
+  })
+
+  it('agrega un comentario remoto al bug resuelto por content_key', async () => {
+    mockTeamStatus()
+    const raw = { title: 'Login roto', description: 'No entra al sistema.' }
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: 'bug-1' }, error: null })
+    const bugsQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
+      maybeSingle,
+    }
+    const single = vi.fn().mockResolvedValue({
+      data: {
+        id: 'comment-1',
+        body: '10 de marzo: se reabre.',
+        created_at: '2026-03-10T12:00:00.000Z',
+        updated_at: '2026-03-10T12:00:00.000Z',
+      },
+      error: null,
+    })
+    const commentsQuery = {
+      insert: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single,
+    }
+    const from = vi
+      .fn()
+      .mockImplementation((table: string) => (table === 'bugs' ? bugsQuery : commentsQuery))
+
+    const comment = await addRemoteBugComment(
+      { from } as never,
+      config(),
+      raw,
+      '  10 de marzo: se reabre.  ',
+    )
+
+    expect(comment).toMatchObject({
+      id: 'comment-1',
+      body: '10 de marzo: se reabre.',
+      authorEmail: 'qa@example.com',
+    })
+    expect(bugsQuery.eq).toHaveBeenCalledWith('content_key', bugRecordKey(raw))
+    expect(commentsQuery.insert).toHaveBeenCalledWith({
+      bug_id: 'bug-1',
+      project_id: 'project-1',
+      body: '10 de marzo: se reabre.',
+      created_by: 'user-1',
     })
   })
 
@@ -206,6 +256,32 @@ describe('teamBugs', () => {
               durationMs: 1200,
             },
           },
+          externalAgentHistory: [
+            {
+              ok: true,
+              output: 'Revisar src/filtros.ts',
+              command: 'opencode run',
+              workingDirectory: '/repo/app',
+              durationMs: 1200,
+              createdAt: '2026-03-10T10:00:00.000Z',
+            },
+            {
+              ok: true,
+              output: 'Resultado anterior',
+              command: 'opencode run',
+              durationMs: 900,
+              createdAt: '2026-03-09T10:00:00.000Z',
+            },
+          ],
+          comments: [
+            {
+              id: 'comment-1',
+              body: '10 de marzo: se reabre por nueva evidencia.',
+              createdAt: '2026-03-10T12:00:00.000Z',
+              updatedAt: '2026-03-10T12:00:00.000Z',
+              authorEmail: 'qa@example.com',
+            },
+          ],
           googleDocs: [],
           processingMs: 12,
         },
@@ -220,10 +296,102 @@ describe('teamBugs', () => {
     expect(results[0].enriched.raw.title).toBe('Filtro roto')
     expect(results[0].analysis.externalAgent?.output).toBe('Revisar src/filtros.ts')
     expect(results[0].analysis.externalAgent?.workingDirectory).toBe('/repo/app')
+    expect(results[0].analysis.externalAgentHistory).toHaveLength(2)
+    expect(results[0].analysis.externalAgentHistory?.[1].output).toBe('Resultado anterior')
+    expect(results[0].comments).toHaveLength(1)
+    expect(results[0].comments?.[0].body).toContain('se reabre')
     expect(rpc).toHaveBeenCalledWith('list_project_bugs', {
       target_project_id: 'project-1',
       result_limit: 500,
     })
+  })
+
+  it('hidrata comentarios e historial del agente aunque list_project_bugs no los incluya', async () => {
+    mockTeamStatus()
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          bugId: 'bug-1',
+          status: 'nuevo',
+          rawBug: {
+            id: 'bug-1',
+            rowIndex: 2,
+            title: 'Filtro roto',
+            description: 'No filtra',
+            rawRow: {},
+            googleDocLinks: [],
+          },
+          analysis: {
+            category: 'frontend',
+            severity: 'medium',
+            confidence: 0.8,
+            affectedArea: 'listado',
+            summary: 'No filtra',
+            rewritten: {
+              observed: 'No filtra',
+              expected: 'Debe filtrar',
+              steps: [],
+              environment: 'dev',
+              problemCount: 1,
+            },
+            missingInformation: [],
+            rawResponse: '{}',
+          },
+          googleDocs: [],
+          processingMs: 12,
+        },
+      ],
+      error: null,
+    })
+    const commentsQuery = {
+      select: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'comment-1',
+            bug_id: 'bug-1',
+            body: '25 de marzo: se reabre.',
+            created_at: '2026-03-25T12:00:00.000Z',
+            updated_at: '2026-03-25T12:00:00.000Z',
+          },
+        ],
+        error: null,
+      }),
+    }
+    const agentRunsQuery = {
+      select: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({
+        data: [
+          {
+            bug_id: 'bug-1',
+            created_at: '2026-03-25T13:00:00.000Z',
+            analysis: {
+              externalAgent: {
+                ok: true,
+                output: 'Análisis guardado',
+                command: 'opencode run',
+                durationMs: 1000,
+              },
+            },
+          },
+        ],
+        error: null,
+      }),
+    }
+    const from = vi
+      .fn()
+      .mockImplementation((table: string) =>
+        table === 'bug_comments' ? commentsQuery : agentRunsQuery,
+      )
+
+    const results = await loadRemoteAnalyzedBugs({ rpc, from } as never, config())
+
+    expect(results[0].comments?.[0].body).toBe('25 de marzo: se reabre.')
+    expect(results[0].analysis.externalAgent?.output).toBe('Análisis guardado')
+    expect(results[0].analysis.externalAgentHistory?.[0].createdAt).toBe('2026-03-25T13:00:00.000Z')
   })
 
   it('mapea una fila remota incompleta con defaults seguros', () => {

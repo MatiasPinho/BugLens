@@ -74,6 +74,7 @@ export interface BugAnalysis {
 
   rawResponse: string
   externalAgent?: ExternalAgentResult
+  externalAgentHistory?: ExternalAgentResult[]
 }
 
 // ─── Análisis delegado a agente externo ──────────────────────────────────────
@@ -93,6 +94,7 @@ export interface ExternalAgentResult {
   workingDirectory?: string
   repositories?: ExternalAgentRepository[]
   durationMs: number
+  createdAt?: string
 }
 
 export interface ExternalAgentProgress {
@@ -115,8 +117,17 @@ export interface AnalyzedBug {
   enriched: EnrichedBug
   analysis: BugAnalysis
   status: BugStatus
+  comments?: BugComment[]
   error?: string
   processingMs: number
+}
+
+export interface BugComment {
+  id: string
+  body: string
+  createdAt: string
+  updatedAt?: string
+  authorEmail?: string
 }
 
 // ─── Config de LLM ────────────────────────────────────────────────────────────

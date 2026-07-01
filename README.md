@@ -35,6 +35,14 @@ trabajar en equipo.
 
 ---
 
+## Dirección de producto
+
+El objetivo principal de integración para BugLens es **Jira**. La evolución del producto
+debe priorizar que los bugs analizados puedan convertirse, sincronizarse o vincularse con
+tickets de Jira, manteniendo el estado y la evidencia útil para QA/dev.
+
+---
+
 ## Requisitos
 
 - Node.js 20+ y npm 9+

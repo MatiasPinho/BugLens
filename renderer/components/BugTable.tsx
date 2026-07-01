@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import type {
   AnalyzedBug,
   BugCategory,
+  BugComment,
   BugStatus,
   DocImage,
   ExternalAgentProgress,
@@ -19,6 +20,7 @@ interface Props {
   onSetStatus?: (bug: AnalyzedBug, status: BugStatus) => void
   onDelete?: (bug: AnalyzedBug) => void
   onAnalyzeExternalAgent?: (bug: AnalyzedBug) => Promise<ExternalAgentResult>
+  onAddComment?: (bug: AnalyzedBug, body: string) => Promise<BugComment>
   focusedId?: string | null
   expandedId?: string | null
   onFocus?: (id: string | null) => void
@@ -443,6 +445,7 @@ export default function BugTable({
   onSetStatus,
   onDelete,
   onAnalyzeExternalAgent,
+  onAddComment,
   focusedId: focusedIdProp,
   expandedId: expandedIdProp,
   onFocus,
@@ -858,6 +861,7 @@ export default function BugTable({
                           onDelete={onDelete ? () => onDelete(r) : undefined}
                           onSetStatus={onSetStatus ? (status) => onSetStatus(r, status) : undefined}
                           onAnalyzeExternalAgent={onAnalyzeExternalAgent}
+                          onAddComment={onAddComment}
                         />
                       </td>
                     </tr>
@@ -1009,12 +1013,14 @@ export function ExpandedDetail({
   onDelete,
   onSetStatus,
   onAnalyzeExternalAgent,
+  onAddComment,
 }: {
   result: AnalyzedBug
   onClose?: () => void
   onDelete?: () => void
   onSetStatus?: (status: BugStatus) => void
   onAnalyzeExternalAgent?: (bug: AnalyzedBug) => Promise<ExternalAgentResult>
+  onAddComment?: (bug: AnalyzedBug, body: string) => Promise<BugComment>
 }) {
   const { enriched, analysis } = result
   const raw = enriched.raw
@@ -1031,7 +1037,12 @@ export function ExpandedDetail({
   const [externalAgentLastOutputAt, setExternalAgentLastOutputAt] = useState<number | null>(null)
   const [externalAgentConfirmOpen, setExternalAgentConfirmOpen] = useState(false)
   const [resolvedSuggestionDismissed, setResolvedSuggestionDismissed] = useState(false)
+  const [comments, setComments] = useState<BugComment[]>(result.comments ?? [])
+  const [commentBody, setCommentBody] = useState('')
+  const [commentSaving, setCommentSaving] = useState(false)
+  const [commentError, setCommentError] = useState('')
   const previousBugIdRef = React.useRef(raw.id)
+  const externalAgentHistory = analysis.externalAgentHistory ?? []
 
   const allImages = enriched.googleDocs.flatMap((d) => d.images ?? [])
   const runExternalAgent =
@@ -1043,11 +1054,15 @@ export function ExpandedDetail({
     if (previousBugIdRef.current !== raw.id) {
       previousBugIdRef.current = raw.id
       setExternalAgentResult(analysis.externalAgent ?? null)
+      setComments(result.comments ?? [])
+      setCommentBody('')
+      setCommentError('')
       setResolvedSuggestionDismissed(false)
       return
     }
     if (analysis.externalAgent) setExternalAgentResult(analysis.externalAgent)
-  }, [analysis.externalAgent, externalAgentRunning, raw.id])
+    setComments(result.comments ?? [])
+  }, [analysis.externalAgent, externalAgentRunning, raw.id, result.comments])
 
   React.useEffect(() => {
     if (!externalAgentRunning || !externalAgentStartedAt) return undefined
@@ -1093,6 +1108,22 @@ export function ExpandedDetail({
     }
   }
 
+  const handleAddComment = async () => {
+    const body = commentBody.trim()
+    if (!body || commentSaving || !onAddComment) return
+    setCommentSaving(true)
+    setCommentError('')
+    try {
+      const comment = await onAddComment(result, body)
+      setComments((prev) => [comment, ...prev])
+      setCommentBody('')
+    } catch (err) {
+      setCommentError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setCommentSaving(false)
+    }
+  }
+
   const externalAgentSilenceMs = externalAgentRunning
     ? Date.now() - (externalAgentLastOutputAt ?? externalAgentStartedAt ?? Date.now())
     : 0
@@ -1119,6 +1150,11 @@ export function ExpandedDetail({
   const resolvedSuggestion = externalAgentResult?.ok
     ? parseResolvedSuggestion(externalAgentResult.output)
     : null
+  const previousExternalAgentRuns = externalAgentHistory.filter(
+    (item) =>
+      item.createdAt !== externalAgentResult?.createdAt ||
+      item.output !== externalAgentResult?.output,
+  )
 
   return (
     <div className="bug-detail space-y-4 p-6">
@@ -1242,6 +1278,10 @@ export function ExpandedDetail({
             />
           )}
 
+          {previousExternalAgentRuns.length > 0 && (
+            <ExternalAgentHistoryPanel items={previousExternalAgentRuns} />
+          )}
+
           {resolvedSuggestion &&
             !resolvedSuggestionDismissed &&
             result.status !== 'solucionado' && (
@@ -1280,6 +1320,16 @@ export function ExpandedDetail({
               <DetailStat label="confianza" value={`${Math.round(analysis.confidence * 100)}%`} />
             </div>
           </SectionCard>
+
+          <BugCommentsCard
+            comments={comments}
+            value={commentBody}
+            saving={commentSaving}
+            error={commentError}
+            canAdd={Boolean(onAddComment)}
+            onChange={setCommentBody}
+            onSubmit={handleAddComment}
+          />
 
           {analysis.missingInformation.length > 0 && (
             <SectionCard title="datos que faltan">
@@ -1456,6 +1506,136 @@ function ExternalAgentPanel({
             </div>
           )}
         </div>
+      </div>
+    </SectionCard>
+  )
+}
+
+function ExternalAgentHistoryPanel({ items }: { items: ExternalAgentResult[] }) {
+  const [expanded, setExpanded] = useState(false)
+  if (items.length === 0) return null
+  const visibleItems = expanded ? items : items.slice(0, 3)
+  const hiddenCount = Math.max(0, items.length - visibleItems.length)
+
+  return (
+    <SectionCard title={`historial del agente (${items.length})`}>
+      <div className="grid gap-3">
+        <div className="grid gap-2">
+          {visibleItems.map((item, index) => (
+            <details
+              key={`${item.createdAt ?? index}-${item.command}`}
+              className="agent-history-item"
+            >
+              <summary className="agent-history-summary">
+                <span>
+                  {item.createdAt ? formatTimelineDate(item.createdAt) : `corrida ${index + 1}`}
+                </span>
+                <span className="agent-history-status">{item.ok ? 'completado' : 'error'}</span>
+              </summary>
+              <div className="agent-history-body">
+                {item.error && (
+                  <p className="mb-2 whitespace-pre-line text-sm" style={{ color: col.red }}>
+                    {item.error}
+                  </p>
+                )}
+                <CloudAgentReport>
+                  {item.output || 'El agente no devolvió salida.'}
+                </CloudAgentReport>
+              </div>
+            </details>
+          ))}
+        </div>
+
+        {items.length > 3 && (
+          <button
+            type="button"
+            className="history-toggle"
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? 'mostrar menos' : `mostrar ${hiddenCount} anteriores`}
+          </button>
+        )}
+      </div>
+    </SectionCard>
+  )
+}
+
+function BugCommentsCard({
+  comments,
+  value,
+  saving,
+  error,
+  canAdd,
+  onChange,
+  onSubmit,
+}: {
+  comments: BugComment[]
+  value: string
+  saving: boolean
+  error: string
+  canAdd: boolean
+  onChange: (value: string) => void
+  onSubmit: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const visibleComments = expanded ? comments : comments.slice(0, 3)
+  const hiddenCount = Math.max(0, comments.length - visibleComments.length)
+
+  return (
+    <SectionCard title={`notas de seguimiento (${comments.length})`}>
+      <div className="grid gap-3">
+        <div className="grid gap-2">
+          <textarea
+            className="input min-h-24 resize-y text-xs"
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Ej: 10/03 se reabre porque volvió a fallar en QA..."
+            disabled={!canAdd || saving}
+          />
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs" style={{ color: error ? col.red : col.fgMuted }}>
+              {error || (canAdd ? 'cada nota queda fechada' : 'sin conexión para guardar notas')}
+            </span>
+            <button
+              type="button"
+              className="btn-mini"
+              onClick={onSubmit}
+              disabled={!canAdd || saving || !value.trim()}
+            >
+              {saving ? 'guardando...' : 'agregar'}
+            </button>
+          </div>
+        </div>
+
+        {comments.length === 0 ? (
+          <p className="text-sm" style={{ color: col.fgMuted }}>
+            Todavía no hay notas para este bug.
+          </p>
+        ) : (
+          <div className="grid gap-3">
+            <div className="bug-comments-list">
+              {visibleComments.map((comment) => (
+                <div key={comment.id} className="bug-comment">
+                  <div className="bug-comment-meta">
+                    <span>{formatTimelineDate(comment.createdAt)}</span>
+                    {comment.authorEmail && <span>{comment.authorEmail}</span>}
+                  </div>
+                  <p className="bug-comment-body">{comment.body}</p>
+                </div>
+              ))}
+            </div>
+
+            {comments.length > 3 && (
+              <button
+                type="button"
+                className="history-toggle"
+                onClick={() => setExpanded((value) => !value)}
+              >
+                {expanded ? 'mostrar menos' : `mostrar ${hiddenCount} anteriores`}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </SectionCard>
   )
@@ -2190,6 +2370,18 @@ function cleanAgentReportText(text: string): string {
     .replace(/`([^`]+)`/g, '$1')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function formatTimelineDate(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
 }
 
 function formatAgentDuration(durationMs: number): string {

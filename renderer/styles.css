@@ -330,6 +330,38 @@
     overflow-wrap: anywhere;
   }
 
+  .bug-comments-list {
+    display: grid;
+    gap: 0.625rem;
+  }
+
+  .bug-comment {
+    display: grid;
+    gap: 0.375rem;
+    border: 1px solid rgb(var(--c-border) / 0.16);
+    border-left: 2px solid rgb(var(--c-cream) / 0.38);
+    border-radius: var(--radius-sm);
+    background: rgb(var(--c-code) / 0.2);
+    padding: 0.625rem;
+  }
+
+  .bug-comment-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem 0.625rem;
+    color: rgb(var(--c-border));
+    font-size: var(--text-2xs);
+    line-height: 1.4;
+  }
+
+  .bug-comment-body {
+    color: rgb(var(--c-fg-dim));
+    font-size: var(--text-xs);
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
   .cloud-agent-panel {
     border: 1px solid rgb(var(--c-cream) / 0.14);
     border-radius: var(--radius-md);
@@ -590,6 +622,55 @@
     color: rgb(var(--c-fg-muted));
     font-size: var(--text-xs);
     line-height: 1.5;
+  }
+
+  .agent-history-item {
+    border: 1px solid rgb(var(--c-border) / 0.16);
+    border-radius: var(--radius-sm);
+    background: rgb(var(--c-code) / 0.18);
+  }
+
+  .agent-history-summary {
+    display: flex;
+    cursor: pointer;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.625rem 0.75rem;
+    color: rgb(var(--c-fg-dim));
+    font-size: var(--text-xs);
+  }
+
+  .agent-history-status {
+    color: rgb(var(--c-border));
+    font-size: var(--text-2xs);
+    text-transform: uppercase;
+  }
+
+  .agent-history-body {
+    border-top: 1px solid rgb(var(--c-border) / 0.14);
+    padding: 0.75rem;
+  }
+
+  .history-toggle {
+    justify-self: start;
+    min-height: var(--ctl-h-sm);
+    border: 1px solid rgb(var(--c-border) / 0.22);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: rgb(var(--c-cream));
+    padding: 0 0.625rem;
+    font-size: var(--text-xs);
+    font-family: inherit;
+    cursor: pointer;
+    transition:
+      border-color 140ms ease,
+      background 140ms ease;
+  }
+
+  .history-toggle:hover {
+    border-color: rgb(var(--c-cream) / 0.32);
+    background: rgb(var(--c-cream) / 0.06);
   }
 
   .agent-running-progress {
