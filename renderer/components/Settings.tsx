@@ -4,7 +4,7 @@ import type { ExternalAgentRepository } from '../../src/types/index'
 import type { LogLine } from '../App'
 import { DEFAULT_OLLAMA_TEXT_MODEL, DEFAULT_OLLAMA_VISION_MODEL } from '../llmOptions'
 import { alpha, col } from '../theme'
-import { IconCheck, IconX } from './icons'
+import { IconCheck, IconRestore, IconX } from './icons'
 import PerformanceModePicker, { type PerformanceMode } from './PerformanceModePicker'
 import type { TeamAuthStatus } from './TeamLogin'
 
@@ -121,6 +121,15 @@ function normalizeExternalAgentRepositories(
   return legacyPath ? [{ path: legacyPath, branch: '' }] : []
 }
 
+function openCodeErrorStatus(error: unknown): OpenCodeStatus {
+  return {
+    installed: false,
+    hasBigPickle: false,
+    model: 'opencode/big-pickle',
+    error: error instanceof Error ? error.message : String(error),
+  }
+}
+
 export default function Settings({ addLog, onTeamStatusChange }: Props) {
   const [settings, setSettings] = useState<SettingsData>({
     googleClientId: '',
@@ -182,7 +191,12 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
     window.electronAPI.getBrowserAuthStatus().then(setBrowserAuth)
     window.electronAPI.getSupabaseStatus().then(setSupabaseStatus)
     window.electronAPI.checkOllama().then(setOllamaStatus)
-    window.electronAPI.checkOpenCode().then(setOpenCodeStatus)
+    setCheckingOpenCode(true)
+    window.electronAPI
+      .checkOpenCode()
+      .then(setOpenCodeStatus)
+      .catch((error: unknown) => setOpenCodeStatus(openCodeErrorStatus(error)))
+      .finally(() => setCheckingOpenCode(false))
     window.electronAPI.cacheStats().then(setCacheStats)
   }, [])
 
@@ -360,7 +374,7 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
 
   const checkOpenCode = async () => {
     setCheckingOpenCode(true)
-    const status = await window.electronAPI.checkOpenCode()
+    const status = await window.electronAPI.checkOpenCode().catch(openCodeErrorStatus)
     setOpenCodeStatus(status)
     setCheckingOpenCode(false)
     addLog(
@@ -721,36 +735,48 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
                       )}
                     </div>
                   </div>
-                  {openCodeStatus && (
-                    <div className="mt-2 grid gap-1 font-mono text-xs">
-                      <span
-                        style={{
-                          color:
-                            openCodeStatus.installed && openCodeStatus.hasBigPickle
-                              ? col.fgDim
-                              : col.red,
-                        }}
-                      >
-                        {openCodeStatus.installed
-                          ? `opencode ${openCodeStatus.version ?? ''} · ${
-                              openCodeStatus.hasBigPickle
-                                ? 'big-pickle disponible'
-                                : 'modelo faltante'
-                            }`
-                          : 'opencode no instalado'}
-                      </span>
-                      {openCodeStatus.commandPath && (
-                        <span style={{ color: col.fgMuted }}>{openCodeStatus.commandPath}</span>
-                      )}
-                      {openCodeStatus.pathAdded && openCodeStatus.pathAdded.length > 0 && (
-                        <span style={{ color: col.fgMuted }}>
-                          PATH reparado: {openCodeStatus.pathAdded.join('; ')}
-                        </span>
-                      )}
-                      {openCodeStatus.error && (
-                        <span style={{ color: col.red }}>{openCodeStatus.error}</span>
-                      )}
+                  {checkingOpenCode ? (
+                    <div
+                      className="mt-2 inline-flex items-center gap-1.5 font-mono text-xs"
+                      role="status"
+                      aria-live="polite"
+                      style={{ color: col.fgMuted }}
+                    >
+                      <IconRestore size={12} className="animate-spin" />
+                      verificando instalación...
                     </div>
+                  ) : (
+                    openCodeStatus && (
+                      <div className="mt-2 grid gap-1 font-mono text-xs">
+                        <span
+                          style={{
+                            color:
+                              openCodeStatus.installed && openCodeStatus.hasBigPickle
+                                ? col.fgDim
+                                : col.red,
+                          }}
+                        >
+                          {openCodeStatus.installed
+                            ? `opencode ${openCodeStatus.version ?? ''} · ${
+                                openCodeStatus.hasBigPickle
+                                  ? 'big-pickle disponible'
+                                  : 'modelo faltante'
+                              }`
+                            : 'opencode no instalado'}
+                        </span>
+                        {openCodeStatus.commandPath && (
+                          <span style={{ color: col.fgMuted }}>{openCodeStatus.commandPath}</span>
+                        )}
+                        {openCodeStatus.pathAdded && openCodeStatus.pathAdded.length > 0 && (
+                          <span style={{ color: col.fgMuted }}>
+                            PATH reparado: {openCodeStatus.pathAdded.join('; ')}
+                          </span>
+                        )}
+                        {openCodeStatus.error && (
+                          <span style={{ color: col.red }}>{openCodeStatus.error}</span>
+                        )}
+                      </div>
+                    )
                   )}
                 </div>
 
