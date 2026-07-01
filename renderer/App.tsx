@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import type { ManualBugFields } from '../src/pipeline/manualBugBuilder'
 import type {
   AnalyzedBug,
+  BugComment,
   BugResultEvent,
   BugStatus,
   ExternalAgentResult,
@@ -371,13 +372,46 @@ export default function App() {
       setResults((prev) =>
         prev.map((item) =>
           item.enriched.raw.id === bug.enriched.raw.id
-            ? { ...item, analysis: { ...item.analysis, externalAgent: result } }
+            ? {
+                ...item,
+                analysis: {
+                  ...item.analysis,
+                  externalAgent: result,
+                  externalAgentHistory: [
+                    result,
+                    ...(item.analysis.externalAgentHistory ?? []).filter(
+                      (entry) =>
+                        entry.createdAt !== result.createdAt || entry.output !== result.output,
+                    ),
+                  ],
+                },
+              }
             : item,
         ),
       )
       return result
     },
     [],
+  )
+
+  const handleAddBugComment = useCallback(
+    async (bug: AnalyzedBug, body: string): Promise<BugComment> => {
+      const result = await window.electronAPI.addBugComment(bug, body)
+      if (!result.ok || !result.comment) {
+        throw new Error(result.error ?? 'No se pudo guardar el comentario.')
+      }
+      const savedComment = result.comment
+      setResults((prev) =>
+        prev.map((item) =>
+          item.enriched.raw.id === bug.enriched.raw.id
+            ? { ...item, comments: [savedComment, ...(item.comments ?? [])] }
+            : item,
+        ),
+      )
+      addLog('info', `nota guardada: ${bug.enriched.raw.title}`)
+      return result.comment
+    },
+    [addLog],
   )
 
   // ─── Keyboard shortcuts ────────────────────────────────────────────────────
@@ -735,6 +769,7 @@ export default function App() {
                       onSetStatus={handleSetStatus}
                       onDelete={handleDeleteBug}
                       onAnalyzeExternalAgent={handleAnalyzeExternalAgent}
+                      onAddComment={handleAddBugComment}
                       focusedId={focusedBugId}
                       expandedId={expandedBugId}
                       onFocus={setFocusedBugId}

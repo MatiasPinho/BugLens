@@ -578,6 +578,117 @@ describe('BugTable — agente externo', () => {
     ).toBeInTheDocument()
   })
 
+  it('muestra notas fechadas y permite agregar una nueva sin ocultar historial del agente', async () => {
+    const bug = makeBug({ id: 'a', title: 'Seguimiento' })
+    bug.comments = [
+      {
+        id: 'comment-1',
+        body: '10 de marzo: se reabre porque QA volvió a reproducirlo.',
+        createdAt: '2026-03-10T12:00:00.000Z',
+        authorEmail: 'qa@example.com',
+      },
+      {
+        id: 'comment-2',
+        body: '09 de marzo: se solicita evidencia adicional.',
+        createdAt: '2026-03-09T12:00:00.000Z',
+      },
+      {
+        id: 'comment-3',
+        body: '08 de marzo: QA confirma ambiente.',
+        createdAt: '2026-03-08T12:00:00.000Z',
+      },
+      {
+        id: 'comment-4',
+        body: '07 de marzo: primera revisión del equipo.',
+        createdAt: '2026-03-07T12:00:00.000Z',
+      },
+    ]
+    bug.analysis.externalAgent = {
+      ok: true,
+      output: '## Resumen\nAnálisis actual',
+      command: 'opencode run',
+      durationMs: 1000,
+      createdAt: '2026-03-25T12:00:00.000Z',
+    }
+    bug.analysis.externalAgentHistory = [
+      bug.analysis.externalAgent,
+      {
+        ok: true,
+        output: '## Resumen\nAnálisis anterior 1',
+        command: 'opencode run',
+        durationMs: 900,
+        createdAt: '2026-03-24T12:00:00.000Z',
+      },
+      {
+        ok: true,
+        output: '## Resumen\nAnálisis anterior 2',
+        command: 'opencode run',
+        durationMs: 900,
+        createdAt: '2026-03-23T12:00:00.000Z',
+      },
+      {
+        ok: true,
+        output: '## Resumen\nAnálisis anterior 3',
+        command: 'opencode run',
+        durationMs: 900,
+        createdAt: '2026-03-22T12:00:00.000Z',
+      },
+      {
+        ok: true,
+        output: '## Resumen\nAnálisis anterior 4',
+        command: 'opencode run',
+        durationMs: 900,
+        createdAt: '2026-03-21T12:00:00.000Z',
+      },
+      {
+        ok: true,
+        output: '## Resumen\nAnálisis anterior 5',
+        command: 'opencode run',
+        durationMs: 900,
+        createdAt: '2026-03-20T12:00:00.000Z',
+      },
+    ]
+    const onAddComment = vi.fn().mockResolvedValue({
+      id: 'comment-2',
+      body: '25 de marzo: se vuelve a abrir por regresión.',
+      createdAt: '2026-03-25T12:00:00.000Z',
+      authorEmail: 'dev@example.com',
+    })
+
+    render(
+      <BugTable results={[bug]} onAnalyzeExternalAgent={vi.fn()} onAddComment={onAddComment} />,
+    )
+    await userEvent.click(screen.getByText('Seguimiento'))
+
+    expect(screen.getByText(/10 de marzo: se reabre/)).toBeInTheDocument()
+    expect(screen.getByText(/08 de marzo: QA confirma/)).toBeInTheDocument()
+    expect(screen.queryByText(/07 de marzo: primera revisión/)).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'mostrar 1 anteriores' })).toHaveLength(1)
+    await userEvent.click(screen.getByRole('button', { name: 'mostrar 1 anteriores' }))
+    expect(screen.getByText(/07 de marzo: primera revisión/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'mostrar menos' }))
+    expect(screen.queryByText(/07 de marzo: primera revisión/)).not.toBeInTheDocument()
+
+    expect(screen.getByText('historial del agente (5)')).toBeInTheDocument()
+    expect(document.querySelectorAll('.agent-history-item')).toHaveLength(3)
+    expect(screen.getByRole('button', { name: 'mostrar 2 anteriores' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'mostrar 2 anteriores' }))
+    expect(document.querySelectorAll('.agent-history-item')).toHaveLength(5)
+    await userEvent.click(screen.getByRole('button', { name: 'mostrar menos' }))
+    expect(document.querySelectorAll('.agent-history-item')).toHaveLength(3)
+    await userEvent.click(screen.getByText(/24.*mar.*2026/i))
+    expect(screen.getByText('Análisis anterior 1')).toBeInTheDocument()
+
+    await userEvent.type(
+      screen.getByPlaceholderText(/10\/03 se reabre/),
+      '25 de marzo: se vuelve a abrir por regresión.',
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'agregar' }))
+
+    expect(onAddComment).toHaveBeenCalledWith(bug, '25 de marzo: se vuelve a abrir por regresión.')
+    expect(await screen.findByText(/25 de marzo: se vuelve a abrir/)).toBeInTheDocument()
+  })
+
   it('muestra el error del agente externo dentro del detalle', async () => {
     const onAnalyzeExternalAgent = vi.fn().mockResolvedValue({
       ok: false,

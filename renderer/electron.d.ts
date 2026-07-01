@@ -1,6 +1,7 @@
 import type { ManualBugFields } from '../src/pipeline/manualBugBuilder'
 import type {
   AnalyzedBug,
+  BugComment,
   ExternalAgentProgress,
   ExternalAgentRepository,
   ExternalAgentResult,
@@ -89,6 +90,10 @@ interface ElectronAPI {
 
   // Estado de bugs (persistente)
   setBugStatus(bug: AnalyzedBug, status: string): Promise<{ ok: boolean; error?: string }>
+  addBugComment(
+    bug: AnalyzedBug,
+    body: string,
+  ): Promise<{ ok: boolean; comment?: BugComment; error?: string }>
   deleteBug(bug: AnalyzedBug): Promise<{ ok: boolean; error?: string }>
   analyzeWithExternalAgent(bug: AnalyzedBug): Promise<ExternalAgentResult>
   onExternalAgentProgress(cb: (event: ExternalAgentProgress) => void): () => void

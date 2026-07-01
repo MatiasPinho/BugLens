@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AnalyzedBug,
+  BugComment,
   ExternalAgentProgress,
   ExternalAgentResult,
   IPCEvent,
@@ -43,6 +44,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Estado de bugs (persistente)
   setBugStatus: (bug: AnalyzedBug, status: string) =>
     ipcRenderer.invoke('bug:set-status', { bug, status }),
+  addBugComment: (
+    bug: AnalyzedBug,
+    body: string,
+  ): Promise<{ ok: boolean; comment?: BugComment; error?: string }> =>
+    ipcRenderer.invoke('bug:add-comment', { bug, body }),
   deleteBug: (bug: AnalyzedBug) => ipcRenderer.invoke('bug:delete', { bug }),
   analyzeWithExternalAgent: (bug: AnalyzedBug): Promise<ExternalAgentResult> =>
     ipcRenderer.invoke('bug:analyze-external-agent', { bug }),
