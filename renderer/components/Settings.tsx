@@ -40,6 +40,18 @@ interface ExternalAgentPreset {
   legacyCommands?: string[]
 }
 
+interface OpenCodeStatus {
+  installed: boolean
+  version?: string
+  hasBigPickle: boolean
+  model: string
+  commandPath?: string
+  pathAdded?: string[]
+  installedPackage?: boolean
+  output?: string
+  error?: string
+}
+
 const EXTERNAL_AGENT_PRESETS: ExternalAgentPreset[] = [
   {
     id: 'codex',
@@ -62,8 +74,17 @@ const EXTERNAL_AGENT_PRESETS: ExternalAgentPreset[] = [
   {
     id: 'opencode',
     name: 'OpenCode',
-    command: 'opencode run "$(cat {promptFile})"',
-    legacyCommands: ['cd ~ && opencode run "$(cat {promptFile})"'],
+    command:
+      'opencode run --model opencode/big-pickle "Analizá el bug adjunto siguiendo las instrucciones del archivo." --file {promptFile}',
+    legacyCommands: [
+      'cd ~ && opencode run "$(cat {promptFile})"',
+      'opencode run "$(cat {promptFile})"',
+      'opencode run --file {promptFile} "Analizá el bug adjunto siguiendo las instrucciones del archivo."',
+      'opencode run --model openrouter/nvidia/nemotron-3-ultra-550b-a55b:free --file {promptFile} "Analizá el bug adjunto siguiendo las instrucciones del archivo."',
+      'opencode run --model openrouter/nvidia/nemotron-3-ultra-550b-a55b:free "Analizá el bug adjunto siguiendo las instrucciones del archivo." --file {promptFile}',
+      'opencode run --model nvidia/nemotron-3-ultra-550b-a55b:free "Analizá el bug adjunto siguiendo las instrucciones del archivo." --file {promptFile}',
+      'opencode run --model nvidia/nemotron-3-ultra-550b-a55b "Analizá el bug adjunto siguiendo las instrucciones del archivo." --file {promptFile}',
+    ],
     description: 'usa OpenCode Zen desde tu configuración global',
   },
 ]
@@ -123,6 +144,9 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
   const [saved, setSaved] = useState(false)
   const [cacheStats, setCacheStats] = useState<{ count: number; sizeKB: number } | null>(null)
   const [clearingCache, setClearingCache] = useState(false)
+  const [openCodeStatus, setOpenCodeStatus] = useState<OpenCodeStatus | null>(null)
+  const [checkingOpenCode, setCheckingOpenCode] = useState(false)
+  const [repairingOpenCode, setRepairingOpenCode] = useState(false)
   const [googleAuth, setGoogleAuth] = useState<{ authenticated: boolean } | null>(null)
   const [browserAuth, setBrowserAuth] = useState<{ authenticated: boolean } | null>(null)
   const [authLoading, setAuthLoading] = useState(false)
@@ -136,6 +160,7 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
   } | null>(null)
   const [showOAuth, setShowOAuth] = useState(false)
   const analyzeImages = settings.llmVisionModel.trim().length > 0
+  const openCodeReady = Boolean(openCodeStatus?.installed && openCodeStatus.hasBigPickle)
 
   useEffect(() => {
     window.electronAPI.getSettings().then((s: SettingsData) => {
@@ -157,6 +182,7 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
     window.electronAPI.getBrowserAuthStatus().then(setBrowserAuth)
     window.electronAPI.getSupabaseStatus().then(setSupabaseStatus)
     window.electronAPI.checkOllama().then(setOllamaStatus)
+    window.electronAPI.checkOpenCode().then(setOpenCodeStatus)
     window.electronAPI.cacheStats().then(setCacheStats)
   }, [])
 
@@ -330,6 +356,33 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
       const status = await window.electronAPI.checkOllama()
       setOllamaStatus(status)
     }
+  }
+
+  const checkOpenCode = async () => {
+    setCheckingOpenCode(true)
+    const status = await window.electronAPI.checkOpenCode()
+    setOpenCodeStatus(status)
+    setCheckingOpenCode(false)
+    addLog(
+      status.installed && status.hasBigPickle ? 'info' : 'warn',
+      status.installed
+        ? `opencode ${status.version ?? ''} · ${status.hasBigPickle ? 'big-pickle disponible' : 'big-pickle no disponible'}`
+        : `opencode no disponible: ${status.error ?? 'sin detalle'}`,
+    )
+  }
+
+  const repairOpenCode = async () => {
+    setRepairingOpenCode(true)
+    addLog('info', 'preparando opencode...')
+    const status = await window.electronAPI.repairOpenCode()
+    setOpenCodeStatus(status)
+    setRepairingOpenCode(false)
+    addLog(
+      status.ok ? 'info' : 'error',
+      status.ok
+        ? `opencode listo: ${status.version ?? 'versión detectada'} · ${status.model}`
+        : `no se pudo preparar opencode: ${status.error ?? 'sin detalle'}`,
+    )
   }
 
   return (
@@ -622,6 +675,85 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
               description="Ejecuta el agente instalado en la terminal del usuario y muestra la salida en el detalle del bug."
             >
               <div className="grid gap-3">
+                <div
+                  className="rounded p-3"
+                  style={{ border: `1px solid ${alpha(col.border, 0.22)}` }}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium text-xs" style={{ color: col.fg }}>
+                        OpenCode
+                      </div>
+                      <p className="mt-1 text-xs" style={{ color: col.fgMuted }}>
+                        Modelo requerido: {openCodeStatus?.model ?? 'opencode/big-pickle'}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className="btn-secondary text-xs"
+                        onClick={checkOpenCode}
+                        disabled={checkingOpenCode || repairingOpenCode}
+                      >
+                        {checkingOpenCode ? 'verificando...' : 'verificar'}
+                      </button>
+                      {openCodeReady ? (
+                        <span
+                          className="inline-flex items-center gap-1.5 text-xs"
+                          style={{ color: col.fgDim }}
+                        >
+                          <IconCheck size={12} />
+                          listo
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-primary text-xs"
+                          onClick={repairOpenCode}
+                          disabled={repairingOpenCode || checkingOpenCode}
+                        >
+                          {repairingOpenCode
+                            ? 'preparando...'
+                            : openCodeStatus?.installed
+                              ? 'reparar modelo'
+                              : 'instalar opencode'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {openCodeStatus && (
+                    <div className="mt-2 grid gap-1 font-mono text-xs">
+                      <span
+                        style={{
+                          color:
+                            openCodeStatus.installed && openCodeStatus.hasBigPickle
+                              ? col.fgDim
+                              : col.red,
+                        }}
+                      >
+                        {openCodeStatus.installed
+                          ? `opencode ${openCodeStatus.version ?? ''} · ${
+                              openCodeStatus.hasBigPickle
+                                ? 'big-pickle disponible'
+                                : 'modelo faltante'
+                            }`
+                          : 'opencode no instalado'}
+                      </span>
+                      {openCodeStatus.commandPath && (
+                        <span style={{ color: col.fgMuted }}>{openCodeStatus.commandPath}</span>
+                      )}
+                      {openCodeStatus.pathAdded && openCodeStatus.pathAdded.length > 0 && (
+                        <span style={{ color: col.fgMuted }}>
+                          PATH reparado: {openCodeStatus.pathAdded.join('; ')}
+                        </span>
+                      )}
+                      {openCodeStatus.error && (
+                        <span style={{ color: col.red }}>{openCodeStatus.error}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <label className="label" htmlFor="settings-external-agent-preset">
                     agente

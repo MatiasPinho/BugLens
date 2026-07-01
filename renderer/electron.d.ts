@@ -118,6 +118,27 @@ interface ElectronAPI {
     detail: string
     model?: string
   }>
+  checkOpenCode(): Promise<{
+    installed: boolean
+    version?: string
+    hasBigPickle: boolean
+    model: string
+    commandPath?: string
+    pathAdded?: string[]
+    error?: string
+  }>
+  repairOpenCode(): Promise<{
+    ok: boolean
+    installed: boolean
+    version?: string
+    hasBigPickle: boolean
+    model: string
+    commandPath?: string
+    pathAdded?: string[]
+    installedPackage?: boolean
+    output?: string
+    error?: string
+  }>
 
   // Events — return cleanup function
   onProgress(cb: (event: IPCEvent) => void): () => void

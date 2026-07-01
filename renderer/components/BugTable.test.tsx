@@ -541,6 +541,43 @@ describe('BugTable — agente externo', () => {
     expect(screen.queryByText('parece que está resuelto')).not.toBeInTheDocument()
   })
 
+  it('limpia trazas del agente y separa el estado compacto del reporte externo', async () => {
+    const bug = makeBug({ id: 'a', title: 'Salida compacta' })
+    bug.analysis.externalAgent = {
+      ok: true,
+      output: [
+        'Ahora tengo suficiente contexto. Éste es mi análisis:',
+        '',
+        'RESUMEN',
+        'El bug requiere revisar el dropdown.',
+        '',
+        'ESTADO PROBABLE DEL BUG',
+        'Estado probable: parcialmente_resuelto Coincide con el bug reportado: parcial Motivo: el endpoint correcto está en template, pero queda una carga redundante.',
+        '',
+        'PRÓXIMOS PASOS',
+        '- Verificar IDs reales.',
+        '- > buglens · big-pickle',
+      ].join('\n'),
+      command: 'opencode run',
+      durationMs: 3000,
+    }
+
+    render(<BugTable results={[bug]} onAnalyzeExternalAgent={vi.fn()} />)
+    await userEvent.click(screen.getByText('Salida compacta'))
+
+    expect(screen.queryByText(/Ahora tengo suficiente contexto/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/buglens · big-pickle/)).not.toBeInTheDocument()
+    expect(screen.getByText('Resumen')).toBeInTheDocument()
+    expect(screen.getByText('Estado probable del bug')).toBeInTheDocument()
+    expect(screen.getByText(/Estado probable:\s*parcialmente_resuelto/)).toBeInTheDocument()
+    expect(screen.getByText(/Coincide con el bug reportado:\s*parcial/)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Motivo:\s*el endpoint correcto está en template, pero queda una carga redundante/,
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('muestra el error del agente externo dentro del detalle', async () => {
     const onAnalyzeExternalAgent = vi.fn().mockResolvedValue({
       ok: false,

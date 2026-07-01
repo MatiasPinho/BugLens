@@ -1780,9 +1780,10 @@ function parseAgentReport(output: string): AgentReportBlock[] {
     references = []
   }
 
-  for (const rawLine of output.split(/\r?\n/)) {
+  for (const rawLine of normalizeAgentReportOutput(output).split(/\r?\n/)) {
     const line = rawLine.trim()
     const heading = line.match(/^#{1,6}\s+(.+)$/)
+    const plainHeading = !heading && isPlainAgentSectionHeading(line) ? line : ''
     if (/^TODOS$/i.test(line)) {
       flushParagraph()
       flushList()
@@ -1793,8 +1794,8 @@ function parseAgentReport(output: string): AgentReportBlock[] {
       skippingTodoBlock = true
       continue
     }
-    if (skippingTodoBlock && !heading) continue
-    if (heading) skippingTodoBlock = false
+    if (skippingTodoBlock && !heading && !plainHeading) continue
+    if (heading || plainHeading) skippingTodoBlock = false
     if (isAgentOperationalTrace(line) || isAgentFillerLine(line)) {
       flushParagraph()
       flushList()
@@ -1825,14 +1826,16 @@ function parseAgentReport(output: string): AgentReportBlock[] {
       continue
     }
 
-    if (heading) {
+    if (heading || plainHeading) {
       flushParagraph()
       flushList()
       flushTable()
       flushInsights()
       flushCoverage()
       flushReferences()
-      const headingText = cleanAgentReportText(heading[1])
+      const headingText = heading?.[1]
+        ? cleanAgentReportText(heading[1])
+        : canonicalAgentSectionHeading(plainHeading)
       currentSection = normalizeAgentSection(headingText)
       blocks.push({ type: 'heading', text: headingText })
       continue
@@ -1936,9 +1939,16 @@ function parseAgentReport(output: string): AgentReportBlock[] {
   return blocks
 }
 
+function normalizeAgentReportOutput(output: string): string {
+  return output
+    .replace(/\s+(Coincide con el bug reportado:)/gi, '\n$1')
+    .replace(/\s+(Motivo:)/gi, '\n$1')
+}
+
 function isAgentOperationalTrace(line: string): boolean {
   if (!line) return false
   if (/^>\s*build\s*[·-]/i.test(line)) return true
+  if (/^(?:[-*]\s*)?>\s*(?:buglens|opencode)\s*[·-]/i.test(line)) return true
   if (/^[→✱✓•]\s+/.test(line)) return true
   if (/\b(Read|Glob|Grep|Explore Agent)\b/.test(line) && /[→✱✓•]/.test(line)) return true
   if (/^✗\s*Invalid Tool\b/i.test(line)) return true
@@ -1949,8 +1959,31 @@ function isAgentOperationalTrace(line: string): boolean {
 function isAgentFillerLine(line: string): boolean {
   return (
     /^ahora tengo suficiente información/i.test(line) ||
+    /^ahora tengo suficiente contexto/i.test(line) ||
+    /^este es mi análisis:?$/i.test(line) ||
     /^(now let me|let me|i(?:'|’)ll|i will|i need to|next,? i|first,? i)\b/i.test(line)
   )
+}
+
+function isPlainAgentSectionHeading(line: string): boolean {
+  if (!line || /[.:]$/.test(line)) return false
+  return Boolean(AGENT_SECTION_HEADINGS[normalizeAgentSection(line)])
+}
+
+const AGENT_SECTION_HEADINGS: Record<string, string> = {
+  resumen: 'Resumen',
+  evidencia: 'Evidencia',
+  'cobertura de los pasos reportados': 'Cobertura de los pasos reportados',
+  'diagnostico probable': 'Diagnóstico probable',
+  'archivos o areas a revisar': 'Archivos o áreas a revisar',
+  'hallazgos laterales': 'Hallazgos laterales',
+  'estado probable del bug': 'Estado probable del bug',
+  'proximos pasos': 'Próximos pasos',
+  'informacion faltante': 'Información faltante',
+}
+
+function canonicalAgentSectionHeading(line: string): string {
+  return AGENT_SECTION_HEADINGS[normalizeAgentSection(line)] ?? cleanAgentReportText(line)
 }
 
 function normalizeAgentSection(text: string): string {
