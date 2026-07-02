@@ -20,8 +20,7 @@ describe('ProjectSwitcher', () => {
       />,
     )
 
-    await userEvent.click(screen.getByLabelText('proyecto activo'))
-    await userEvent.click(screen.getByRole('option', { name: 'cliente / cliente' }))
+    await userEvent.selectOptions(screen.getByLabelText('proyecto activo'), 'project-2')
 
     expect(onSelect).toHaveBeenCalledWith('project-2')
   })
