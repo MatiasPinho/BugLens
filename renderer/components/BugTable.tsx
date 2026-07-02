@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import type {
   AnalyzedBug,
   BugCategory,
@@ -13,7 +13,6 @@ import { alpha, col, sz } from '../theme'
 import { ActionModal, ConfirmActionModal } from './ActionModal'
 import { BugUnderLensMark } from './decor/BugMotifs'
 import { IconCheck, IconHelp, IconInfo, IconWarning, IconX } from './icons'
-import SystemSelect from './SystemSelect'
 
 interface Props {
   results: AnalyzedBug[]
@@ -60,9 +59,9 @@ export const statusStyle: Record<
 > = {
   nuevo: {
     label: 'nuevo',
-    text: col.fgDim,
-    bg: alpha(col.fgDim, 0.08),
-    border: alpha(col.fgDim, 0.22),
+    text: col.cream,
+    bg: alpha(col.cream, 0.06),
+    border: alpha(col.cream, 0.18),
   },
   en_progreso: {
     label: 'en progreso',
@@ -103,10 +102,6 @@ const STATUS_OPTIONS: BugStatus[] = [
 // reproducir). La pestaña 'activos' es la vista por defecto.
 const ACTIVE_STATUSES: BugStatus[] = ['nuevo', 'en_progreso']
 const HISTORIC_STATUSES: BugStatus[] = ['solucionado', 'cerrado', 'no_replicado']
-const PAGE_SIZE_OPTIONS = ['auto', 10, 25, 50] as const
-type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number]
-const TABLE_HEADER_HEIGHT = 38
-const COLLAPSED_ROW_HEIGHT = 70
 
 export function isActiveStatus(status: BugStatus): boolean {
   return status === 'nuevo' || status === 'en_progreso'
@@ -119,6 +114,9 @@ const LIFECYCLE_TABS: { key: LifecycleTab; label: string }[] = [
   { key: 'historicos', label: 'históricos' },
   { key: 'todos', label: 'todos' },
 ]
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
+type PageSize = (typeof PAGE_SIZE_OPTIONS)[number]
 
 // Control segmentado para elegir el ciclo de vida. Sigue el patrón ARIA tablist:
 // una sola parada de tab (roving tabindex), flechas/Home/End mueven la selección
@@ -211,16 +209,20 @@ export function StatusSelect({
 }) {
   const st = statusStyle[status]
   return (
-    <SystemSelect
+    <select
       value={status}
-      ariaLabel="estado del bug"
-      onChange={(nextStatus) => onChange(nextStatus as BugStatus)}
-      className="status-select-wrap"
-      triggerClassName="status-select"
-      triggerStyle={{ color: st.text, backgroundColor: st.bg, border: `1px solid ${st.border}` }}
-      stopPropagation
-      options={STATUS_OPTIONS.map((s) => ({ value: s, label: statusStyle[s].label }))}
-    />
+      aria-label="estado del bug"
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => onChange(e.target.value as BugStatus)}
+      className="status-select cursor-pointer rounded px-1.5 py-0.5 font-mono text-xs"
+      style={{ color: st.text, backgroundColor: st.bg, border: `1px solid ${st.border}` }}
+    >
+      {STATUS_OPTIONS.map((s) => (
+        <option key={s} value={s}>
+          {statusStyle[s].label}
+        </option>
+      ))}
+    </select>
   )
 }
 
@@ -417,6 +419,138 @@ export function SectionCard({
   )
 }
 
+function PageArrowIcon({ direction }: { direction: 'previous' | 'next' }) {
+  return (
+    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <path
+        d={direction === 'previous' ? 'M7.5 2.5 4 6l3.5 3.5' : 'M4.5 2.5 8 6 4.5 9.5'}
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function PaginationBar({
+  page,
+  totalPages,
+  pageSize,
+  totalItems,
+  startItem,
+  endItem,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number
+  totalPages: number
+  pageSize: PageSize
+  totalItems: number
+  startItem: number
+  endItem: number
+  onPageChange: (page: number) => void
+  onPageSizeChange: (pageSize: PageSize) => void
+}) {
+  const canGoPrevious = page > 1
+  const canGoNext = page < totalPages
+
+  return (
+    <nav
+      aria-label="paginación de bugs"
+      className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-y px-4 py-2.5"
+      style={{
+        borderColor: alpha(col.cream, 0.18),
+        background: col.surface,
+      }}
+    >
+      <div className="flex items-center gap-2 font-mono text-xs" style={{ color: col.fgMuted }}>
+        <span
+          aria-live="polite"
+          aria-atomic="true"
+          className="inline-flex items-center rounded border px-2 py-1 tabular-nums"
+          style={{
+            color: col.cream,
+            background: alpha(col.cream, 0.06),
+            borderColor: alpha(col.cream, 0.18),
+          }}
+        >
+          {totalItems === 0
+            ? '0 bugs'
+            : `${startItem}-${endItem} de ${totalItems} bug${totalItems === 1 ? '' : 's'}`}
+        </span>
+        <span aria-hidden="true" style={{ color: col.dim }}>
+          ·
+        </span>
+        <label className="flex items-center gap-1.5">
+          <span>por página</span>
+          <select
+            aria-label="bugs por página"
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value) as PageSize)}
+            className="input w-20 cursor-pointer py-1 pr-6 pl-2 font-mono text-xs"
+          >
+            {PAGE_SIZE_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="flex items-center gap-2 font-mono text-xs" style={{ color: col.fgMuted }}>
+        <span
+          className="inline-flex items-center rounded border px-2 py-1 tabular-nums"
+          aria-live="polite"
+          aria-atomic="true"
+          style={{
+            color: col.fg,
+            background: alpha(col.raised, 0.78),
+            borderColor: alpha(col.border, 0.32),
+          }}
+        >
+          página {page} de {totalPages}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label="página anterior"
+            title="página anterior"
+            className="btn-mini"
+            disabled={!canGoPrevious}
+            onClick={() => onPageChange(page - 1)}
+            style={{
+              color: canGoPrevious ? col.fgMuted : col.dim,
+              borderColor: canGoPrevious ? alpha(col.border, 0.32) : alpha(col.border, 0.16),
+              background: canGoPrevious ? alpha(col.raised, 0.82) : alpha(col.base, 0.35),
+              cursor: canGoPrevious ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <PageArrowIcon direction="previous" />
+          </button>
+          <button
+            type="button"
+            aria-label="página siguiente"
+            title="página siguiente"
+            className="btn-mini"
+            disabled={!canGoNext}
+            onClick={() => onPageChange(page + 1)}
+            style={{
+              color: canGoNext ? col.fgMuted : col.dim,
+              borderColor: canGoNext ? alpha(col.border, 0.32) : alpha(col.border, 0.16),
+              background: canGoNext ? alpha(col.raised, 0.82) : alpha(col.base, 0.35),
+              cursor: canGoNext ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <PageArrowIcon direction="next" />
+          </button>
+        </div>
+      </div>
+    </nav>
+  )
+}
+
 // ─── Screen grouping key ──────────────────────────────────────────────────────
 // La pantalla se deriva del REPORTE original (estable): ruta de una URL de la
 // fila → título → área del análisis.
@@ -472,10 +606,8 @@ export default function BugTable({
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
-  const [pageSize, setPageSize] = useState<PageSizeOption>('auto')
-  const [autoPageSize, setAutoPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState<PageSize>(25)
   const [currentPage, setCurrentPage] = useState(1)
-  const tableViewportRef = React.useRef<HTMLDivElement | null>(null)
 
   // Cambiar de pestaña limpia el filtro de estado (evita un filtro fuera de la
   // pestaña, ej. quedar en 'solucionado' al volver a 'activos').
@@ -520,46 +652,27 @@ export default function BugTable({
       .sort((a, b) => severityOrder[a.analysis.severity] - severityOrder[b.analysis.severity])
   }, [results, lifecycle, filterCategory, filterSeverity, filterStatus, search])
 
-  const effectivePageSize = pageSize === 'auto' ? autoPageSize : pageSize
-  const pageCount = Math.max(1, Math.ceil(filtered.length / effectivePageSize))
-  const activePage = Math.min(currentPage, pageCount)
-  const pageStartIndex = filtered.length === 0 ? 0 : (activePage - 1) * effectivePageSize
-  const pageEndIndex = Math.min(pageStartIndex + effectivePageSize, filtered.length)
-  const visibleResults = useMemo(
+  const categories = useMemo(() => [...new Set(results.map((r) => r.analysis.category))], [results])
+  const severities = useMemo(() => [...new Set(results.map((r) => r.analysis.severity))], [results])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const pageStartIndex = filtered.length === 0 ? 0 : (safeCurrentPage - 1) * pageSize
+  const pageEndIndex = Math.min(pageStartIndex + pageSize, filtered.length)
+  const pageStartItem = filtered.length === 0 ? 0 : pageStartIndex + 1
+  const visibleBugs = useMemo(
     () => filtered.slice(pageStartIndex, pageEndIndex),
     [filtered, pageStartIndex, pageEndIndex],
   )
 
-  useEffect(() => {
-    const viewport = tableViewportRef.current
-    if (!viewport) return
-
-    const updateAutoPageSize = () => {
-      if (viewport.clientHeight <= TABLE_HEADER_HEIGHT) return
-      const availableHeight = viewport.clientHeight - TABLE_HEADER_HEIGHT
-      const nextPageSize = Math.max(1, Math.floor(availableHeight / COLLAPSED_ROW_HEIGHT))
-      setAutoPageSize((prev) => (prev === nextPageSize ? prev : nextPageSize))
-    }
-
-    updateAutoPageSize()
-    if (typeof ResizeObserver === 'undefined') return
-
-    const observer = new ResizeObserver(updateAutoPageSize)
-    observer.observe(viewport)
-    return () => observer.disconnect()
-  }, [])
-
-  useEffect(() => {
-    if (currentPage > pageCount) setCurrentPage(pageCount)
-  }, [currentPage, pageCount])
-
-  const categories = useMemo(() => [...new Set(results.map((r) => r.analysis.category))], [results])
-  const severities = useMemo(() => [...new Set(results.map((r) => r.analysis.severity))], [results])
+  React.useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages))
+  }, [totalPages])
 
   const groups = useMemo(() => {
     if (viewMode !== 'grouped') return []
     const map = new Map<string, AnalyzedBug[]>()
-    for (const bug of visibleResults) {
+    for (const bug of visibleBugs) {
       const key = screenOf(bug)
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(bug)
@@ -571,17 +684,17 @@ export default function BugTable({
           Math.min(...a.bugs.map((b) => severityOrder[b.analysis.severity])) -
           Math.min(...b.bugs.map((b) => severityOrder[b.analysis.severity])),
       )
-  }, [visibleResults, viewMode])
+  }, [visibleBugs, viewMode])
 
   const renderItems = useMemo(() => {
     if (viewMode === 'flat') {
-      return visibleResults.map((bug) => ({ type: 'bug' as const, bug }))
+      return visibleBugs.map((bug) => ({ type: 'bug' as const, bug }))
     }
     return groups.flatMap((g) => [
       { type: 'group-header' as const, area: g.area, bugs: g.bugs },
       ...(collapsedGroups.has(g.area) ? [] : g.bugs.map((bug) => ({ type: 'bug' as const, bug }))),
     ])
-  }, [visibleResults, viewMode, groups, collapsedGroups])
+  }, [visibleBugs, viewMode, groups, collapsedGroups])
 
   return (
     <div className="flex h-full flex-col">
@@ -625,48 +738,54 @@ export default function BugTable({
             style={{ paddingLeft: '1.5rem' }}
           />
         </div>
-        <SystemSelect
-          ariaLabel="filtrar por categoría"
+        <select
+          aria-label="filtrar por categoría"
           value={filterCategory}
-          onChange={(nextCategory) => {
-            setFilterCategory(nextCategory as BugCategory | 'all')
+          onChange={(e) => {
+            setFilterCategory(e.target.value as BugCategory | 'all')
             setCurrentPage(1)
           }}
-          className="w-32 text-xs"
-          options={[
-            { value: 'all', label: 'categoría' },
-            ...categories.map((category) => ({ value: category, label: category })),
-          ]}
-        />
-        <SystemSelect
-          ariaLabel="filtrar por severidad"
+          className="input w-32 cursor-pointer text-xs"
+        >
+          <option value="all">categoría</option>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="filtrar por severidad"
           value={filterSeverity}
-          onChange={(nextSeverity) => {
-            setFilterSeverity(nextSeverity as Severity | 'all')
+          onChange={(e) => {
+            setFilterSeverity(e.target.value as Severity | 'all')
             setCurrentPage(1)
           }}
-          className="w-32 text-xs"
-          options={[
-            { value: 'all', label: 'severidad' },
-            ...severities.map((severity) => ({ value: severity, label: severityLabel[severity] })),
-          ]}
-        />
-        <SystemSelect
-          ariaLabel="filtrar por estado"
+          className="input w-32 cursor-pointer text-xs"
+        >
+          <option value="all">severidad</option>
+          {severities.map((s) => (
+            <option key={s} value={s}>
+              {severityLabel[s]}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="filtrar por estado"
           value={filterStatus}
-          onChange={(nextStatus) => {
-            setFilterStatus(nextStatus as BugStatus | 'all')
+          onChange={(e) => {
+            setFilterStatus(e.target.value as BugStatus | 'all')
             setCurrentPage(1)
           }}
-          className="w-32 text-xs"
-          options={[
-            { value: 'all', label: 'estado' },
-            ...statusOptionsForTab.map((statusOption) => ({
-              value: statusOption,
-              label: statusStyle[statusOption].label,
-            })),
-          ]}
-        />
+          className="input w-32 cursor-pointer text-xs"
+        >
+          <option value="all">estado</option>
+          {statusOptionsForTab.map((s) => (
+            <option key={s} value={s}>
+              {statusStyle[s].label}
+            </option>
+          ))}
+        </select>
         {(search ||
           filterCategory !== 'all' ||
           filterSeverity !== 'all' ||
@@ -690,7 +809,10 @@ export default function BugTable({
         )}
         <button
           type="button"
-          onClick={() => setViewMode((v) => (v === 'flat' ? 'grouped' : 'flat'))}
+          onClick={() => {
+            setViewMode((v) => (v === 'flat' ? 'grouped' : 'flat'))
+            setCurrentPage(1)
+          }}
           className="ml-auto flex cursor-pointer items-center justify-center gap-1.5 rounded px-2 py-1 font-mono text-xs transition-all"
           style={{
             // Ancho fijo al texto más largo ("agrupado", 8ch) para que el toggle
@@ -735,7 +857,7 @@ export default function BugTable({
         </span>
       </div>
 
-      <div ref={tableViewportRef} className="bug-table-viewport flex-1 overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
         <table className="w-full text-xs">
           <thead
             className="sticky top-0 z-10"
@@ -958,115 +1080,20 @@ export default function BugTable({
           </div>
         )}
       </div>
-      {filtered.length > 0 && (
-        <nav
-          aria-label="paginación de bugs"
-          className="bug-pagination flex flex-shrink-0 flex-wrap items-center justify-between gap-2 border-t px-4 py-2"
-          style={{ borderColor: alpha(col.border, 0.2), background: col.base }}
-        >
-          <div className="flex items-center gap-2 font-mono text-xs" style={{ color: col.muted }}>
-            <span aria-live="polite" aria-atomic="true" className="tabular-nums">
-              {pageStartIndex + 1}-{pageEndIndex} de {filtered.length}
-            </span>
-            <span style={{ color: col.dim }}>visibles</span>
-          </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 font-mono text-xs" style={{ color: col.muted }}>
-              <span>por página</span>
-              <SystemSelect
-                ariaLabel="bugs por página"
-                value={String(pageSize)}
-                onChange={(nextValue) => {
-                  const nextPageSize =
-                    nextValue === 'auto'
-                      ? 'auto'
-                      : (Number(nextValue) as Exclude<PageSizeOption, 'auto'>)
-                  setPageSize(nextPageSize)
-                  setCurrentPage(1)
-                }}
-                className="w-24 text-xs"
-                options={PAGE_SIZE_OPTIONS.map((size) => ({
-                  value: String(size),
-                  label: size === 'auto' ? `auto (${autoPageSize})` : String(size),
-                }))}
-              />
-            </div>
-
-            <fieldset className="flex items-center gap-1 border-0 p-0">
-              <legend className="sr-only">páginas</legend>
-              <button
-                type="button"
-                className="btn-mini"
-                disabled={activePage === 1}
-                aria-label="página anterior"
-                title="página anterior"
-                onClick={() => setCurrentPage(Math.max(1, activePage - 1))}
-              >
-                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path
-                    d="M7.5 2.5 4 6l3.5 3.5"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-              {pageNumbers(activePage, pageCount).map((page) =>
-                page < 0 ? (
-                  <span
-                    key={page}
-                    aria-hidden="true"
-                    className="px-1 font-mono text-xs"
-                    style={{ color: col.dim }}
-                  >
-                    ...
-                  </span>
-                ) : (
-                  <button
-                    key={page}
-                    type="button"
-                    className="btn-mini min-w-7 tabular-nums"
-                    aria-label={`página ${page}`}
-                    aria-current={activePage === page ? 'page' : undefined}
-                    onClick={() => setCurrentPage(page)}
-                    style={
-                      activePage === page
-                        ? {
-                            color: col.cream,
-                            borderColor: alpha(col.cream, 0.32),
-                            background: alpha(col.cream, 0.09),
-                          }
-                        : undefined
-                    }
-                  >
-                    {page}
-                  </button>
-                ),
-              )}
-              <button
-                type="button"
-                className="btn-mini"
-                disabled={activePage === pageCount}
-                aria-label="página siguiente"
-                title="página siguiente"
-                onClick={() => setCurrentPage(Math.min(pageCount, activePage + 1))}
-              >
-                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path
-                    d="M4.5 2.5 8 6 4.5 9.5"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            </fieldset>
-          </div>
-        </nav>
-      )}
+      <PaginationBar
+        page={safeCurrentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        totalItems={filtered.length}
+        startItem={pageStartItem}
+        endItem={pageEndIndex}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={(nextPageSize) => {
+          setPageSize(nextPageSize)
+          setCurrentPage(1)
+        }}
+      />
     </div>
   )
 }
@@ -1158,19 +1185,6 @@ export function SeverityDot({ count, color }: { count: number; color: string }) 
       </span>
     </div>
   )
-}
-
-function pageNumbers(currentPage: number, pageCount: number): number[] {
-  if (pageCount <= 7) return Array.from({ length: pageCount }, (_, i) => i + 1)
-  const start = Math.max(2, currentPage - 1)
-  const end = Math.min(pageCount - 1, currentPage + 1)
-  return [
-    1,
-    ...(start > 2 ? [-1] : []),
-    ...Array.from({ length: end - start + 1 }, (_, i) => start + i),
-    ...(end < pageCount - 1 ? [-2] : []),
-    pageCount,
-  ]
 }
 
 // ─── Expanded detail ──────────────────────────────────────────────────────────

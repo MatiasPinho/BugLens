@@ -21,7 +21,24 @@ describe('ProjectSwitcher', () => {
     )
 
     await userEvent.click(screen.getByLabelText('proyecto activo'))
-    await userEvent.click(screen.getByRole('option', { name: 'cliente / cliente' }))
+    await userEvent.click(screen.getByRole('option', { name: /cliente/ }))
+
+    expect(onSelect).toHaveBeenCalledWith('project-2')
+  })
+
+  it('permite elegir proyecto con teclado sin usar el select nativo', async () => {
+    const onSelect = vi.fn()
+    render(
+      <ProjectSwitcher
+        activeProject={projects[0]}
+        projects={projects}
+        onSelect={onSelect}
+        onCreate={vi.fn()}
+      />,
+    )
+
+    screen.getByLabelText('proyecto activo').focus()
+    await userEvent.keyboard('{ArrowDown}{Enter}')
 
     expect(onSelect).toHaveBeenCalledWith('project-2')
   })
