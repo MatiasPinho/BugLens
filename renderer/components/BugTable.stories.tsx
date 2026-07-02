@@ -44,6 +44,20 @@ const bugs: AnalyzedBug[] = [
   }),
 ]
 
+const manyBugs: AnalyzedBug[] = Array.from({ length: 64 }, (_, index) => {
+  const statuses = ['nuevo', 'en_progreso', 'solucionado', 'cerrado'] as const
+  const severities = ['critical', 'high', 'medium', 'low'] as const
+  const categories = ['frontend', 'backend', 'data', 'config'] as const
+  return makeBug({
+    id: `page-${index + 1}`,
+    title: `Bug paginado ${String(index + 1).padStart(2, '0')}`,
+    summary: 'caso de QA dentro de una importación larga',
+    status: statuses[index % statuses.length],
+    severity: severities[index % severities.length],
+    category: categories[index % categories.length],
+  })
+})
+
 const agentCoverageOutput = `## Resumen
 El formulario de armas tiene validaciones implementadas para los pasos reportados, pero queda una inconsistencia lateral entre frontend y backend.
 
@@ -97,6 +111,10 @@ export const Default: Story = {
 export const MultiProblema: Story = { args: { results: [bugs[1]], onSetStatus: () => {} } }
 
 export const SinResultados: Story = { args: { results: [] } }
+
+export const ConPaginacion: Story = {
+  args: { results: manyBugs, onSetStatus: () => {}, onDelete: () => {} },
+}
 
 export const ConAgenteExterno: Story = {
   args: {

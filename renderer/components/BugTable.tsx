@@ -59,9 +59,9 @@ export const statusStyle: Record<
 > = {
   nuevo: {
     label: 'nuevo',
-    text: col.fgDim,
-    bg: alpha(col.fgDim, 0.08),
-    border: alpha(col.fgDim, 0.22),
+    text: col.cream,
+    bg: alpha(col.cream, 0.06),
+    border: alpha(col.cream, 0.18),
   },
   en_progreso: {
     label: 'en progreso',
@@ -114,6 +114,9 @@ const LIFECYCLE_TABS: { key: LifecycleTab; label: string }[] = [
   { key: 'historicos', label: 'históricos' },
   { key: 'todos', label: 'todos' },
 ]
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
+type PageSize = (typeof PAGE_SIZE_OPTIONS)[number]
 
 // Control segmentado para elegir el ciclo de vida. Sigue el patrón ARIA tablist:
 // una sola parada de tab (roving tabindex), flechas/Home/End mueven la selección
@@ -212,7 +215,7 @@ export function StatusSelect({
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => onChange(e.target.value as BugStatus)}
       className="status-select cursor-pointer rounded px-1.5 py-0.5 font-mono text-xs"
-      style={{ color: st.text, background: st.bg, border: `1px solid ${st.border}` }}
+      style={{ color: st.text, backgroundColor: st.bg, border: `1px solid ${st.border}` }}
     >
       {STATUS_OPTIONS.map((s) => (
         <option key={s} value={s}>
@@ -416,6 +419,138 @@ export function SectionCard({
   )
 }
 
+function PageArrowIcon({ direction }: { direction: 'previous' | 'next' }) {
+  return (
+    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <path
+        d={direction === 'previous' ? 'M7.5 2.5 4 6l3.5 3.5' : 'M4.5 2.5 8 6 4.5 9.5'}
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function PaginationBar({
+  page,
+  totalPages,
+  pageSize,
+  totalItems,
+  startItem,
+  endItem,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number
+  totalPages: number
+  pageSize: PageSize
+  totalItems: number
+  startItem: number
+  endItem: number
+  onPageChange: (page: number) => void
+  onPageSizeChange: (pageSize: PageSize) => void
+}) {
+  const canGoPrevious = page > 1
+  const canGoNext = page < totalPages
+
+  return (
+    <nav
+      aria-label="paginación de bugs"
+      className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-y px-4 py-2.5"
+      style={{
+        borderColor: alpha(col.cream, 0.18),
+        background: col.surface,
+      }}
+    >
+      <div className="flex items-center gap-2 font-mono text-xs" style={{ color: col.fgMuted }}>
+        <span
+          aria-live="polite"
+          aria-atomic="true"
+          className="inline-flex items-center rounded border px-2 py-1 tabular-nums"
+          style={{
+            color: col.cream,
+            background: alpha(col.cream, 0.06),
+            borderColor: alpha(col.cream, 0.18),
+          }}
+        >
+          {totalItems === 0
+            ? '0 bugs'
+            : `${startItem}-${endItem} de ${totalItems} bug${totalItems === 1 ? '' : 's'}`}
+        </span>
+        <span aria-hidden="true" style={{ color: col.dim }}>
+          ·
+        </span>
+        <label className="flex items-center gap-1.5">
+          <span>por página</span>
+          <select
+            aria-label="bugs por página"
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value) as PageSize)}
+            className="input w-20 cursor-pointer py-1 pr-6 pl-2 font-mono text-xs"
+          >
+            {PAGE_SIZE_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="flex items-center gap-2 font-mono text-xs" style={{ color: col.fgMuted }}>
+        <span
+          className="inline-flex items-center rounded border px-2 py-1 tabular-nums"
+          aria-live="polite"
+          aria-atomic="true"
+          style={{
+            color: col.fg,
+            background: alpha(col.raised, 0.78),
+            borderColor: alpha(col.border, 0.32),
+          }}
+        >
+          página {page} de {totalPages}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label="página anterior"
+            title="página anterior"
+            className="btn-mini"
+            disabled={!canGoPrevious}
+            onClick={() => onPageChange(page - 1)}
+            style={{
+              color: canGoPrevious ? col.fgMuted : col.dim,
+              borderColor: canGoPrevious ? alpha(col.border, 0.32) : alpha(col.border, 0.16),
+              background: canGoPrevious ? alpha(col.raised, 0.82) : alpha(col.base, 0.35),
+              cursor: canGoPrevious ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <PageArrowIcon direction="previous" />
+          </button>
+          <button
+            type="button"
+            aria-label="página siguiente"
+            title="página siguiente"
+            className="btn-mini"
+            disabled={!canGoNext}
+            onClick={() => onPageChange(page + 1)}
+            style={{
+              color: canGoNext ? col.fgMuted : col.dim,
+              borderColor: canGoNext ? alpha(col.border, 0.32) : alpha(col.border, 0.16),
+              background: canGoNext ? alpha(col.raised, 0.82) : alpha(col.base, 0.35),
+              cursor: canGoNext ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <PageArrowIcon direction="next" />
+          </button>
+        </div>
+      </div>
+    </nav>
+  )
+}
+
 // ─── Screen grouping key ──────────────────────────────────────────────────────
 // La pantalla se deriva del REPORTE original (estable): ruta de una URL de la
 // fila → título → área del análisis.
@@ -471,12 +606,15 @@ export default function BugTable({
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [pageSize, setPageSize] = useState<PageSize>(25)
+  const [currentPage, setCurrentPage] = useState(1)
 
   // Cambiar de pestaña limpia el filtro de estado (evita un filtro fuera de la
   // pestaña, ej. quedar en 'solucionado' al volver a 'activos').
   const handleLifecycle = (tab: LifecycleTab) => {
     setLifecycle(tab)
     setFilterStatus('all')
+    setCurrentPage(1)
   }
 
   // Estados que tiene sentido ofrecer en el dropdown según la pestaña.
@@ -517,10 +655,24 @@ export default function BugTable({
   const categories = useMemo(() => [...new Set(results.map((r) => r.analysis.category))], [results])
   const severities = useMemo(() => [...new Set(results.map((r) => r.analysis.severity))], [results])
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const pageStartIndex = filtered.length === 0 ? 0 : (safeCurrentPage - 1) * pageSize
+  const pageEndIndex = Math.min(pageStartIndex + pageSize, filtered.length)
+  const pageStartItem = filtered.length === 0 ? 0 : pageStartIndex + 1
+  const visibleBugs = useMemo(
+    () => filtered.slice(pageStartIndex, pageEndIndex),
+    [filtered, pageStartIndex, pageEndIndex],
+  )
+
+  React.useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages))
+  }, [totalPages])
+
   const groups = useMemo(() => {
     if (viewMode !== 'grouped') return []
     const map = new Map<string, AnalyzedBug[]>()
-    for (const bug of filtered) {
+    for (const bug of visibleBugs) {
       const key = screenOf(bug)
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(bug)
@@ -532,17 +684,17 @@ export default function BugTable({
           Math.min(...a.bugs.map((b) => severityOrder[b.analysis.severity])) -
           Math.min(...b.bugs.map((b) => severityOrder[b.analysis.severity])),
       )
-  }, [filtered, viewMode])
+  }, [visibleBugs, viewMode])
 
   const renderItems = useMemo(() => {
     if (viewMode === 'flat') {
-      return filtered.map((bug) => ({ type: 'bug' as const, bug }))
+      return visibleBugs.map((bug) => ({ type: 'bug' as const, bug }))
     }
     return groups.flatMap((g) => [
       { type: 'group-header' as const, area: g.area, bugs: g.bugs },
       ...(collapsedGroups.has(g.area) ? [] : g.bugs.map((bug) => ({ type: 'bug' as const, bug }))),
     ])
-  }, [filtered, viewMode, groups, collapsedGroups])
+  }, [visibleBugs, viewMode, groups, collapsedGroups])
 
   return (
     <div className="flex h-full flex-col">
@@ -578,7 +730,10 @@ export default function BugTable({
             type="text"
             placeholder="buscar bugs... (/)"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setCurrentPage(1)
+            }}
             className="input w-44 text-xs"
             style={{ paddingLeft: '1.5rem' }}
           />
@@ -586,7 +741,10 @@ export default function BugTable({
         <select
           aria-label="filtrar por categoría"
           value={filterCategory}
-          onChange={(e) => setFilterCategory(e.target.value as BugCategory | 'all')}
+          onChange={(e) => {
+            setFilterCategory(e.target.value as BugCategory | 'all')
+            setCurrentPage(1)
+          }}
           className="input w-32 cursor-pointer text-xs"
         >
           <option value="all">categoría</option>
@@ -599,7 +757,10 @@ export default function BugTable({
         <select
           aria-label="filtrar por severidad"
           value={filterSeverity}
-          onChange={(e) => setFilterSeverity(e.target.value as Severity | 'all')}
+          onChange={(e) => {
+            setFilterSeverity(e.target.value as Severity | 'all')
+            setCurrentPage(1)
+          }}
           className="input w-32 cursor-pointer text-xs"
         >
           <option value="all">severidad</option>
@@ -612,7 +773,10 @@ export default function BugTable({
         <select
           aria-label="filtrar por estado"
           value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value as BugStatus | 'all')}
+          onChange={(e) => {
+            setFilterStatus(e.target.value as BugStatus | 'all')
+            setCurrentPage(1)
+          }}
           className="input w-32 cursor-pointer text-xs"
         >
           <option value="all">estado</option>
@@ -633,6 +797,7 @@ export default function BugTable({
               setFilterCategory('all')
               setFilterSeverity('all')
               setFilterStatus('all')
+              setCurrentPage(1)
             }}
             className="cursor-pointer font-mono text-xs transition-colors"
             style={{ color: col.muted }}
@@ -644,7 +809,10 @@ export default function BugTable({
         )}
         <button
           type="button"
-          onClick={() => setViewMode((v) => (v === 'flat' ? 'grouped' : 'flat'))}
+          onClick={() => {
+            setViewMode((v) => (v === 'flat' ? 'grouped' : 'flat'))
+            setCurrentPage(1)
+          }}
           className="ml-auto flex cursor-pointer items-center justify-center gap-1.5 rounded px-2 py-1 font-mono text-xs transition-all"
           style={{
             // Ancho fijo al texto más largo ("agrupado", 8ch) para que el toggle
@@ -899,6 +1067,7 @@ export default function BugTable({
                   setFilterSeverity('all')
                   setFilterStatus('all')
                   setLifecycle('todos')
+                  setCurrentPage(1)
                 }}
                 className="cursor-pointer font-mono text-xs transition-colors"
                 style={{ color: col.border }}
@@ -911,6 +1080,20 @@ export default function BugTable({
           </div>
         )}
       </div>
+
+      <PaginationBar
+        page={safeCurrentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        totalItems={filtered.length}
+        startItem={pageStartItem}
+        endItem={pageEndIndex}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={(nextPageSize) => {
+          setPageSize(nextPageSize)
+          setCurrentPage(1)
+        }}
+      />
     </div>
   )
 }

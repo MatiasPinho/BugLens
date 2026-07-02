@@ -151,6 +151,66 @@ describe('BugTable — ciclo de vida (activos / históricos)', () => {
   })
 })
 
+describe('BugTable — paginación', () => {
+  const manyBugs = () =>
+    Array.from({ length: 30 }, (_, index) =>
+      makeBug({
+        id: `bug-${index + 1}`,
+        title: `Bug ${String(index + 1).padStart(2, '0')}`,
+        status: 'nuevo',
+      }),
+    )
+
+  it('muestra 25 bugs por página por defecto y deja el paginador fijo', () => {
+    render(<BugTable results={manyBugs()} />)
+
+    expect(screen.getByText('Bug 01')).toBeInTheDocument()
+    expect(screen.getByText('Bug 25')).toBeInTheDocument()
+    expect(screen.queryByText('Bug 26')).not.toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'paginación de bugs' })).toHaveTextContent(
+      '1-25 de 30 bugs',
+    )
+    expect(screen.getByText('página 1 de 2')).toBeInTheDocument()
+  })
+
+  it('avanza y vuelve entre páginas', async () => {
+    render(<BugTable results={manyBugs()} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'página siguiente' }))
+    expect(screen.queryByText('Bug 01')).not.toBeInTheDocument()
+    expect(screen.getByText('Bug 26')).toBeInTheDocument()
+    expect(screen.getByText('página 2 de 2')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'página anterior' }))
+    expect(screen.getByText('Bug 01')).toBeInTheDocument()
+    expect(screen.queryByText('Bug 26')).not.toBeInTheDocument()
+  })
+
+  it('cambiar el tamaño de página vuelve al inicio', async () => {
+    render(<BugTable results={manyBugs()} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'página siguiente' }))
+    await userEvent.selectOptions(screen.getByLabelText('bugs por página'), '50')
+
+    expect(screen.getByText('Bug 01')).toBeInTheDocument()
+    expect(screen.getByText('Bug 30')).toBeInTheDocument()
+    expect(screen.getByText('página 1 de 1')).toBeInTheDocument()
+  })
+
+  it('buscar resetea la página para mostrar el resultado filtrado', async () => {
+    render(<BugTable results={manyBugs()} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'página siguiente' }))
+    await userEvent.type(screen.getByPlaceholderText('buscar bugs... (/)'), 'Bug 01')
+
+    expect(screen.getByText('Bug 01')).toBeInTheDocument()
+    expect(screen.getByText('página 1 de 1')).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'paginación de bugs' })).toHaveTextContent(
+      '1-1 de 1 bug',
+    )
+  })
+})
+
 describe('BugTable — borrar bug', () => {
   function renderWithDelete(onDelete = vi.fn()) {
     render(

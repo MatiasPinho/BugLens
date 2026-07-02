@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react'
 import { col } from '../theme'
 import { ActionModal } from './ActionModal'
 import { IconFolder, IconPlus } from './icons'
@@ -38,6 +38,10 @@ export default function ProjectSwitcher({
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
+  const [projectListOpen, setProjectListOpen] = useState(false)
+  const [activeOptionIndex, setActiveOptionIndex] = useState(0)
+  const projectPickerRef = useRef<HTMLDivElement | null>(null)
+  const projectListboxId = useId()
 
   const canCreate = name.trim().length > 0 && !busy
   const projectCount = projects.length
@@ -45,6 +49,57 @@ export default function ProjectSwitcher({
   const updateName = (value: string) => {
     setName(value)
     setSlug(slugify(value))
+  }
+
+  useEffect(() => {
+    const activeIndex = projects.findIndex((project) => project.id === activeProject?.id)
+    setActiveOptionIndex(activeIndex >= 0 ? activeIndex : 0)
+  }, [activeProject?.id, projects])
+
+  useEffect(() => {
+    if (!projectListOpen) return
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!projectPickerRef.current?.contains(event.target as Node)) setProjectListOpen(false)
+    }
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => window.removeEventListener('pointerdown', handlePointerDown)
+  }, [projectListOpen])
+
+  const selectProject = (projectId: string) => {
+    if (projectId !== activeProject?.id) onSelect(projectId)
+    setProjectListOpen(false)
+  }
+
+  const handleProjectPickerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (busy || projects.length === 0) return
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      setProjectListOpen(true)
+      setActiveOptionIndex((current) => {
+        if (event.key === 'ArrowDown') return current >= projects.length - 1 ? 0 : current + 1
+        return current <= 0 ? projects.length - 1 : current - 1
+      })
+      return
+    }
+
+    if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault()
+      setProjectListOpen(true)
+      setActiveOptionIndex(event.key === 'Home' ? 0 : projects.length - 1)
+      return
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      if (projectListOpen) selectProject(projects[activeOptionIndex]?.id ?? '')
+      else setProjectListOpen(true)
+      return
+    }
+
+    if (event.key === 'Escape') {
+      setProjectListOpen(false)
+    }
   }
 
   const submit = () => {
@@ -80,23 +135,59 @@ export default function ProjectSwitcher({
         </span>
       </div>
 
-      <div className="space-y-2">
-        <label className="sr-only" htmlFor="dashboard-project">
-          proyecto activo
-        </label>
-        <select
-          id="dashboard-project"
-          className="project-select input text-xs"
-          value={activeProject?.id ?? ''}
-          onChange={(event) => onSelect(event.target.value)}
+      <div ref={projectPickerRef} className="relative space-y-2">
+        <button
+          type="button"
+          role="combobox"
+          aria-label="proyecto activo"
+          aria-controls={projectListboxId}
+          aria-expanded={projectListOpen}
+          aria-haspopup="listbox"
+          aria-activedescendant={
+            projectListOpen && projects[activeOptionIndex]
+              ? `dashboard-project-${projects[activeOptionIndex].id}`
+              : undefined
+          }
+          className="project-select-trigger input flex w-full cursor-pointer items-center justify-between gap-2 text-left text-xs"
+          onClick={() => {
+            if (!busy && projects.length > 0) setProjectListOpen((open) => !open)
+          }}
+          onKeyDown={handleProjectPickerKeyDown}
           disabled={busy || projects.length === 0}
         >
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name} / {project.slug}
-            </option>
-          ))}
-        </select>
+          <span className="truncate">
+            {activeProject ? `${activeProject.name} / ${activeProject.slug}` : 'sin proyecto'}
+          </span>
+          <span className="project-select-caret" aria-hidden="true" />
+        </button>
+        {projectListOpen && (
+          <div id={projectListboxId} role="listbox" className="project-listbox">
+            {projects.map((project, index) => {
+              const selected = project.id === activeProject?.id
+              const active = index === activeOptionIndex
+              return (
+                <button
+                  key={project.id}
+                  id={`dashboard-project-${project.id}`}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className={`project-option ${selected ? 'project-option-selected' : ''} ${
+                    active ? 'project-option-active' : ''
+                  }`}
+                  onMouseEnter={() => setActiveOptionIndex(index)}
+                  onClick={() => selectProject(project.id)}
+                >
+                  <span className="truncate">
+                    <span>{project.name}</span>
+                    <span className="project-option-separator"> / </span>
+                    <span className="project-option-slug">{project.slug}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
         <div className="project-sync-line truncate text-xs">
           {busy ? <LoadingInline label="sincronizando proyecto" /> : 'proyecto compartido'}
         </div>
