@@ -3,6 +3,7 @@ import { col } from '../theme'
 import { ActionModal } from './ActionModal'
 import { IconFolder, IconPlus } from './icons'
 import { LoadingInline } from './Loading'
+import SystemSelect from './SystemSelect'
 
 export interface ProjectOption {
   id: string
@@ -84,19 +85,18 @@ export default function ProjectSwitcher({
         <label className="sr-only" htmlFor="dashboard-project">
           proyecto activo
         </label>
-        <select
+        <SystemSelect
           id="dashboard-project"
-          className="project-select input text-xs"
+          ariaLabel="proyecto activo"
+          className="project-select text-xs"
           value={activeProject?.id ?? ''}
-          onChange={(event) => onSelect(event.target.value)}
+          onChange={onSelect}
           disabled={busy || projects.length === 0}
-        >
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name} / {project.slug}
-            </option>
-          ))}
-        </select>
+          options={projects.map((project) => ({
+            value: project.id,
+            label: `${project.name} / ${project.slug}`,
+          }))}
+        />
         <div className="project-sync-line truncate text-xs">
           {busy ? <LoadingInline label="sincronizando proyecto" /> : 'proyecto compartido'}
         </div>

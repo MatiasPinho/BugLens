@@ -6,6 +6,7 @@ import { DEFAULT_OLLAMA_TEXT_MODEL, DEFAULT_OLLAMA_VISION_MODEL } from '../llmOp
 import { alpha, col } from '../theme'
 import { IconCheck, IconRestore, IconX } from './icons'
 import PerformanceModePicker, { type PerformanceMode } from './PerformanceModePicker'
+import SystemSelect from './SystemSelect'
 import type { TeamAuthStatus } from './TeamLogin'
 
 interface SettingsData {
@@ -784,32 +785,31 @@ export default function Settings({ addLog, onTeamStatusChange }: Props) {
                   <label className="label" htmlFor="settings-external-agent-preset">
                     agente
                   </label>
-                  <select
+                  <SystemSelect
                     id="settings-external-agent-preset"
-                    className="input text-xs"
+                    ariaLabel="agente"
+                    className="text-xs"
                     value={externalAgentMode}
-                    onChange={(event) => {
-                      setExternalAgentMode(event.target.value)
-                      const preset = EXTERNAL_AGENT_PRESETS.find(
-                        (item) => item.id === event.target.value,
-                      )
+                    onChange={(nextMode) => {
+                      setExternalAgentMode(nextMode)
+                      const preset = EXTERNAL_AGENT_PRESETS.find((item) => item.id === nextMode)
                       if (preset) {
                         setSettings((prev) => ({ ...prev, externalAgentCommand: preset.command }))
                         return
                       }
-                      if (event.target.value === '') {
+                      if (nextMode === '') {
                         setSettings((prev) => ({ ...prev, externalAgentCommand: '' }))
                       }
                     }}
-                  >
-                    <option value="">sin agente configurado</option>
-                    {EXTERNAL_AGENT_PRESETS.map((preset) => (
-                      <option key={preset.id} value={preset.id}>
-                        {preset.name} · {preset.command}
-                      </option>
-                    ))}
-                    <option value={CUSTOM_EXTERNAL_AGENT_ID}>personalizado</option>
-                  </select>
+                    options={[
+                      { value: '', label: 'sin agente configurado' },
+                      ...EXTERNAL_AGENT_PRESETS.map((preset) => ({
+                        value: preset.id,
+                        label: `${preset.name} · ${preset.command}`,
+                      })),
+                      { value: CUSTOM_EXTERNAL_AGENT_ID, label: 'personalizado' },
+                    ]}
+                  />
                 </div>
 
                 <div className="grid gap-2 md:grid-cols-2">
