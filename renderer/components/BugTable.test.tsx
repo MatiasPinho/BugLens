@@ -30,6 +30,11 @@ function makeBug(
   }
 }
 
+async function chooseOption(label: string, option: string) {
+  await userEvent.click(screen.getByLabelText(label))
+  await userEvent.click(screen.getByRole('option', { name: option }))
+}
+
 describe('BugTable — estados', () => {
   it('renderiza una fila por bug con su título', () => {
     render(<BugTable results={[makeBug({ id: 'bug-1', title: 'Login roto' })]} />)
@@ -45,8 +50,7 @@ describe('BugTable — estados', () => {
     )
     // 'solucionado' es histórico → no se ve en la pestaña por defecto.
     await userEvent.click(screen.getByRole('tab', { name: /todos/ }))
-    const select = screen.getByLabelText('estado del bug') as HTMLSelectElement
-    expect(select.value).toBe('solucionado')
+    expect(screen.getByLabelText('estado del bug')).toHaveTextContent('solucionado')
   })
 
   it('cambiar el estado llama onSetStatus con el bug y el nuevo estado', async () => {
@@ -54,7 +58,7 @@ describe('BugTable — estados', () => {
     const bug = makeBug({ id: 'bug-1', title: 'X' })
     render(<BugTable results={[bug]} onSetStatus={onSetStatus} />)
 
-    await userEvent.selectOptions(screen.getByLabelText('estado del bug'), 'solucionado')
+    await chooseOption('estado del bug', 'solucionado')
 
     expect(onSetStatus).toHaveBeenCalledTimes(1)
     const [bugArg, statusArg] = onSetStatus.mock.calls[0]
@@ -74,7 +78,7 @@ describe('BugTable — estados', () => {
     expect(screen.getByText('Bug activo')).toBeInTheDocument()
     expect(screen.getByText('Bug resuelto')).toBeInTheDocument()
 
-    await userEvent.selectOptions(screen.getByLabelText('filtrar por estado'), 'solucionado')
+    await chooseOption('filtrar por estado', 'solucionado')
 
     expect(screen.queryByText('Bug activo')).not.toBeInTheDocument()
     expect(screen.getByText('Bug resuelto')).toBeInTheDocument()
@@ -148,6 +152,51 @@ describe('BugTable — ciclo de vida (activos / históricos)', () => {
     render(<BugTable results={mixed()} />)
     expect(screen.getByRole('tab', { name: 'activos, 2 bugs' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'históricos, 2 bugs' })).toBeInTheDocument()
+  })
+})
+
+describe('BugTable — paginación', () => {
+  const manyBugs = (count: number) =>
+    Array.from({ length: count }, (_, i) =>
+      makeBug({
+        id: `bug-${i + 1}`,
+        title: `Bug ${String(i + 1).padStart(2, '0')}`,
+      }),
+    )
+
+  it('muestra la primera página y permite avanzar', async () => {
+    render(<BugTable results={manyBugs(30)} />)
+
+    expect(screen.getByText('Bug 01')).toBeInTheDocument()
+    expect(screen.queryByText('Bug 11')).not.toBeInTheDocument()
+    expect(screen.getByText('1-10 de 30')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'página siguiente' }))
+
+    expect(screen.queryByText('Bug 01')).not.toBeInTheDocument()
+    expect(screen.getByText('Bug 11')).toBeInTheDocument()
+    expect(screen.getByText('11-20 de 30')).toBeInTheDocument()
+  })
+
+  it('cambia el tamaño de página y vuelve al inicio', async () => {
+    render(<BugTable results={manyBugs(30)} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'página siguiente' }))
+    await chooseOption('bugs por página', '50')
+
+    expect(screen.getByText('Bug 01')).toBeInTheDocument()
+    expect(screen.getByText('Bug 30')).toBeInTheDocument()
+    expect(screen.getByText('1-30 de 30')).toBeInTheDocument()
+  })
+
+  it('vuelve a la primera página cuando cambia la búsqueda', async () => {
+    render(<BugTable results={manyBugs(30)} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'página siguiente' }))
+    await userEvent.type(screen.getByPlaceholderText(/buscar bugs/), 'Bug 30')
+
+    expect(screen.getByText('Bug 30')).toBeInTheDocument()
+    expect(screen.getByText('1-1 de 1')).toBeInTheDocument()
   })
 })
 
