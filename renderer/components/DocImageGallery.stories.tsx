@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import type { DocImage } from '../../src/types/index'
-import { DocImageGallery } from './BugTable'
+import type { DocImage } from '../../src/shared/contracts'
+import { DocImageGallery } from '../features/bug-workflow/ui/BugTable'
 
 // Captura "mock" como SVG en base64 (sin assets binarios). btoa requiere ASCII,
 // así que las etiquetas van sin acentos.

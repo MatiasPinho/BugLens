@@ -1,7 +1,7 @@
 // Fábrica de AnalyzedBug para las historias de Storybook (no es una *.stories,
 // así que Storybook no la carga como historia).
 
-import type { AnalyzedBug, BugCategory, BugStatus, Severity } from '../../src/types/index'
+import type { AnalyzedBug, BugCategory, BugStatus, Severity } from '../../src/shared/contracts'
 
 export function makeBug(o: {
   id: string

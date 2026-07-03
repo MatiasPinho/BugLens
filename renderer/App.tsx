@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import type { ManualBugFields } from '../src/pipeline/manualBugBuilder'
+import type { ManualBugFields } from '../src/features/analyze-bugs/application/manualBugBuilder'
 import type {
   AnalyzedBug,
   BugComment,
@@ -9,19 +9,19 @@ import type {
   IPCEvent,
   LogEvent,
   ProgressEvent,
-} from '../src/types/index'
-import BugTable, { severityLabel } from './components/BugTable'
+} from '../src/shared/contracts'
 import { BeetleMark } from './components/decor/BugMotifs'
 import EmptyState from './components/EmptyState'
 import FileUpload from './components/FileUpload'
 import { IconPlus } from './components/icons'
 import { LoadingOverlay } from './components/Loading'
-import ManualBugForm from './components/ManualBugForm'
-import Onboarding from './components/Onboarding'
 import ProgressLog from './components/ProgressLog'
-import ProjectSwitcher from './components/ProjectSwitcher'
-import Settings from './components/Settings'
-import TeamLogin, { type TeamAuthStatus } from './components/TeamLogin'
+import ManualBugForm from './features/analyze-bugs/ui/ManualBugForm'
+import BugTable, { severityLabel } from './features/bug-workflow/ui/BugTable'
+import ProjectSwitcher from './features/projects/ui/ProjectSwitcher'
+import TeamLogin, { type TeamAuthStatus } from './features/projects/ui/TeamLogin'
+import Onboarding from './features/settings/ui/Onboarding'
+import Settings from './features/settings/ui/Settings'
 import { alpha, col } from './theme'
 
 type Tab = 'main' | 'settings'
@@ -36,7 +36,46 @@ export interface LogLine {
 
 let logCounter = 0
 
+function MissingElectronApi() {
+  return (
+    <div
+      className="min-h-screen bg-om-base text-om-fg"
+      style={{
+        display: 'grid',
+        placeItems: 'center',
+        padding: 24,
+        background: col.base,
+        color: col.fg,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 420,
+          border: `1px solid ${alpha(col.border, 0.8)}`,
+          borderRadius: 6,
+          background: col.surface,
+          padding: 20,
+        }}
+      >
+        <div className="font-semibold text-sm">BugLens necesita Electron</div>
+        <p className="mt-2 text-om-fgdim text-xs leading-relaxed">
+          Esta pantalla requiere el preload de Electron para comunicarse con archivos, Supabase y el
+          proceso principal. Abri la app con <code>npm run dev</code> o desde el ejecutable.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
+  if (typeof window !== 'undefined' && !window.electronAPI) {
+    return <MissingElectronApi />
+  }
+
+  return <ElectronApp />
+}
+
+function ElectronApp() {
   const [tab, setTab] = useState<Tab>('main')
   const [phase, setPhase] = useState<Phase>('idle')
   const [excelPath, setExcelPath] = useState<string | null>(null)
@@ -46,7 +85,7 @@ export default function App() {
     current: number
     total: number
     message: string
-    phase?: import('../src/types/index').AnalysisPhase
+    phase?: import('../src/shared/contracts').AnalysisPhase
   }>({ current: 0, total: 0, message: '' })
   const [showLogs, setShowLogs] = useState(false)
   const [showManualForm, setShowManualForm] = useState(false)
@@ -911,8 +950,12 @@ function ShortcutRow({ keys, label }: { keys: string[]; label: string }) {
 
 // Pasos visuales del pipeline. Cada chip se ilumina cuando es la fase activa,
 // los anteriores quedan en color completado, los futuros en gris.
-export function PhaseSteps({ current }: { current?: import('../src/types/index').AnalysisPhase }) {
-  const steps: Array<{ key: import('../src/types/index').AnalysisPhase; label: string }> = [
+export function PhaseSteps({
+  current,
+}: {
+  current?: import('../src/shared/contracts').AnalysisPhase
+}) {
+  const steps: Array<{ key: import('../src/shared/contracts').AnalysisPhase; label: string }> = [
     { key: 'reading_excel', label: 'excel' },
     { key: 'reading_docs', label: 'docs' },
     { key: 'analyzing', label: 'analizar' },

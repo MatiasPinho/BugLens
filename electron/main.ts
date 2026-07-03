@@ -1,5 +1,3 @@
-import * as cp from 'node:child_process'
-import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as dotenv from 'dotenv'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
@@ -10,42 +8,93 @@ const envPath = app.isPackaged
   : path.join(__dirname, '..', '..', '.env')
 dotenv.config({ path: envPath })
 
-import { runExternalAgent } from '../src/agents/externalAgent.js'
-import { clearCache, getCacheStats } from '../src/llm/analysisCache.js'
-import { getLLMConfig } from '../src/llm/client.js'
-import { analyzeBug, selectLLMConfigForBug } from '../src/llm/fastTriage.js'
-import { resolveConcurrency } from '../src/llm/runtimeConfig.js'
-import { BrowserDocsReader } from '../src/pipeline/browserDocsReader.js'
-import { BugEnricher } from '../src/pipeline/bugEnricher.js'
-import { readExcel, writeBugsExcel, writeEnrichedExcel } from '../src/pipeline/excelReader.js'
-import { writeFullDataJson } from '../src/pipeline/fullDataExport.js'
-import { GoogleDocsReader } from '../src/pipeline/googleDocsReader.js'
-import { buildManualBug, type ManualBugFields } from '../src/pipeline/manualBugBuilder.js'
 import {
-  addRemoteBugComment,
-  createRemoteBugImport,
-  deleteRemoteBug,
-  loadRemoteAnalyzedBugs,
-  type RemoteAnalysisContext,
-  saveRemoteAnalysisResult,
-  setRemoteBugStatus,
-} from '../src/supabase/teamBugs.js'
+  analyzeExcelBugs,
+  analyzeManualBug,
+} from '../src/features/analyze-bugs/application/analyzeBugReports.js'
+import { BugEnricher } from '../src/features/analyze-bugs/application/bugEnricher.js'
 import {
-  createSupabaseProject,
-  createSupabaseTeamClient,
-  getSupabaseTeamStatus,
+  getBrowserDocsAuthStatus,
+  getGoogleDocsAuthStatus,
+  revokeBrowserDocsAuth,
+  revokeGoogleDocsAuth,
+  startBrowserDocsLogin,
+  startGoogleDocsAuth,
+} from '../src/features/analyze-bugs/application/evidenceDocsAuth.js'
+import {
+  createBrowserDocsReader,
+  createGoogleDocsReader,
+} from '../src/features/analyze-bugs/application/evidenceDocsReaders.js'
+import type { ManualBugFields } from '../src/features/analyze-bugs/application/manualBugBuilder.js'
+import { runBugAnalysisBatch } from '../src/features/analyze-bugs/application/runBugAnalysisBatch.js'
+import { selectEvidenceDocsReader } from '../src/features/analyze-bugs/application/selectEvidenceDocsReader.js'
+import {
+  clearCache,
+  getCacheStats,
+} from '../src/features/analyze-bugs/infrastructure/analysisCache.js'
+import { BrowserDocsReader } from '../src/features/analyze-bugs/infrastructure/browserDocsReader.js'
+import {
+  addBugComment,
+  deleteBug,
+  loadProjectBugs,
+  setBugStatus,
+} from '../src/features/bug-workflow/application/manageBugWorkflow.js'
+import {
+  enrichedExcelDefaultName,
+  exportBugsExcel,
+  exportEnrichedExcel,
+  exportFullDataJson,
+  fullDataDefaultName,
+} from '../src/features/export-bugs/application/exportBugReports.js'
+import { runExternalAgent } from '../src/features/external-agent/application/externalAgent.js'
+import {
+  checkOpenCode,
+  repairOpenCode,
+} from '../src/features/external-agent/application/openCodeSetup.js'
+import {
+  createProjectAndLoadStatus,
+  createProjectClient,
+  loadProjectTeamStatus,
+  projectTeamErrorStatus,
   type SupabaseTeamConfig,
-  signOutSupabaseTeam,
-  startSupabaseGoogleAuth,
-} from '../src/supabase/teamClient.js'
+  signOutProjectTeam,
+  startProjectTeamGoogleAuth,
+} from '../src/features/projects/application/manageProjects.js'
+import {
+  saveProjectAnalysisResult,
+  startProjectAnalysisRun,
+} from '../src/features/projects/application/projectAnalysisRun.js'
+import { ProjectBugRealtimeWatcher } from '../src/features/projects/application/projectBugRealtime.js'
+import {
+  buildLLMConfigFromSettings,
+  localLLMBaseUrl,
+  shouldEnsureLocalLLM,
+} from '../src/features/settings/application/llmSettings.js'
+import { probeHardware } from '../src/features/settings/application/probeHardware.js'
+import {
+  type AppResetScope,
+  resetAppSettings,
+} from '../src/features/settings/application/resetAppSettings.js'
+import {
+  type AppSettings,
+  appSettingsPath,
+  loadAppSettings,
+  saveAppSettings,
+  settingsToSupabaseTeamConfig,
+} from '../src/features/settings/application/settingsStore.js'
+import {
+  checkOllamaAvailability,
+  ensureOllamaRunning,
+  stopManagedOllama,
+} from '../src/platform/ollama/ollamaService.js'
 import type {
   AnalyzedBug,
   BugStatus,
-  ExternalAgentRepository,
+  HardwareProbe,
   LLMConfig,
-  PerformanceMode,
   RawBug,
-} from '../src/types/index.js'
+} from '../src/shared/contracts/index.js'
+import { IPC_CHANNELS, type IPCChannel } from '../src/shared/ipc/channels.js'
 
 function getCacheDir(): string {
   return path.join(app.getPath('userData'), 'analysis-cache')
@@ -58,137 +107,29 @@ function getSupabaseSessionPath(): string {
 // ─── Simple JSON config store ─────────────────────────────────────────────────
 // Replaces electron-store to avoid ESM/CJS conflicts.
 
-interface AppSettings {
-  googleClientId: string
-  googleClientSecret: string
-  llmProvider: string
-  llmModel: string
-  llmVisionModel: string
-  ollamaBaseUrl: string
-  // Rendimiento: 'gpu' (paralelismo/timeout normales) o 'cpu' (serie + timeout largo).
-  performanceMode: PerformanceMode
-  supabaseUrl: string
-  supabasePublishableKey: string
-  supabaseDefaultProjectSlug: string
-  supabaseDefaultProjectName: string
-  supabaseActiveProjectId: string
-  externalAgentCommand: string
-  externalAgentTimeoutMs: number
-  externalAgentWorkingDirectory: string
-  externalAgentRepositories: ExternalAgentRepository[]
-  // Marca de primer arranque: false hasta que el usuario completa el wizard inicial.
-  onboarded: boolean
-}
-
 function getConfigPath(): string {
-  return path.join(app.getPath('userData'), 'settings.json')
-}
-
-function normalizeExternalAgentTimeoutMs(value: unknown): number {
-  const fallback = 20 * 60 * 1000
-  const timeoutMs = Number(value)
-  if (!Number.isFinite(timeoutMs) || timeoutMs < 60 * 1000) return fallback
-  return timeoutMs
-}
-
-function normalizeExternalAgentRepositories(
-  value: unknown,
-  legacyWorkingDirectory?: string,
-): ExternalAgentRepository[] {
-  const repositories = Array.isArray(value)
-    ? value
-        .map((item) => {
-          if (!item || typeof item !== 'object') return null
-          const repo = item as Partial<ExternalAgentRepository>
-          return {
-            path: typeof repo.path === 'string' ? repo.path.trim() : '',
-            branch: typeof repo.branch === 'string' ? repo.branch.trim() : '',
-          }
-        })
-        .filter((repo): repo is ExternalAgentRepository => Boolean(repo?.path))
-    : []
-  if (repositories.length > 0) return repositories
-  const legacyPath = legacyWorkingDirectory?.trim()
-  return legacyPath ? [{ path: legacyPath, branch: '' }] : []
+  return appSettingsPath(app.getPath('userData'))
 }
 
 function loadSettings(): AppSettings {
-  const defaults: AppSettings = {
-    googleClientId: process.env['GOOGLE_CLIENT_ID'] ?? '',
-    googleClientSecret: process.env['GOOGLE_CLIENT_SECRET'] ?? '',
-    llmProvider: process.env['LLM_PROVIDER'] ?? 'ollama',
-    llmModel: process.env['LLM_MODEL'] ?? process.env['OLLAMA_MODEL'] ?? 'qwen2.5:7b',
-    llmVisionModel:
-      process.env['LLM_VISION_MODEL'] ?? process.env['OLLAMA_VISION_MODEL'] ?? 'qwen2.5vl:7b',
-    ollamaBaseUrl: process.env['OLLAMA_BASE_URL'] ?? 'http://localhost:11434',
-    performanceMode: process.env['LLM_PERFORMANCE_MODE'] === 'cpu' ? 'cpu' : 'gpu',
-    supabaseUrl: process.env['SUPABASE_URL'] ?? '',
-    supabasePublishableKey:
-      process.env['SUPABASE_PUBLISHABLE_KEY'] ?? process.env['SUPABASE_ANON_KEY'] ?? '',
-    supabaseDefaultProjectSlug: process.env['SUPABASE_DEFAULT_PROJECT_SLUG'] ?? 'buglens-default',
-    supabaseDefaultProjectName: process.env['SUPABASE_DEFAULT_PROJECT_NAME'] ?? 'buglens',
-    supabaseActiveProjectId: process.env['SUPABASE_ACTIVE_PROJECT_ID'] ?? '',
-    externalAgentCommand: process.env['EXTERNAL_AGENT_COMMAND'] ?? '',
-    externalAgentTimeoutMs: normalizeExternalAgentTimeoutMs(
-      process.env['EXTERNAL_AGENT_TIMEOUT_MS'],
-    ),
-    externalAgentWorkingDirectory: process.env['EXTERNAL_AGENT_WORKING_DIRECTORY'] ?? '',
-    externalAgentRepositories: normalizeExternalAgentRepositories(
-      undefined,
-      process.env['EXTERNAL_AGENT_WORKING_DIRECTORY'],
-    ),
-    onboarded: false,
-  }
-
-  const configPath = getConfigPath()
-  if (!fs.existsSync(configPath)) return defaults
-
-  try {
-    const saved = JSON.parse(fs.readFileSync(configPath, 'utf8')) as Partial<AppSettings>
-    const settings = { ...defaults, ...saved }
-    settings.externalAgentTimeoutMs = normalizeExternalAgentTimeoutMs(
-      settings.externalAgentTimeoutMs,
-    )
-    settings.externalAgentRepositories = normalizeExternalAgentRepositories(
-      settings.externalAgentRepositories,
-      settings.externalAgentWorkingDirectory,
-    )
-    settings.externalAgentWorkingDirectory = settings.externalAgentRepositories[0]?.path ?? ''
-    return settings
-  } catch {
-    return defaults
-  }
+  return loadAppSettings(getConfigPath(), process.env)
 }
 
 function saveSettings(patch: Partial<AppSettings>): void {
-  const current = loadSettings()
-  const updated = { ...current, ...patch }
-  fs.mkdirSync(path.dirname(getConfigPath()), { recursive: true })
-  fs.writeFileSync(getConfigPath(), JSON.stringify(updated, null, 2))
+  saveAppSettings(getConfigPath(), patch, process.env)
 }
 
 function loadSupabaseTeamConfig(): SupabaseTeamConfig {
-  const s = loadSettings()
-  return {
-    url: s.supabaseUrl,
-    publishableKey: s.supabasePublishableKey,
-    defaultProjectSlug: s.supabaseDefaultProjectSlug,
-    defaultProjectName: s.supabaseDefaultProjectName,
-    activeProjectId: s.supabaseActiveProjectId || undefined,
-  }
+  return settingsToSupabaseTeamConfig(loadSettings())
 }
 
 function makeSupabaseTeamClient() {
-  return createSupabaseTeamClient(loadSupabaseTeamConfig(), getSupabaseSessionPath())
+  return createProjectClient(loadSupabaseTeamConfig(), getSupabaseSessionPath())
 }
 
 // ─── Window ───────────────────────────────────────────────────────────────────
 
 let mainWindow: BrowserWindow | null = null
-let remoteBugsChannel: ReturnType<
-  NonNullable<ReturnType<typeof makeSupabaseTeamClient>>['channel']
-> | null = null
-let watchedProjectId: string | null = null
 
 // En Linux, algunos drivers/Mesa hacen que el proceso GPU de Chromium sea
 // inusable ("GPU process isn't usable. Goodbye." → SIGTRAP). Para una UI simple
@@ -237,19 +178,29 @@ app.on('window-all-closed', () => {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function sendToRenderer(channel: string, payload: unknown): void {
+function sendToRenderer(channel: IPCChannel, payload: unknown): void {
   mainWindow?.webContents.send(channel, payload)
 }
 
 function log(level: 'info' | 'warn' | 'error', message: string): void {
   console.log(`[${level.toUpperCase()}] ${message}`)
-  sendToRenderer('log', {
-    type: 'log',
+  sendToRenderer(IPC_CHANNELS.log, {
+    type: IPC_CHANNELS.log,
     level,
     message,
     timestamp: new Date().toISOString(),
   })
 }
+
+const projectBugRealtimeWatcher = new ProjectBugRealtimeWatcher({
+  onChanged: () => {
+    sendToRenderer(IPC_CHANNELS.remoteBugsChanged, { type: IPC_CHANNELS.remoteBugsChanged })
+  },
+  onStatus: (status) => {
+    if (status === 'SUBSCRIBED') log('info', 'Realtime de bugs conectado')
+    if (status === 'CHANNEL_ERROR') log('warn', 'Realtime de bugs tuvo un error')
+  },
+})
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
@@ -269,102 +220,42 @@ function errorMessage(err: unknown): string {
 }
 
 async function watchRemoteBugChanges(projectId: string): Promise<void> {
-  if (watchedProjectId === projectId && remoteBugsChannel) return
-
-  const client = makeSupabaseTeamClient()
-  if (!client) throw new Error('Supabase no está configurado.')
-
-  if (remoteBugsChannel) {
-    await client.removeChannel(remoteBugsChannel)
-    remoteBugsChannel = null
-    watchedProjectId = null
-  }
-
-  remoteBugsChannel = client
-    .channel(`project-bugs:${projectId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'bugs',
-        filter: `project_id=eq.${projectId}`,
-      },
-      () => {
-        sendToRenderer('remote-bugs-changed', { type: 'remote-bugs-changed' })
-      },
-    )
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'bug_comments',
-        filter: `project_id=eq.${projectId}`,
-      },
-      () => {
-        sendToRenderer('remote-bugs-changed', { type: 'remote-bugs-changed' })
-      },
-    )
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'bug_analysis_runs',
-        filter: `project_id=eq.${projectId}`,
-      },
-      () => {
-        sendToRenderer('remote-bugs-changed', { type: 'remote-bugs-changed' })
-      },
-    )
-    .subscribe((status) => {
-      if (status === 'SUBSCRIBED') log('info', 'Realtime de bugs conectado')
-      if (status === 'CHANNEL_ERROR') log('warn', 'Realtime de bugs tuvo un error')
-    })
-
-  watchedProjectId = projectId
+  await projectBugRealtimeWatcher.watch(makeSupabaseTeamClient(), projectId)
 }
 
 async function unwatchRemoteBugChanges(): Promise<void> {
-  if (!remoteBugsChannel) return
-  const client = makeSupabaseTeamClient()
-  if (client) await client.removeChannel(remoteBugsChannel)
-  remoteBugsChannel = null
-  watchedProjectId = null
+  await projectBugRealtimeWatcher.unwatch(makeSupabaseTeamClient())
 }
 
 // ─── Lazy singleton factories ─────────────────────────────────────────────────
 
-function makeGoogleReader(): GoogleDocsReader {
-  const s = loadSettings()
-  const tokenPath = path.join(app.getPath('userData'), 'google-token.json')
-  return new GoogleDocsReader(s.googleClientId, s.googleClientSecret, tokenPath)
+function makeGoogleReader() {
+  return createGoogleDocsReader(loadSettings(), app.getPath('userData'))
 }
 
-function makeBrowserReader(): BrowserDocsReader {
-  return new BrowserDocsReader(app.getPath('userData'))
+function makeBrowserReader() {
+  return createBrowserDocsReader(app.getPath('userData'))
 }
 
 // ─── IPC: Settings ────────────────────────────────────────────────────────────
 
-ipcMain.handle('settings:get', () => loadSettings())
+ipcMain.handle(IPC_CHANNELS.settingsGet, () => loadSettings())
 
-ipcMain.handle('settings:save', (_e, patch: Partial<AppSettings>) => {
+ipcMain.handle(IPC_CHANNELS.settingsSave, (_e, patch: Partial<AppSettings>) => {
   saveSettings(patch)
   return { ok: true }
 })
 
-ipcMain.handle('settings:pick-directory', async () => {
+ipcMain.handle(IPC_CHANNELS.settingsPickDirectory, async () => {
   const result = await dialog.showOpenDialog(mainWindow!, { properties: ['openDirectory'] })
   return result.canceled ? null : result.filePaths[0]
 })
 
 // ─── IPC: Supabase team auth ─────────────────────────────────────────────────
 
-ipcMain.handle('supabase:status', async () => {
+ipcMain.handle(IPC_CHANNELS.supabaseStatus, async () => {
   try {
-    const status = await getSupabaseTeamStatus(makeSupabaseTeamClient(), loadSupabaseTeamConfig())
+    const status = await loadProjectTeamStatus(makeSupabaseTeamClient(), loadSupabaseTeamConfig())
     if (status.authenticated && status.project) {
       saveSettings({ supabaseActiveProjectId: status.project.id })
       await watchRemoteBugChanges(status.project.id).catch((err) => {
@@ -373,18 +264,14 @@ ipcMain.handle('supabase:status', async () => {
     }
     return status
   } catch (err) {
-    return {
-      configured: Boolean(loadSupabaseTeamConfig().url && loadSupabaseTeamConfig().publishableKey),
-      authenticated: false,
-      error: errorMessage(err),
-    }
+    return projectTeamErrorStatus(loadSupabaseTeamConfig(), errorMessage(err))
   }
 })
 
-ipcMain.handle('supabase:start-google-auth', async () => {
+ipcMain.handle(IPC_CHANNELS.supabaseStartGoogleAuth, async () => {
   try {
     const config = loadSupabaseTeamConfig()
-    const client = createSupabaseTeamClient(config, getSupabaseSessionPath())
+    const client = createProjectClient(config, getSupabaseSessionPath())
     if (!client) {
       return {
         configured: false,
@@ -392,7 +279,7 @@ ipcMain.handle('supabase:start-google-auth', async () => {
         error: 'Configurá SUPABASE_URL y SUPABASE_PUBLISHABLE_KEY antes de iniciar sesión.',
       }
     }
-    const status = await startSupabaseGoogleAuth(client, config, shell)
+    const status = await startProjectTeamGoogleAuth(client, config, shell)
     log('info', `supabase login completado: ${status.user?.email ?? status.user?.id}`)
     if (status.project) {
       saveSettings({ supabaseActiveProjectId: status.project.id })
@@ -404,110 +291,88 @@ ipcMain.handle('supabase:start-google-auth', async () => {
   } catch (err) {
     const message = errorMessage(err)
     log('error', `Error en Supabase Auth: ${message}`)
-    return {
-      configured: Boolean(loadSupabaseTeamConfig().url && loadSupabaseTeamConfig().publishableKey),
-      authenticated: false,
-      error: message,
-    }
+    return projectTeamErrorStatus(loadSupabaseTeamConfig(), message)
   }
 })
 
-ipcMain.handle('supabase:sign-out', async () => {
+ipcMain.handle(IPC_CHANNELS.supabaseSignOut, async () => {
   await unwatchRemoteBugChanges()
-  await signOutSupabaseTeam(makeSupabaseTeamClient())
+  await signOutProjectTeam(makeSupabaseTeamClient())
   return { ok: true }
 })
 
-ipcMain.handle('supabase:select-project', async (_e, { projectId }: { projectId: string }) => {
-  try {
-    saveSettings({ supabaseActiveProjectId: projectId })
-    const status = await getSupabaseTeamStatus(makeSupabaseTeamClient(), loadSupabaseTeamConfig())
-    if (status.authenticated && status.project) {
-      saveSettings({ supabaseActiveProjectId: status.project.id })
-      await watchRemoteBugChanges(status.project.id)
+ipcMain.handle(
+  IPC_CHANNELS.supabaseSelectProject,
+  async (_e, { projectId }: { projectId: string }) => {
+    try {
+      saveSettings({ supabaseActiveProjectId: projectId })
+      const status = await loadProjectTeamStatus(makeSupabaseTeamClient(), loadSupabaseTeamConfig())
+      if (status.authenticated && status.project) {
+        saveSettings({ supabaseActiveProjectId: status.project.id })
+        await watchRemoteBugChanges(status.project.id)
+      }
+      return status
+    } catch (err) {
+      const message = errorMessage(err)
+      log('error', `Error seleccionando proyecto: ${message}`)
+      return projectTeamErrorStatus(loadSupabaseTeamConfig(), message)
     }
-    return status
-  } catch (err) {
-    const message = errorMessage(err)
-    log('error', `Error seleccionando proyecto: ${message}`)
-    return {
-      configured: Boolean(loadSupabaseTeamConfig().url && loadSupabaseTeamConfig().publishableKey),
-      authenticated: false,
-      error: message,
-    }
-  }
-})
+  },
+)
 
 ipcMain.handle(
-  'supabase:create-project',
+  IPC_CHANNELS.supabaseCreateProject,
   async (_e, { name, slug }: { name: string; slug: string }) => {
     try {
       const client = makeSupabaseTeamClient()
       if (!client) throw new Error('Supabase no está configurado.')
-      const project = await createSupabaseProject(client, name, slug)
+      const config = loadSupabaseTeamConfig()
+      const status = await createProjectAndLoadStatus(client, config, name, slug)
+      const project = status.project
+      if (!project) throw new Error('No se pudo resolver el proyecto creado.')
       saveSettings({ supabaseActiveProjectId: project.id })
-      const status = await getSupabaseTeamStatus(client, loadSupabaseTeamConfig())
       await watchRemoteBugChanges(project.id)
       log('info', `proyecto creado: ${project.name}`)
       return status
     } catch (err) {
       const message = errorMessage(err)
       log('error', `Error creando proyecto: ${message}`)
-      return {
-        configured: Boolean(
-          loadSupabaseTeamConfig().url && loadSupabaseTeamConfig().publishableKey,
-        ),
-        authenticated: false,
-        error: message,
-      }
+      return projectTeamErrorStatus(loadSupabaseTeamConfig(), message)
     }
   },
 )
 
 // ─── IPC: Google Auth ─────────────────────────────────────────────────────────
 
-ipcMain.handle('google:auth-status', () => {
-  return { authenticated: makeGoogleReader().isAuthenticated() }
+ipcMain.handle(IPC_CHANNELS.googleAuthStatus, () => {
+  return getGoogleDocsAuthStatus(makeGoogleReader())
 })
 
-ipcMain.handle('google:start-auth', async () => {
-  const reader = makeGoogleReader()
-  const authUrl = reader.getAuthUrl()
-  await shell.openExternal(authUrl)
-  try {
-    await reader.waitForCallback()
-    return { ok: true }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
-  }
+ipcMain.handle(IPC_CHANNELS.googleStartAuth, async () => {
+  return startGoogleDocsAuth(makeGoogleReader(), shell)
 })
 
-ipcMain.handle('google:revoke', async () => {
-  await makeGoogleReader().revokeAuth()
-  return { ok: true }
+ipcMain.handle(IPC_CHANNELS.googleRevoke, async () => {
+  return revokeGoogleDocsAuth(makeGoogleReader())
 })
 
 // ─── IPC: Browser-based Google Auth (cookie session, no OAuth) ───────────────
 
-ipcMain.handle('browser-auth:status', () => {
-  return { authenticated: makeBrowserReader().isAuthenticated() }
+ipcMain.handle(IPC_CHANNELS.browserAuthStatus, () => {
+  return getBrowserDocsAuthStatus(makeBrowserReader())
 })
 
-ipcMain.handle('browser-auth:start-login', async () => {
-  const reader = makeBrowserReader()
-  try {
-    await reader.startLoginFlow()
-    return { ok: true }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
+ipcMain.handle(IPC_CHANNELS.browserAuthStartLogin, async () => {
+  const result = await startBrowserDocsLogin(makeBrowserReader())
+  if (!result.ok) {
+    const message = result.error ?? 'Error desconocido'
     log('error', `Error en login del navegador: ${message}`)
-    return { ok: false, error: message }
   }
+  return result
 })
 
-ipcMain.handle('browser-auth:revoke', () => {
-  makeBrowserReader().revokeSession()
-  return { ok: true }
+ipcMain.handle(IPC_CHANNELS.browserAuthRevoke, () => {
+  return revokeBrowserDocsAuth(makeBrowserReader())
 })
 
 // ─── IPC: Main analysis pipeline ─────────────────────────────────────────────
@@ -539,38 +404,30 @@ async function analyzeBugs(
     sourcePath?: string
   },
 ): Promise<{ ok: boolean; count?: number; error?: string }> {
-  const start = Date.now()
-
   try {
     const s = loadSettings()
-    const llmConfig: LLMConfig = getLLMConfig({
-      provider: s.llmProvider as LLMConfig['provider'],
-      model: s.llmModel,
-      visionModel: s.llmVisionModel,
-      baseUrl: s.ollamaBaseUrl,
-      performanceMode: s.performanceMode,
-    })
+    const llmConfig: LLMConfig = buildLLMConfigFromSettings(s)
     const teamClient = makeSupabaseTeamClient()
     if (!teamClient) throw new Error('Supabase no está configurado.')
-    const remoteClient = teamClient
     const teamConfig = loadSupabaseTeamConfig()
-    const importId = await createRemoteBugImport(teamClient, teamConfig, {
-      sourceType,
-      sourceName,
-      sourcePath,
-      rowCount: bugs.length,
-    })
-    const remoteContext: RemoteAnalysisContext = {
-      importId,
-      sourceType,
-      provider: llmConfig.provider,
-      model: llmConfig.model,
-    }
+    const projectAnalysisRun = await startProjectAnalysisRun(
+      teamClient,
+      teamConfig,
+      {
+        sourceType,
+        sourceName,
+        sourcePath,
+        rowCount: bugs.length,
+      },
+      llmConfig,
+    )
 
     // Auto-levantar Ollama si es el provider elegido y no está corriendo
-    if (s.llmProvider === 'ollama') {
-      const baseUrl = s.ollamaBaseUrl || 'http://localhost:11434'
-      const { started, alreadyRunning } = await ensureOllamaRunning(baseUrl)
+    if (shouldEnsureLocalLLM(s)) {
+      const baseUrl = localLLMBaseUrl(s)
+      const { started, alreadyRunning } = await ensureOllamaRunning(baseUrl, (message) =>
+        log('info', message),
+      )
       if (started) log('info', 'Ollama iniciado automáticamente')
       else if (alreadyRunning) log('info', 'Ollama ya estaba corriendo')
       else log('warn', 'No se pudo levantar Ollama — el análisis puede fallar')
@@ -581,171 +438,38 @@ async function analyzeBugs(
     const browserReader = makeBrowserReader()
     const oauthReader = makeGoogleReader()
 
-    let docsReader: {
-      readDocuments(urls: string[]): Promise<import('../src/types/index.js').GoogleDocContent[]>
-    } | null = null
-    if (browserReader.isAuthenticated()) {
-      docsReader = browserReader
-      log('info', 'Acceso a Google Docs via sesión del navegador')
-    } else if (oauthReader.isAuthenticated()) {
-      docsReader = oauthReader
-      log('info', 'Acceso a Google Docs via OAuth (sin capturas — requiere sesión del navegador)')
-    } else {
-      log('warn', 'Google no autenticado — bugs sin documentos de evidencia')
-    }
+    const docsSelection = selectEvidenceDocsReader(browserReader, oauthReader)
+    log(docsSelection.log.level, docsSelection.log.message)
 
-    const enricher = new BugEnricher(docsReader)
+    const enricher = new BugEnricher(docsSelection.reader)
 
-    // Paralelismo por proveedor (cloud tolera más; Ollama queuea internamente, pero N
-    // workers evitan head-of-line blocking). En modo CPU baja a 1; override global vía
-    // LLM_CONCURRENCY (ver resolveConcurrency).
-    const concurrency = resolveConcurrency(llmConfig.provider, {
+    const { results } = await runBugAnalysisBatch({
+      bugs,
+      enricher,
+      llmConfig,
       performanceMode: s.performanceMode,
-    })
-
-    log(
-      'info',
-      `Paralelismo: ${concurrency} bugs simultáneos (${llmConfig.provider}, modo ${s.performanceMode})`,
-    )
-
-    // Results array preserves original order
-    const results: AnalyzedBug[] = new Array(bugs.length)
-    let completed = 0
-
-    // Worker-pool pattern: N workers consume from shared queue
-    async function processBug(i: number): Promise<void> {
-      const bug = bugs[i]
-      const bugStart = Date.now()
-
-      log('info', `[${i + 1}/${bugs.length}] ${bug.title}`)
-
-      try {
-        const enriched = await enricher.enrich(bug)
-
-        for (const doc of enriched.googleDocs) {
-          if (!doc.accessible) log('warn', `  Doc no accesible: ${doc.url}`)
-          else {
-            const imgCount = doc.images?.length ?? 0
-            log(
-              'info',
-              `  Doc leído: ${doc.title}${imgCount > 0 ? ` (${imgCount} imagen${imgCount > 1 ? 'es' : ''})` : ''}`,
-            )
-          }
-        }
-
-        // Clasificar + reescribir el bug (una sola llamada LLM, sin tocar repos).
-        const analysisConfig = selectLLMConfigForBug(enriched, llmConfig)
-        const { analysis, fromCache } = await analyzeBug(enriched, analysisConfig, getCacheDir())
-        if (fromCache) log('info', `  ✓ desde cache`)
-        const result: AnalyzedBug = {
-          enriched,
-          analysis,
-          status: 'nuevo',
-          processingMs: Date.now() - bugStart,
-        }
-
-        results[i] = result
-        await saveRemoteAnalysisResult(remoteClient, teamConfig, result, {
-          ...remoteContext,
-          model: analysisConfig.model,
-        })
-        completed++
-
-        log(
-          'info',
-          `✓ [${completed}/${bugs.length}] ${analysis.severity} ${analysis.category} — ${bug.title}`,
-        )
-
-        // Stream result to renderer immediately — don't wait for all bugs
-        sendToRenderer('bug-result', {
-          type: 'bug-result',
+      cacheDir: getCacheDir(),
+      saveResult: projectAnalysisRun.saveResult,
+      onBugResult: ({ result, current, total }) =>
+        sendToRenderer(IPC_CHANNELS.bugResult, {
+          type: IPC_CHANNELS.bugResult,
           result,
-          current: completed,
-          total: bugs.length,
-        })
-        sendToRenderer('progress', {
-          type: 'progress',
-          phase: 'analyzing',
-          message: `${completed}/${bugs.length} analizados — ${bug.title}`,
-          current: completed,
-          total: bugs.length,
-        })
-      } catch (err) {
-        const message = errorMessage(err)
-        log('error', `✗ Bug ${i + 1} falló: ${message}`)
-        const result: AnalyzedBug = {
-          enriched: { raw: bug, googleDocs: [] },
-          analysis: {
-            category: 'otro',
-            severity: 'low',
-            confidence: 0,
-            affectedArea: 'No informado',
-            summary: 'Error durante el análisis',
-            rewritten: {
-              observed: 'No informado',
-              expected: 'No informado',
-              steps: [],
-              environment: 'No informado',
-              problemCount: 1,
-            },
-            missingInformation: [],
-            rawResponse: message,
-          },
-          status: 'nuevo',
-          error: message,
-          processingMs: Date.now() - bugStart,
-        }
-        results[i] = result
-        await saveRemoteAnalysisResult(remoteClient, teamConfig, result, remoteContext)
-        completed++
-
-        sendToRenderer('bug-result', {
-          type: 'bug-result',
-          result,
-          current: completed,
-          total: bugs.length,
-        })
-        sendToRenderer('progress', {
-          type: 'progress',
-          message: `${completed}/${bugs.length} analizados`,
-          current: completed,
-          total: bugs.length,
-        })
-      }
-    }
-
-    // Run workers: each picks the next unstarted bug until all are done
-    let nextIdx = 0
-    async function worker() {
-      while (nextIdx < bugs.length) {
-        const i = nextIdx++
-        await processBug(i)
-      }
-    }
-
-    sendToRenderer('progress', {
-      type: 'progress',
-      phase: 'analyzing',
-      message: `analizando ${bugs.length} bugs (x${concurrency})`,
-      current: 0,
-      total: bugs.length,
+          current,
+          total,
+        }),
+      onProgress: (progress) =>
+        sendToRenderer(IPC_CHANNELS.progress, {
+          type: IPC_CHANNELS.progress,
+          ...progress,
+        }),
+      onLog: log,
     })
-    await Promise.all(Array.from({ length: Math.min(concurrency, bugs.length) }, worker))
 
-    const elapsed = ((Date.now() - start) / 1000).toFixed(1)
-    log(
-      'info',
-      `Análisis completado en ${elapsed}s (${(bugs.length / parseFloat(elapsed)).toFixed(1)} bugs/s)`,
-    )
-    sendToRenderer('progress', {
-      type: 'progress',
-      phase: 'done',
-      message: `completado en ${elapsed}s`,
-      current: bugs.length,
-      total: bugs.length,
-    })
     if (emitComplete) {
-      sendToRenderer('analysis-complete', { type: 'complete', results: results.filter(Boolean) })
+      sendToRenderer(IPC_CHANNELS.analysisComplete, {
+        type: 'complete',
+        results: results.filter(Boolean),
+      })
     }
 
     // Cerrar el contexto headless del browser reader para liberar recursos
@@ -762,17 +486,17 @@ async function analyzeBugs(
 }
 
 // Corrida desde Excel: lee el archivo y analiza todos los bugs (reemplaza la tabla).
-ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
+ipcMain.handle(IPC_CHANNELS.analyzeRun, async (_e, excelPath: string) => {
   try {
-    sendToRenderer('progress', {
-      type: 'progress',
+    sendToRenderer(IPC_CHANNELS.progress, {
+      type: IPC_CHANNELS.progress,
       phase: 'reading_excel',
       message: 'leyendo Excel...',
       current: 0,
       total: 0,
     })
     log('info', `Leyendo Excel: ${excelPath}`)
-    const bugs = readExcel(excelPath)
+    const bugs = analyzeExcelBugs(excelPath)
     log('info', `Encontrados ${bugs.length} bugs`)
     return await analyzeBugs(bugs, {
       emitComplete: true,
@@ -789,9 +513,9 @@ ipcMain.handle('analyze:run', async (_e, excelPath: string) => {
 
 // Carga manual: arma un RawBug desde los campos del formulario y lo analiza,
 // streameándolo a la tabla sin reemplazar lo ya cargado.
-ipcMain.handle('analyze:manual-bug', async (_e, fields: ManualBugFields) => {
+ipcMain.handle(IPC_CHANNELS.analyzeManualBug, async (_e, fields: ManualBugFields) => {
   try {
-    const bug = buildManualBug(fields, ++manualBugCounter)
+    const bug = analyzeManualBug(fields, ++manualBugCounter)
     log('info', `Bug manual cargado: ${bug.title}`)
     return await analyzeBugs([bug], {
       emitComplete: false,
@@ -805,77 +529,80 @@ ipcMain.handle('analyze:manual-bug', async (_e, fields: ManualBugFields) => {
   }
 })
 
-ipcMain.handle('bug:analyze-external-agent', async (event, { bug }: { bug: AnalyzedBug }) => {
-  try {
-    const { externalAgentCommand, externalAgentTimeoutMs, externalAgentRepositories } =
-      loadSettings()
-    log('info', `Enviando bug a agente externo: ${bug.enriched.raw.title}`)
-    const externalAgentResult = await runExternalAgent(
-      externalAgentCommand,
-      bug,
-      externalAgentTimeoutMs,
-      (progress) => {
-        event.sender.send('external-agent-progress', progress)
-      },
-      externalAgentRepositories,
-    )
-    const result = { ...externalAgentResult, createdAt: new Date().toISOString() }
-    if (result.ok) {
-      log('info', `Agente externo terminó en ${Math.round(result.durationMs / 1000)}s`)
-    } else {
-      log('error', `Error en agente externo: ${result.error ?? 'sin detalle'}`)
-    }
+ipcMain.handle(
+  IPC_CHANNELS.bugAnalyzeExternalAgent,
+  async (event, { bug }: { bug: AnalyzedBug }) => {
     try {
-      const client = makeSupabaseTeamClient()
-      if (!client) throw new Error('Supabase no está configurado.')
-      await saveRemoteAnalysisResult(
-        client,
-        loadSupabaseTeamConfig(),
-        {
-          ...bug,
-          analysis: {
-            ...bug.analysis,
-            externalAgent: result,
-            externalAgentHistory: [result, ...(bug.analysis.externalAgentHistory ?? [])],
-          },
+      const { externalAgentCommand, externalAgentTimeoutMs, externalAgentRepositories } =
+        loadSettings()
+      log('info', `Enviando bug a agente externo: ${bug.enriched.raw.title}`)
+      const externalAgentResult = await runExternalAgent(
+        externalAgentCommand,
+        bug,
+        externalAgentTimeoutMs,
+        (progress) => {
+          event.sender.send(IPC_CHANNELS.externalAgentProgress, progress)
         },
-        {
-          importId: null,
-          sourceType: bug.enriched.raw.id.startsWith('manual-') ? 'manual' : 'excel',
-          provider: 'external-agent',
-          model: result.command,
-          promptVersion: 'external-agent-v1',
-        },
+        externalAgentRepositories,
       )
-      log('info', `Resultado del agente externo guardado: ${bug.enriched.raw.title}`)
+      const result = { ...externalAgentResult, createdAt: new Date().toISOString() }
+      if (result.ok) {
+        log('info', `Agente externo terminó en ${Math.round(result.durationMs / 1000)}s`)
+      } else {
+        log('error', `Error en agente externo: ${result.error ?? 'sin detalle'}`)
+      }
+      try {
+        const client = makeSupabaseTeamClient()
+        if (!client) throw new Error('Supabase no está configurado.')
+        await saveProjectAnalysisResult(
+          client,
+          loadSupabaseTeamConfig(),
+          {
+            ...bug,
+            analysis: {
+              ...bug.analysis,
+              externalAgent: result,
+              externalAgentHistory: [result, ...(bug.analysis.externalAgentHistory ?? [])],
+            },
+          },
+          {
+            importId: null,
+            sourceType: bug.enriched.raw.id.startsWith('manual-') ? 'manual' : 'excel',
+            provider: 'external-agent',
+            model: result.command,
+            promptVersion: 'external-agent-v1',
+          },
+        )
+        log('info', `Resultado del agente externo guardado: ${bug.enriched.raw.title}`)
+      } catch (err) {
+        log('warn', `No se pudo guardar el resultado del agente externo: ${errorMessage(err)}`)
+      }
+      return result
     } catch (err) {
-      log('warn', `No se pudo guardar el resultado del agente externo: ${errorMessage(err)}`)
+      const message = errorMessage(err)
+      log('error', `Error ejecutando agente externo: ${message}`)
+      return {
+        ok: false,
+        output: '',
+        error: message,
+        command: loadSettings().externalAgentCommand,
+        durationMs: 0,
+      }
     }
-    return result
-  } catch (err) {
-    const message = errorMessage(err)
-    log('error', `Error ejecutando agente externo: ${message}`)
-    return {
-      ok: false,
-      output: '',
-      error: message,
-      command: loadSettings().externalAgentCommand,
-      durationMs: 0,
-    }
-  }
-})
+  },
+)
 
 // ─── IPC: Cache ───────────────────────────────────────────────────────────────
 
 // ─── IPC: Estado de bugs (persistente) ───────────────────────────────────────
 
 ipcMain.handle(
-  'bug:set-status',
+  IPC_CHANNELS.bugSetStatus,
   async (_e, { bug, status }: { bug: AnalyzedBug; status: BugStatus }) => {
     try {
       const client = makeSupabaseTeamClient()
       if (!client) throw new Error('Supabase no está configurado.')
-      await setRemoteBugStatus(client, loadSupabaseTeamConfig(), bug.enriched.raw, status)
+      await setBugStatus(client, loadSupabaseTeamConfig(), bug, status)
       return { ok: true }
     } catch (err) {
       const message = errorMessage(err)
@@ -885,29 +612,27 @@ ipcMain.handle(
   },
 )
 
-ipcMain.handle('bug:add-comment', async (_e, { bug, body }: { bug: AnalyzedBug; body: string }) => {
-  try {
-    const client = makeSupabaseTeamClient()
-    if (!client) throw new Error('Supabase no está configurado.')
-    const comment = await addRemoteBugComment(
-      client,
-      loadSupabaseTeamConfig(),
-      bug.enriched.raw,
-      body,
-    )
-    return { ok: true, comment }
-  } catch (err) {
-    const message = errorMessage(err)
-    log('error', `Error guardando comentario remoto: ${message}`)
-    return { ok: false, error: message }
-  }
-})
+ipcMain.handle(
+  IPC_CHANNELS.bugAddComment,
+  async (_e, { bug, body }: { bug: AnalyzedBug; body: string }) => {
+    try {
+      const client = makeSupabaseTeamClient()
+      if (!client) throw new Error('Supabase no está configurado.')
+      const comment = await addBugComment(client, loadSupabaseTeamConfig(), bug, body)
+      return { ok: true, comment }
+    } catch (err) {
+      const message = errorMessage(err)
+      log('error', `Error guardando comentario remoto: ${message}`)
+      return { ok: false, error: message }
+    }
+  },
+)
 
-ipcMain.handle('bugs:load-remote', async () => {
+ipcMain.handle(IPC_CHANNELS.bugsLoadRemote, async () => {
   try {
     const client = makeSupabaseTeamClient()
     if (!client) throw new Error('Supabase no está configurado.')
-    const results = await loadRemoteAnalyzedBugs(client, loadSupabaseTeamConfig())
+    const results = await loadProjectBugs(client, loadSupabaseTeamConfig())
     return { ok: true, results }
   } catch (err) {
     const message = errorMessage(err)
@@ -916,11 +641,11 @@ ipcMain.handle('bugs:load-remote', async () => {
   }
 })
 
-ipcMain.handle('bug:delete', async (_e, { bug }: { bug: AnalyzedBug }) => {
+ipcMain.handle(IPC_CHANNELS.bugDelete, async (_e, { bug }: { bug: AnalyzedBug }) => {
   try {
     const client = makeSupabaseTeamClient()
     if (!client) throw new Error('Supabase no está configurado.')
-    await deleteRemoteBug(client, loadSupabaseTeamConfig(), bug.enriched.raw)
+    await deleteBug(client, loadSupabaseTeamConfig(), bug)
     return { ok: true }
   } catch (err) {
     const message = errorMessage(err)
@@ -929,9 +654,9 @@ ipcMain.handle('bug:delete', async (_e, { bug }: { bug: AnalyzedBug }) => {
   }
 })
 
-ipcMain.handle('bugs:watch-remote', async () => {
+ipcMain.handle(IPC_CHANNELS.bugsWatchRemote, async () => {
   try {
-    const status = await getSupabaseTeamStatus(makeSupabaseTeamClient(), loadSupabaseTeamConfig())
+    const status = await loadProjectTeamStatus(makeSupabaseTeamClient(), loadSupabaseTeamConfig())
     if (!status.authenticated || !status.project) {
       throw new Error('No hay sesión de equipo o proyecto compartido activo.')
     }
@@ -946,9 +671,9 @@ ipcMain.handle('bugs:watch-remote', async () => {
 
 // ─── IPC: Cache ───────────────────────────────────────────────────────────────
 
-ipcMain.handle('cache:stats', () => getCacheStats(getCacheDir()))
+ipcMain.handle(IPC_CHANNELS.cacheStats, () => getCacheStats(getCacheDir()))
 
-ipcMain.handle('cache:clear', () => {
+ipcMain.handle(IPC_CHANNELS.cacheClear, () => {
   clearCache(getCacheDir())
   return { ok: true }
 })
@@ -960,18 +685,8 @@ ipcMain.handle('cache:clear', () => {
 // No toca la caché de análisis (tiene su propio botón) ni las sesiones de Google.
 // Tras borrar, reinicia la app para arrancar desde un estado limpio.
 
-function removeFileIfExists(filePath: string): void {
-  try {
-    fs.rmSync(filePath, { force: true })
-  } catch {
-    // best-effort: si no se puede borrar, el reinicio igual no rompe nada
-  }
-}
-
-ipcMain.handle('app:reset', (_e, { scope }: { scope: 'bug-data' | 'config' }) => {
-  if (scope === 'config') {
-    removeFileIfExists(getConfigPath())
-  }
+ipcMain.handle(IPC_CHANNELS.appReset, (_e, { scope }: { scope: AppResetScope }) => {
+  resetAppSettings(scope, getConfigPath())
   // Reiniciar para que el renderer arranque sin estado en memoria.
   app.relaunch()
   app.quit()
@@ -981,9 +696,9 @@ ipcMain.handle('app:reset', (_e, { scope }: { scope: 'bug-data' | 'config' }) =>
 // ─── IPC: Export ─────────────────────────────────────────────────────────────
 
 ipcMain.handle(
-  'export:excel',
+  IPC_CHANNELS.exportExcel,
   async (_e, { originalPath, results }: { originalPath: string; results: AnalyzedBug[] }) => {
-    const defaultName = `${path.basename(originalPath, path.extname(originalPath))}_analizado.xlsx`
+    const defaultName = enrichedExcelDefaultName(originalPath)
     const { filePath, canceled } = await dialog.showSaveDialog(mainWindow!, {
       defaultPath: defaultName,
       filters: [{ name: 'Excel', extensions: ['xlsx'] }],
@@ -992,24 +707,7 @@ ipcMain.handle(
     if (canceled || !filePath) return { ok: false }
 
     try {
-      writeEnrichedExcel(
-        filePath,
-        originalPath,
-        results.map((r) => ({
-          rowIndex: r.enriched.raw.rowIndex,
-          category: r.analysis.category,
-          severity: r.analysis.severity,
-          bugType: r.analysis.bugType ?? '',
-          confidence: r.analysis.confidence,
-          summary: r.analysis.summary,
-          observed: r.analysis.rewritten.observed,
-          expected: r.analysis.rewritten.expected,
-          steps: r.analysis.rewritten.steps,
-          environment: r.analysis.rewritten.environment,
-          missingInformation: r.analysis.missingInformation,
-          error: r.error,
-        })),
-      )
+      exportEnrichedExcel(filePath, originalPath, results)
       log('info', `Excel exportado: ${filePath}`)
       return { ok: true, filePath }
     } catch (err) {
@@ -1021,7 +719,7 @@ ipcMain.handle(
 )
 
 // Export desde cero (sin Excel original): para bugs cargados a mano o mezclados.
-ipcMain.handle('export:bugs', async (_e, { results }: { results: AnalyzedBug[] }) => {
+ipcMain.handle(IPC_CHANNELS.exportBugs, async (_e, { results }: { results: AnalyzedBug[] }) => {
   const { filePath, canceled } = await dialog.showSaveDialog(mainWindow!, {
     defaultPath: 'bugs_analizados.xlsx',
     filters: [{ name: 'Excel', extensions: ['xlsx'] }],
@@ -1030,24 +728,7 @@ ipcMain.handle('export:bugs', async (_e, { results }: { results: AnalyzedBug[] }
   if (canceled || !filePath) return { ok: false }
 
   try {
-    writeBugsExcel(
-      filePath,
-      results.map((r) => ({
-        title: r.enriched.raw.title,
-        rowIndex: r.enriched.raw.rowIndex,
-        category: r.analysis.category,
-        severity: r.analysis.severity,
-        bugType: r.analysis.bugType ?? '',
-        confidence: r.analysis.confidence,
-        summary: r.analysis.summary,
-        observed: r.analysis.rewritten.observed,
-        expected: r.analysis.rewritten.expected,
-        steps: r.analysis.rewritten.steps,
-        environment: r.analysis.rewritten.environment,
-        missingInformation: r.analysis.missingInformation,
-        error: r.error,
-      })),
-    )
+    exportBugsExcel(filePath, results)
     log('info', `Excel exportado: ${filePath}`)
     return { ok: true, filePath }
   } catch (err) {
@@ -1060,11 +741,9 @@ ipcMain.handle('export:bugs', async (_e, { results }: { results: AnalyzedBug[] }
 // Export completo sin aplanar: conserva RawBug, rawRow, Google Docs leídos,
 // imágenes base64, análisis, rawResponse del LLM, errores, estado y tiempos.
 ipcMain.handle(
-  'export:full-data',
+  IPC_CHANNELS.exportFullData,
   async (_e, { excelPath, results }: { excelPath: string | null; results: AnalyzedBug[] }) => {
-    const defaultName = excelPath
-      ? `${path.basename(excelPath, path.extname(excelPath))}_datos_completos.json`
-      : 'bugs_datos_completos.json'
+    const defaultName = fullDataDefaultName(excelPath)
     const { filePath, canceled } = await dialog.showSaveDialog(mainWindow!, {
       defaultPath: defaultName,
       filters: [{ name: 'JSON', extensions: ['json'] }],
@@ -1073,7 +752,7 @@ ipcMain.handle(
     if (canceled || !filePath) return { ok: false }
 
     try {
-      writeFullDataJson(filePath, results, excelPath)
+      exportFullDataJson(filePath, results, excelPath)
       log('info', `Datos completos exportados: ${filePath}`)
       return { ok: true, filePath }
     } catch (err) {
@@ -1086,7 +765,7 @@ ipcMain.handle(
 
 // ─── IPC: Dialogs & misc ─────────────────────────────────────────────────────
 
-ipcMain.handle('dialog:open-excel', async () => {
+ipcMain.handle(IPC_CHANNELS.dialogOpenExcel, async () => {
   const result = await dialog.showOpenDialog(mainWindow!, {
     properties: ['openFile'],
     filters: [{ name: 'Excel', extensions: ['xlsx', 'xls', 'csv'] }],
@@ -1096,375 +775,34 @@ ipcMain.handle('dialog:open-excel', async () => {
 
 // ─── Ollama helpers ───────────────────────────────────────────────────────────
 
-const OPENCODE_BIG_PICKLE_MODEL = 'opencode/big-pickle'
+ipcMain.handle(IPC_CHANNELS.opencodeCheck, async () => checkOpenCode())
+ipcMain.handle(IPC_CHANNELS.opencodeRepair, async () => repairOpenCode())
 
-interface ShellResult {
-  ok: boolean
-  stdout: string
-  stderr: string
-  exitCode: number | null
-}
-
-interface OpenCodeStatus {
-  installed: boolean
-  version?: string
-  hasBigPickle: boolean
-  model: string
-  commandPath?: string
-  pathAdded?: string[]
-  error?: string
-}
-
-interface OpenCodeRepairResult extends OpenCodeStatus {
-  ok: boolean
-  installedPackage?: boolean
-  output?: string
-}
-
-function splitPathEnv(value: string | undefined): string[] {
-  return (value ?? '')
-    .split(path.delimiter)
-    .map((item) => item.trim())
-    .filter(Boolean)
-}
-
-function uniqueExistingDirs(dirs: Array<string | undefined>): string[] {
-  const seen = new Set<string>()
-  return dirs
-    .filter((dir): dir is string => Boolean(dir?.trim()))
-    .map((dir) => path.resolve(dir))
-    .filter((dir) => {
-      if (!fs.existsSync(dir)) return false
-      const key = process.platform === 'win32' ? dir.toLowerCase() : dir
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-}
-
-function commonNodeBinDirs(): string[] {
-  const env = process.env
-  const home = env['USERPROFILE'] ?? env['HOME']
-  return uniqueExistingDirs([
-    env['APPDATA'] ? path.join(env['APPDATA'], 'npm') : undefined,
-    env['LOCALAPPDATA'] ? path.join(env['LOCALAPPDATA'], 'Programs', 'nodejs') : undefined,
-    env['ProgramFiles'] ? path.join(env['ProgramFiles'], 'nodejs') : undefined,
-    env['ProgramFiles(x86)'] ? path.join(env['ProgramFiles(x86)'], 'nodejs') : undefined,
-    home ? path.join(home, 'AppData', 'Roaming', 'npm') : undefined,
-    home ? path.join(home, '.npm-global', 'bin') : undefined,
-    home ? path.join(home, '.local', 'bin') : undefined,
-    'C:\\nvm4w\\nodejs',
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-    '/usr/bin',
-  ])
-}
-
-function prependToProcessPath(dirs: string[]): string[] {
-  const current = splitPathEnv(process.env['PATH'])
-  const currentKeys = new Set(
-    current.map((item) => (process.platform === 'win32' ? item.toLowerCase() : item)),
-  )
-  const added = dirs.filter((dir) => {
-    const key = process.platform === 'win32' ? dir.toLowerCase() : dir
-    return !currentKeys.has(key)
-  })
-  if (added.length > 0) {
-    process.env['PATH'] = [...added, ...current].join(path.delimiter)
-  }
-  return added
-}
-
-function runShell(command: string, timeoutMs = 30_000): Promise<ShellResult> {
-  return new Promise((resolve) => {
-    let stdout = ''
-    let stderr = ''
-    let settled = false
-    const child = cp.spawn(command, {
-      shell: process.env['SHELL'] || process.env['ComSpec'],
-      windowsHide: true,
-      env: process.env,
-    })
-    const timeout = setTimeout(() => {
-      if (!settled) child.kill('SIGTERM')
-    }, timeoutMs)
-
-    child.stdout?.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString('utf8')
-    })
-    child.stderr?.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString('utf8')
-    })
-    child.on('error', (err) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timeout)
-      resolve({ ok: false, stdout, stderr: stderr || err.message, exitCode: null })
-    })
-    child.on('close', (code) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timeout)
-      resolve({ ok: code === 0, stdout, stderr, exitCode: code })
-    })
-  })
-}
-
-async function detectOpenCodePath(): Promise<string | undefined> {
-  const result = await runShell(
-    process.platform === 'win32' ? 'where opencode' : 'command -v opencode',
-  )
-  return result.ok ? result.stdout.trim().split(/\r?\n/)[0]?.trim() : undefined
-}
-
-async function getOpenCodeStatus(pathAdded: string[] = []): Promise<OpenCodeStatus> {
-  const versionResult = await runShell('opencode --version')
-  if (!versionResult.ok) {
-    return {
-      installed: false,
-      hasBigPickle: false,
-      model: OPENCODE_BIG_PICKLE_MODEL,
-      pathAdded,
-      error: (
-        versionResult.stderr ||
-        versionResult.stdout ||
-        'OpenCode no está disponible.'
-      ).trim(),
-    }
-  }
-
-  const modelsResult = await runShell('opencode models opencode', 60_000)
-  const modelsOutput = `${modelsResult.stdout}\n${modelsResult.stderr}`
-  const hasBigPickle = modelsOutput.includes(OPENCODE_BIG_PICKLE_MODEL)
-  return {
-    installed: true,
-    version: versionResult.stdout.trim().split(/\s+/)[0],
-    hasBigPickle,
-    model: OPENCODE_BIG_PICKLE_MODEL,
-    commandPath: await detectOpenCodePath(),
-    pathAdded,
-    error: hasBigPickle
-      ? undefined
-      : `OpenCode está instalado, pero no lista ${OPENCODE_BIG_PICKLE_MODEL}. Actualizá OpenCode o revisá providers.`,
-  }
-}
-
-async function repairOpenCode(): Promise<OpenCodeRepairResult> {
-  const added = prependToProcessPath(commonNodeBinDirs())
-  let status = await getOpenCodeStatus(added)
-  if (status.installed && status.hasBigPickle) return { ...status, ok: true }
-
-  const npmResult = await runShell('npm install -g opencode-ai', 180_000)
-  const addedAfterInstall = prependToProcessPath(commonNodeBinDirs())
-  status = await getOpenCodeStatus([...added, ...addedAfterInstall])
-  return {
-    ...status,
-    ok: status.installed && status.hasBigPickle,
-    installedPackage: npmResult.ok,
-    output: [npmResult.stdout.trim(), npmResult.stderr.trim()].filter(Boolean).join('\n'),
-    error:
-      status.error ??
-      (npmResult.ok
-        ? undefined
-        : (npmResult.stderr || npmResult.stdout || 'No se pudo instalar OpenCode.').trim()),
-  }
-}
-
-ipcMain.handle('opencode:check', async () => {
-  const added = prependToProcessPath(commonNodeBinDirs())
-  return getOpenCodeStatus(added)
-})
-
-ipcMain.handle('opencode:repair', async () => repairOpenCode())
-
-let ollamaProcess: cp.ChildProcess | null = null
-
-/** Busca el binario de ollama en rutas comunes. */
-function findOllamaBin(): string | null {
-  const env = process.env
-  // OLLAMA_BIN (override explícito) primero, en cualquier plataforma.
-  const candidates: Array<string | null | undefined> = [env['OLLAMA_BIN']]
-
-  if (process.platform === 'win32') {
-    const localApp = env['LOCALAPPDATA']
-    const programFiles = env['ProgramFiles']
-    candidates.push(
-      localApp ? path.join(localApp, 'Programs', 'Ollama', 'ollama.exe') : null,
-      programFiles ? path.join(programFiles, 'Ollama', 'ollama.exe') : null,
-    )
-  } else {
-    candidates.push(
-      env['HOME'] ? path.join(env['HOME'], '.local', 'bin', 'ollama') : null,
-      '/usr/local/bin/ollama',
-      '/usr/bin/ollama',
-      '/opt/homebrew/bin/ollama',
-    )
-  }
-
-  for (const p of candidates) {
-    if (p && fs.existsSync(p)) return p
-  }
-  return null
-}
-
-/** Pinga Ollama. Devuelve true si responde. */
-async function pingOllama(baseUrl: string): Promise<boolean> {
-  try {
-    const r = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(3000) })
-    return r.ok
-  } catch {
-    return false
-  }
-}
-
-/** Intenta levantar `ollama serve` si no está corriendo. */
-async function ensureOllamaRunning(
-  baseUrl: string,
-): Promise<{ started: boolean; alreadyRunning: boolean }> {
-  if (await pingOllama(baseUrl)) return { started: false, alreadyRunning: true }
-
-  const bin = findOllamaBin()
-  if (!bin) return { started: false, alreadyRunning: false }
-
-  log('info', `Levantando Ollama: ${bin}`)
-  // HSA_OVERRIDE_GFX_VERSION=10.3.0 is required for AMD RDNA2 GPUs (RX 6xxx series, gfx1030/1031/1032)
-  // that are not in Ollama's bundled ROCm TensileLibrary. Maps gfx1032 → gfx1030 codepath.
-  // Solo aplica al ROCm de Linux; en Windows/macOS no corresponde.
-  // OLLAMA_NUM_PARALLEL: sin esto ollama sirve los requests casi en serie, así que
-  // analizar un batch grande tarda muchísimo. 3 slots paralelos comparten los pesos
-  // del modelo (solo suman KV cache chico) y aceleran el throughput del batch.
-  ollamaProcess = cp.spawn(bin, ['serve'], {
-    detached: false,
-    stdio: 'ignore',
-    env: {
-      ...process.env,
-      ...(process.platform === 'linux' ? { HSA_OVERRIDE_GFX_VERSION: '10.3.0' } : {}),
-      OLLAMA_NUM_PARALLEL: '3',
-    },
-  })
-  ollamaProcess.unref()
-
-  // Esperar hasta 15 s a que responda
-  const deadline = Date.now() + 15_000
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 800))
-    if (await pingOllama(baseUrl)) {
-      log('info', 'Ollama levantado correctamente')
-      return { started: true, alreadyRunning: false }
-    }
-  }
-
-  return { started: false, alreadyRunning: false }
-}
-
-// Cerrar ollama al salir de la app (solo si lo levantamos nosotros)
 app.on('before-quit', () => {
-  if (ollamaProcess) {
-    ollamaProcess.kill()
-    ollamaProcess = null
-  }
+  stopManagedOllama()
 })
 
-ipcMain.handle('llm:check-ollama', async () => {
+ipcMain.handle(IPC_CHANNELS.llmCheckOllama, async () => {
   const s = loadSettings()
   const baseUrl = s.ollamaBaseUrl || 'http://localhost:11434'
-  try {
-    const response = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(5000) })
-    if (!response.ok) return { available: false }
-    const data = (await response.json()) as { models?: Array<{ name: string }> }
-    return { available: true, models: data.models?.map((m) => m.name) ?? [] }
-  } catch {
-    return { available: false, models: [] }
-  }
+  return checkOllamaAvailability(baseUrl)
 })
 
-ipcMain.handle('llm:start-ollama', async () => {
+ipcMain.handle(IPC_CHANNELS.llmStartOllama, async () => {
   const s = loadSettings()
   const baseUrl = s.ollamaBaseUrl || 'http://localhost:11434'
-  const result = await ensureOllamaRunning(baseUrl)
+  const result = await ensureOllamaRunning(baseUrl, (message) => log('info', message))
   if (result.alreadyRunning) return { ok: true, message: 'Ollama ya estaba corriendo' }
   if (result.started) return { ok: true, message: 'Ollama iniciado correctamente' }
   return { ok: false, message: 'No se encontró el binario de Ollama — instalalo primero' }
 })
 
-// ─── Sondeo de hardware (GPU vs CPU) ────────────────────────────────────────────
-// La forma honesta de saber si el modelo correrá en GPU o CPU es preguntarle a Ollama:
-// cargamos el modelo con una generación mínima y leemos /api/ps. `size_vram > 0`
-// significa que Ollama lo está corriendo (al menos en parte) en la GPU.
-
-type Accelerator = 'gpu' | 'cpu' | 'unknown'
-
-interface HardwareProbe {
-  accelerator: Accelerator
-  detail: string
-  model?: string
-}
-
-interface OllamaPsModel {
-  name: string
-  model?: string
-  size?: number
-  size_vram?: number
-}
-
-async function probeAccelerator(baseUrl: string, model: string): Promise<HardwareProbe> {
-  const running = await ensureOllamaRunning(baseUrl)
-  if (!running.started && !running.alreadyRunning) {
-    return { accelerator: 'unknown', detail: 'Ollama no está disponible (instalalo y reintentá)' }
-  }
-
-  // ¿Está descargado el modelo? Sin él no podemos cargar nada.
-  try {
-    const tags = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(5000) })
-    const data = (await tags.json()) as { models?: Array<{ name: string }> }
-    const names = data.models?.map((m) => m.name) ?? []
-    const isDownloaded = names.some((n) => n === model || n.split(':')[0] === model.split(':')[0])
-    if (!isDownloaded) {
-      return { accelerator: 'unknown', detail: `El modelo "${model}" no está descargado todavía` }
-    }
-  } catch {
-    return { accelerator: 'unknown', detail: 'No se pudo consultar Ollama' }
-  }
-
-  // Cargar el modelo con una generación mínima (puede tardar en CPU — es esperable).
-  try {
-    await fetch(`${baseUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, prompt: 'hi', stream: false, options: { num_predict: 1 } }),
-      signal: AbortSignal.timeout(120_000),
-    })
-  } catch {
-    return { accelerator: 'unknown', detail: 'No se pudo cargar el modelo para el sondeo' }
-  }
-
-  // Leer qué tiene cargado y cuánta VRAM usa.
-  try {
-    const ps = await fetch(`${baseUrl}/api/ps`, { signal: AbortSignal.timeout(5000) })
-    const data = (await ps.json()) as { models?: OllamaPsModel[] }
-    const loaded =
-      data.models?.find((m) => (m.model ?? m.name) === model || m.name === model) ??
-      data.models?.[0]
-    if (!loaded) {
-      return { accelerator: 'unknown', detail: 'Ollama no reportó el modelo cargado', model }
-    }
-    const vram = loaded.size_vram ?? 0
-    if (vram > 0) {
-      return { accelerator: 'gpu', detail: 'El modelo corre en la GPU', model }
-    }
-    return {
-      accelerator: 'cpu',
-      detail: 'El modelo corre en CPU — el análisis será lento y puede cortar por timeout',
-      model,
-    }
-  } catch {
-    return { accelerator: 'unknown', detail: 'No se pudo leer el estado de Ollama', model }
-  }
-}
-
-ipcMain.handle('hardware:probe', async (): Promise<HardwareProbe> => {
+ipcMain.handle(IPC_CHANNELS.hardwareProbe, async (): Promise<HardwareProbe> => {
   const s = loadSettings()
   const baseUrl = s.ollamaBaseUrl || 'http://localhost:11434'
   const model = s.llmModel || 'qwen2.5:7b'
-  return probeAccelerator(baseUrl, model)
+  return probeHardware(baseUrl, model, {
+    ensureRunning: (ollamaBaseUrl) =>
+      ensureOllamaRunning(ollamaBaseUrl, (message) => log('info', message)),
+  })
 })

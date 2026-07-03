@@ -280,38 +280,33 @@ al proveedor configurado. BugLens muestra esa advertencia antes de ejecutar el a
 
 Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados → exportar**.
 
-### `src/pipeline/` — lectura y datos
+### `src/features/analyze-bugs/` — intake, evidencia y analisis
 
 | Función | Qué hace |
 |---|---|
 | `excelReader.readExcel(path)` | Parsea el Excel → `RawBug[]`: mapea columnas, extrae links a docs, filtra filas que son headers repetidos. |
-| `excelReader.writeEnrichedExcel(...)` | Exporta el Excel original + columnas del análisis (reescritura, estado, etc.). |
-| `excelReader.writeBugsExcel(...)` | Exporta un `.xlsx` **desde cero** (sin Excel original): para bugs manuales o mezclados. |
-| `fullDataExport.writeFullDataJson(...)` | Exporta un `.json` completo sin aplanar: fila original, docs leídos, imágenes, análisis, estado, errores, tiempos y respuesta cruda del LLM. |
-| `excelReader.mapHeader(h)` / `extractGoogleLinks(t)` | Helpers puros: mapeo de cabeceras ES/EN y detección de links Docs/Drive. |
 | `manualBugBuilder.buildManualBug(fields, seq)` | Arma un `RawBug` válido desde los campos del formulario manual (sin Excel). |
-| `bugEnricher.BugEnricher.enrich(bug)` | Trae los Google Docs del bug. **Cachea por URL** para no re-descargar el mismo doc (un doc suele documentar varios bugs). |
-| `bugStatusKey.bugRecordKey(raw)` | Clave de identidad **estable por contenido** (título+descripción). Vincula el mismo bug con su fila compartida en Supabase aunque cambie de posición. |
-| `src/supabase/teamBugs` | Crea imports, guarda análisis, cambia estados, borra bugs con soft-delete y reconstruye la tabla desde Supabase. |
-| `googleDocsReader` / `browserDocsReader` | Lectura de Google Docs vía OAuth (texto) o sesión de navegador (texto + capturas). |
+| `BugEnricher.enrich(bug)` | Trae los Google Docs del bug y cachea por URL durante la corrida. |
+| `runBugAnalysisBatch(...)` | Procesa el lote con concurrencia, progreso, fallback por bug y guardado por resultado. |
+| `fastTriage.analyzeBug(enriched, config, cacheDir?)` | Una llamada LLM por bug: clasifica, reescribe y lista faltantes. |
+| `analysisCache` / `runtimeConfig` | Cache por contenido, paralelismo y timeouts efectivos. |
 
-### `src/llm/` — análisis
-
-| Función | Qué hace |
-|---|---|
-| `fastTriage.analyzeBug(enriched, config, cacheDir?)` | **El pipeline**: una llamada LLM por bug → clasifica + reescribe + lista faltantes. Con caché. |
-| `fastTriage.parseAnalysis(raw)` | Parsea la respuesta del LLM de forma robusta: tolera ` ```fences``` `, texto extra, campos faltantes/inválidos → defaults seguros. |
-| `fastTriage.extractRelevantDocSection(bug, text)` | Ventana deslizante que elige la sección del doc más relevante al bug (un doc puede documentar varios). |
-| `client.getLLMConfig(override?)` | Resuelve provider / modelo / baseUrl / apiKey / modo de rendimiento desde env + overrides. |
-| `runtimeConfig.resolveConcurrency / resolveOllamaTimeoutMs` | Paralelismo y timeout efectivos. Precedencia: env var > modo de rendimiento (cpu → 1 / 240 s) > default del proveedor. |
-| `analysisCache.makeCacheKey / load / save` | Caché por **contenido** (bug + docs + modelo + versión de prompt): re-correr el mismo Excel = 0 llamadas. |
-
-### `src/agents/` — agente externo
+### `src/features/bug-workflow/` y `src/features/projects/`
 
 | Función | Qué hace |
 |---|---|
-| `externalAgent.buildExternalAgentPrompt(...)` | Construye el prompt por bug: reporte reescrito, evidencia, repositorios y reglas para evaluar pasos reportados vs. hallazgos laterales. |
-| `externalAgent.runExternalAgent(...)` | Ejecuta el comando configurado sin TTY, streamea progreso al renderer, aplica timeout y devuelve salida/error normalizados. |
+| `bugRecordKey(raw)` | Identidad estable por contenido (titulo + descripcion). |
+| `manageBugWorkflow` | Carga bugs, cambia estado, agrega comentarios y borra con soft-delete. |
+| `projectAnalysisRun` | Crea imports remotos y guarda resultados de analisis en el proyecto activo. |
+| `teamClient` / `teamBugs` | Infraestructura Supabase de proyectos, auth, imports, estados y restore remoto. |
+
+### `src/features/export-bugs/`, `settings` y `external-agent`
+
+| Area | Qué hace |
+|---|---|
+| `export-bugs` | Exporta Excel enriquecido, Excel desde cero y JSON completo. |
+| `settings` | Settings, onboarding, rendimiento GPU/CPU, reset y sondeo de hardware/Ollama. |
+| `external-agent` | Ejecuta un comando externo por bug y guarda su aporte. BugLens no analiza codigo fuente por si mismo. |
 
 ### `electron/main.ts` — proceso main
 
@@ -346,30 +341,26 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 ```
 buglens/
 ├── electron/
-│   ├── main.ts            # Main process: IPC, ventana, orquestación del pipeline
+│   ├── main.ts            # Main process: IPC, ventana y adaptadores Electron
 │   └── preload.ts         # Expone electronAPI al renderer (contextBridge)
 ├── src/
-│   ├── pipeline/
-│   │   ├── excelReader.ts        # Lee/escribe Excel (SheetJS) + export desde cero
-│   │   ├── manualBugBuilder.ts   # Arma un RawBug desde el formulario manual
-│   │   ├── googleDocsReader.ts   # Google Docs vía OAuth2
-│   │   ├── browserDocsReader.ts  # Google Docs vía sesión de navegador (+ capturas)
-│   │   ├── bugEnricher.ts        # Trae los docs del bug (con dedup por URL)
-│   │   └── bugStatusKey.ts       # Clave de identidad estable por contenido
-│   ├── supabase/
-│   │   ├── teamClient.ts         # Auth, storage y cliente Supabase
-│   │   └── teamBugs.ts           # Persistencia compartida de bugs/análisis
-│   ├── llm/
-│   │   ├── fastTriage.ts         # Pipeline de análisis (clasificar + reescribir)
-│   │   ├── client.ts             # Config de LLM local (Ollama)
-│   │   ├── runtimeConfig.ts      # Paralelismo + timeout efectivos (modo GPU/CPU + env)
-│   │   └── analysisCache.ts      # Caché de análisis por contenido
-│   ├── agents/
-│   │   └── externalAgent.ts      # Prompt + ejecución del agente externo por bug
-│   └── types/index.ts            # Tipos TypeScript compartidos
+│   ├── features/
+│   │   ├── analyze-bugs/      # Excel/manual input, evidencia, LLM, cache y batch
+│   │   ├── bug-workflow/      # Estados, comentarios, borrado e identidad por contenido
+│   │   ├── projects/          # Proyectos, Supabase team auth, imports y realtime
+│   │   ├── export-bugs/       # Excel/JSON export
+│   │   ├── settings/          # Settings, onboarding, reset, Ollama/hardware probe
+│   │   └── external-agent/    # Comando externo por bug
+│   ├── platform/
+│   │   ├── filesystem/        # JSON file store
+│   │   ├── ollama/            # Proceso/ping de Ollama
+│   │   └── supabase/          # Cliente persistente Supabase
+│   └── shared/
+│       ├── contracts/         # bugTypes, settingsTypes, ipcEvents, externalAgentTypes
+│       └── ipc/               # Canales IPC compartidos
 ├── renderer/
-│   ├── components/        # BugTable, ManualBugForm, Settings, Onboarding, PerformanceModePicker, FileUpload, ProgressLog, EmptyState
-│   │   └── decor/         # Motivos decorativos temáticos (BugMotifs: escarabajo, lupa+bicho)
+│   ├── features/          # UI de negocio por feature
+│   ├── components/        # UI generica, decor, FileUpload, Loading, EmptyState
 │   ├── App.tsx            # Root component + estado + atajos
 │   ├── main.tsx           # Entry point React
 │   ├── styles.css         # Tailwind
@@ -416,7 +407,7 @@ La app deshabilita la aceleración por hardware en Linux automáticamente (rende
 software). Si igual falla, verificá que Vite esté en el puerto 5173.
 
 **Ollama timeout / lento.** Modelos grandes en CPU/GPU modesta tardan. Probá un modelo
-más chico (`qwen2.5:7b`) desde config, o subí el timeout en `src/llm/fastTriage.ts`.
+más chico (`qwen2.5:7b`) desde config, o subí el timeout en `src/features/analyze-bugs/infrastructure/runtimeConfig.ts`.
 
 **GPU AMD no se usa.** Necesita `HSA_OVERRIDE_GFX_VERSION=10.3.0` (la app lo setea al
 levantar Ollama; si lo corrés manual, agregalo).

@@ -1,4 +1,4 @@
-import type { ManualBugFields } from '../src/pipeline/manualBugBuilder'
+import type { ManualBugFields } from '../src/features/analyze-bugs/application/manualBugBuilder'
 import type {
   AnalyzedBug,
   BugComment,
@@ -6,7 +6,7 @@ import type {
   ExternalAgentRepository,
   ExternalAgentResult,
   IPCEvent,
-} from '../src/types/index'
+} from '../src/shared/contracts'
 
 interface ElectronAPI {
   // Settings

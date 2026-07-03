@@ -1,11 +1,14 @@
 node_modules/
 dist/
+release/
+release-*/
 
 # Datos locales / sesión del navegador
 data/
 *.json.bak
 google-session-cookies.json
 browser-profile/
+supabase/.temp/
 
 # Variables de entorno y claves
 .env
