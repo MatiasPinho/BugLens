@@ -9,7 +9,7 @@ import {
   SeverityDot,
   severityStyle,
   statusStyle,
-} from './BugTable'
+} from '../features/bug-workflow/ui/BugTable'
 
 // Kitchen-sink del design system: badges (con las paletas reales del código) +
 // los átomos. Documentación viva de los tokens visuales.
@@ -56,11 +56,13 @@ export const Badges: Story = {
         ))}
       </Row>
       <Row label="estado">
-        {Object.entries(statusStyle).map(([s, st]) => (
-          <OmBadge key={s} style={st}>
-            {st.label}
-          </OmBadge>
-        ))}
+        {Object.entries(statusStyle).map(
+          ([s, st]: [string, (typeof statusStyle)[keyof typeof statusStyle]]) => (
+            <OmBadge key={s} style={st}>
+              {st.label}
+            </OmBadge>
+          ),
+        )}
       </Row>
     </div>
   ),

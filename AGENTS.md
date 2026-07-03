@@ -27,23 +27,39 @@ reescribe el reporte en texto claro y estructurado, y lleva un **estado** por bu
 
 ```
 Excel  ─┐
-        ├→ bugEnricher (trae Google Docs) → fastTriage.analyzeBug (1 llamada LLM:
-manual ─┘   clasifica + reescribe + lista faltantes) → tabla (activos/históricos) → exportar
+        ├→ analyze-bugs (evidencia + LLM) → bug-workflow (activos/históricos) → export-bugs
+manual ─┘                                      │
+                                               └→ projects (Supabase)
 ```
 
 Dos entradas, mismo pipeline: el Excel (`analyze:run`) y la carga manual
 (`analyze:manual-bug`, que appendea sin reemplazar). Los bugs analizados, estados,
 imports y corridas se persisten en Supabase; al reabrir se restaura desde el proyecto remoto.
 
-- `src/pipeline/` — `excelReader` (lee + exporta; `writeBugsExcel` exporta desde cero),
-  `manualBugBuilder` (RawBug desde el form), doc readers
-  (`googleDocsReader`/`browserDocsReader`), `bugEnricher`, identidad (`bugStatusKey`)
-- `src/supabase/` — `teamClient` (auth/cliente) y `teamBugs` (imports, análisis,
-  estados, soft-delete, restore remoto)
-- `src/llm/` — `fastTriage` (el pipeline real), `client` (config de LLM), `analysisCache`
-- `electron/main.ts` — IPC (`analyze:run`/`analyze:manual-bug`, `export:excel`/`export:bugs`,
-  `bugs:load-remote`/`bugs:watch-remote`, `bug:set-status`/`bug:delete`) + orquestación
-  del batch · `renderer/` — UI (`App`, `BugTable`, `ManualBugForm`, `decor/BugMotifs`, …)
+La estructura del proyecto sigue **Screaming Architecture**: la raíz debe gritar el producto
+de BugLens (analizar reportes QA, gestionar bugs/proyectos, exportar y configurar), no las
+capas técnicas. No volver a organizar el código por carpetas raíz como `pipeline`, `llm`,
+`supabase`, `renderer` o `agents` para lógica de negocio.
+
+- `src/features/analyze-bugs/` — Excel/manual input, enriquecimiento con Google Docs,
+  análisis LLM, caché, runtime config y progreso de batch.
+- `src/features/bug-workflow/` — identidad por contenido, estados, comentarios,
+  activos/históricos y soft-delete.
+- `src/features/projects/` — proyectos, team auth, imports, restore remoto y realtime.
+- `src/features/export-bugs/` — export Excel/JSON.
+- `src/features/settings/` — settings, onboarding, reset, Ollama/hardware probe y
+  configuración LLM.
+- `src/features/external-agent/` — comando externo/OpenCode por bug. Mantenerlo claramente
+  secundario: BugLens no analiza código fuente por sí mismo.
+- `src/shared/` — contratos compartidos, canales IPC, helpers puros transversales y UI
+  realmente genérica.
+- `src/platform/` — adaptadores técnicos: filesystem, Ollama, Supabase client y otros
+  detalles de infraestructura.
+- `electron/main.ts`, `electron/preload.ts` y `renderer/main.tsx` son entrypoints del
+  framework. Deben delegar en módulos de `features/`, `shared/` o `platform/`; no concentrar
+  ahí reglas de negocio nuevas.
+- `renderer/features/*/ui` contiene UI de negocio por feature. `renderer/components/` queda
+  para piezas genéricas: modales, loading, iconos, empty states, decor y controles comunes.
 
 ## Convenciones y constraints
 
