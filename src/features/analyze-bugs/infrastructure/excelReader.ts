@@ -138,7 +138,7 @@ const ANALYSIS_HEADERS = [
   'Qué debería pasar',
   'Pasos',
   'Ambiente',
-  'Falta info',
+  'Preguntas pendientes',
   'Error análisis',
 ] as const
 

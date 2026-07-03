@@ -749,6 +749,58 @@ describe('BugTable — agente externo', () => {
     expect(await screen.findByText(/25 de marzo: se vuelve a abrir/)).toBeInTheDocument()
   })
 
+  it('permite responder preguntas pendientes como notas vinculadas', async () => {
+    const bug = makeBug({
+      id: 'a',
+      title: 'Pregunta abierta',
+      missingInformation: ['qué usuario reproduce el error'],
+    })
+    const onAddComment = vi.fn().mockResolvedValue({
+      id: 'comment-answer',
+      body: '[Pregunta pendiente]\nPregunta: qué usuario reproduce el error\nRespuesta: qa.demo',
+      createdAt: '2026-03-25T12:00:00.000Z',
+      authorEmail: 'qa@example.com',
+    })
+
+    render(<BugTable results={[bug]} onAddComment={onAddComment} />)
+    await userEvent.click(screen.getByText('Pregunta abierta'))
+
+    expect(screen.getByText('preguntas pendientes')).toBeInTheDocument()
+    expect(screen.getByText('qué usuario reproduce el error')).toBeInTheDocument()
+
+    await userEvent.type(screen.getByPlaceholderText('Responder esta pregunta...'), 'qa.demo')
+    await userEvent.click(screen.getByRole('button', { name: 'responder' }))
+
+    expect(onAddComment).toHaveBeenCalledWith(
+      bug,
+      '[Pregunta pendiente]\nPregunta: qué usuario reproduce el error\nRespuesta: qa.demo',
+    )
+    expect(await screen.findByText(/respondida.*25.*mar.*2026/i)).toBeInTheDocument()
+    expect(screen.getByText('qa.demo')).toBeInTheDocument()
+  })
+
+  it('limita las preguntas pendientes a tres y permite ver el resto', async () => {
+    const bug = makeBug({
+      id: 'a',
+      title: 'Varias preguntas',
+      missingInformation: ['pregunta 1', 'pregunta 2', 'pregunta 3', 'pregunta 4'],
+    })
+
+    render(<BugTable results={[bug]} onAddComment={vi.fn()} />)
+    await userEvent.click(screen.getByText('Varias preguntas'))
+
+    expect(screen.getByText('pregunta 1')).toBeInTheDocument()
+    expect(screen.getByText('pregunta 2')).toBeInTheDocument()
+    expect(screen.getByText('pregunta 3')).toBeInTheDocument()
+    expect(screen.queryByText('pregunta 4')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'mostrar 1 pendientes' }))
+    expect(screen.getByText('pregunta 4')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'mostrar menos' }))
+    expect(screen.queryByText('pregunta 4')).not.toBeInTheDocument()
+  })
+
   it('muestra el error del agente externo dentro del detalle', async () => {
     const onAnalyzeExternalAgent = vi.fn().mockResolvedValue({
       ok: false,

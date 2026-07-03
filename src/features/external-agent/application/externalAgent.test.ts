@@ -71,7 +71,7 @@ describe('externalAgent', () => {
 
     expect(prompt).toContain('Título: Login roto')
     expect(prompt).toContain('Qué pasa: al enviar credenciales queda cargando')
-    expect(prompt).toContain('Información faltante: usuario de prueba')
+    expect(prompt).toContain('Preguntas pendientes: usuario de prueba')
     expect(prompt).toContain('captura con error 500')
     expect(prompt).toContain('No modifiques archivos')
     expect(prompt).toContain('No uses subagentes')

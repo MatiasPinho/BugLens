@@ -17,7 +17,7 @@ import type { BugAnalysis, EnrichedBug } from '../../../shared/contracts/bugType
 import type { LLMConfig } from '../../../shared/contracts/settingsTypes.js'
 
 // Bump cuando cambia el prompt — invalida cache vieja para forzar recálculo.
-const PROMPT_VERSION = 'v11-2026-06-vision-images'
+const PROMPT_VERSION = 'v12-2026-07-actionable-questions'
 
 const SUBDIR = 'analysis'
 

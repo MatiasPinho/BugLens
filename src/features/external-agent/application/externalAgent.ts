@@ -194,7 +194,7 @@ function resolveStalledProgressTimeoutMs(timeoutMs: number): number {
 }
 
 function hasExpectedReportContent(output: string): boolean {
-  return /(^|\n)#{1,3}\s*(resumen|evidencia|diagn[oó]stico|archivos|estado probable|pr[oó]ximos pasos|informaci[oó]n faltante)\b/i.test(
+  return /(^|\n)#{1,3}\s*(resumen|evidencia|diagn[oó]stico|archivos|estado probable|pr[oó]ximos pasos|informaci[oó]n faltante|preguntas pendientes)\b/i.test(
     output,
   )
 }
@@ -345,8 +345,8 @@ export function buildExternalAgentPrompt(
       : 'Pasos reescritos: No informado',
     `Ambiente reescrito: ${rewritten.environment}`,
     analysis.missingInformation.length > 0
-      ? `Información faltante: ${analysis.missingInformation.join('; ')}`
-      : 'Información faltante: ninguna',
+      ? `Preguntas pendientes: ${analysis.missingInformation.join('; ')}`
+      : 'Preguntas pendientes: ninguna',
     '',
     docs ? `Documentos adjuntos\n${docs}` : 'Documentos adjuntos: ninguno',
     '',
@@ -393,7 +393,7 @@ export function buildExternalAgentPrompt(
     '- <acción concreta para reproducir, verificar, corregir o pedir más información>',
     '- ninguno',
     '',
-    '## Información faltante',
+    '## Preguntas pendientes',
     '- <pregunta específica para QA/producto/dev>',
     '- ninguna',
   ]

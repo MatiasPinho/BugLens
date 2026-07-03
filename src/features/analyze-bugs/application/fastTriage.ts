@@ -2,7 +2,8 @@
  * analyze.ts (histórico: fastTriage.ts)
  *
  * El único pipeline de la app: por cada bug, clasifica + REESCRIBE el reporte
- * (a veces incoherente) del QA en texto claro + lista qué datos faltan.
+ * (a veces incoherente) del QA en texto claro + lista preguntas pendientes
+ * realmente accionables.
  *
  * No toca el repositorio ni usa agente. Una sola llamada LLM corta por bug:
  * texto con qwen2.5:7b, y capturas con un modelo vision local si está configurado.
@@ -22,7 +23,7 @@ import { resolveOllamaTimeoutMs } from '../infrastructure/runtimeConfig.js'
 const SYSTEM_PROMPT = `Sos un asistente que ordena y REESCRIBE reportes de bugs de QA. Los reportes suelen venir incoherentes, incompletos o mal redactados. Tu trabajo:
 1. Clasificar el bug (área, tipo, severidad).
 2. REESCRIBIR el reporte en español claro y estructurado.
-3. Listar qué información falta.
+3. Listar solo preguntas pendientes que bloqueen reproducir, priorizar o asignar.
 
 Respondé SOLO un JSON con este formato. Todo en español.
 
@@ -40,11 +41,13 @@ Respondé SOLO un JSON con este formato. Todo en español.
     "environment": "dev / prod / local (o 'No informado')"
   },
   "problemCount": 1,
-  "missingInformation": ["qué dato falta para entender o reproducir el bug"]
+  "missingInformation": ["pregunta concreta que bloquea reproducir, priorizar o asignar"]
 }
 
 REGLAS:
-- SIEMPRE producí una reescritura con lo que haya. Nunca digas "no se puede" ni "información insuficiente": si falta algo, escribilo en "missingInformation" y poné "No informado" en el campo que corresponda.
+- SIEMPRE producí una reescritura con lo que haya. Nunca digas "no se puede" ni "información insuficiente": si falta un campo no bloqueante, poné "No informado" en el campo que corresponda y NO lo agregues a "missingInformation".
+- "missingInformation" NO es un checklist de campos vacíos. Usalo como lista corta de preguntas accionables para QA/producto/dev cuando el dato faltante cambia la reproducción, prioridad, asignación o decisión siguiente. Si el bug igual se entiende y se puede ordenar, devolvé [].
+- No agregues preguntas genéricas como "más contexto", "más información", "capturas", "pasos exactos" o "ambiente" salvo que en este reporte sean imprescindibles para reproducir o decidir el bug.
 - REESCRIBÍ, no copies: arreglá la redacción, ordená los pasos, separá "qué pasa" de "qué debería pasar". No inventes hechos que el reporte no dice.
 - PASOS NO SON PROBLEMAS (IMPORTANTE): los pasos para reproducir, el flujo de uso, y la separación "qué pasa" vs "qué debería pasar" de UN MISMO bug NO son problemas distintos. Los pasos van SIEMPRE en "steps", NUNCA numerados dentro de "observed"/"expected". Un bug con muchos pasos o varios síntomas del mismo origen sigue siendo UN problema.
 - VARIOS PROBLEMAS EN UN MISMO REPORTE: numerá "observed"/"expected" SOLO si el reporte mezcla defectos INDEPENDIENTES, cada uno arreglable por separado (ej: "no guarda" + "se ve mal en mobile"). En ese caso escribí UN problema por línea, numerados ("1. ...\\n2. ..."), en el MISMO orden en ambos campos (el punto 2 de observed se corresponde con el punto 2 de expected), y poné "problemCount" con la cantidad de defectos. Si es UN solo bug (aunque tenga varios pasos), "observed"/"expected" en una sola línea SIN numerar y "problemCount": 1.
@@ -317,7 +320,39 @@ function extractJSON(text: string): string {
 
 function toStringArray(v: unknown): string[] {
   if (!Array.isArray(v)) return []
-  return v.map((x) => String(x)).filter((s) => s.trim().length > 0)
+  return v.map((x) => String(x).trim()).filter((s) => s.length > 0)
+}
+
+function normalizeTextKey(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function isActionableMissingInformation(value: string): boolean {
+  const normalized = normalizeTextKey(value)
+  if (
+    [
+      'n/a',
+      'na',
+      'ninguna',
+      'ninguno',
+      'no aplica',
+      'no informado',
+      'sin datos',
+      'sin informacion',
+    ].includes(normalized)
+  ) {
+    return false
+  }
+  return !/^falta (mas )?(informacion|contexto|detalle|detalles)\.?$/.test(normalized)
+}
+
+function toActionableMissingInformation(v: unknown): string[] {
+  return toStringArray(v).filter(isActionableMissingInformation)
 }
 
 // Cuenta los ítems numerados ("1.", "2)", …) al inicio de línea. Usado para
@@ -361,7 +396,7 @@ function validate(obj: unknown, rawResponse: string): BugAnalysis {
       // así el badge "N problemas" siempre coincide con la lista que se ve.
       problemCount: Math.max(1, countNumberedItems(observed), countNumberedItems(expected)),
     },
-    missingInformation: toStringArray(o['missingInformation']),
+    missingInformation: toActionableMissingInformation(o['missingInformation']),
     rawResponse,
   }
 }

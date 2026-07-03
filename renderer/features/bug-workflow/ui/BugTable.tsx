@@ -96,6 +96,7 @@ const STATUS_OPTIONS: BugStatus[] = [
   'cerrado',
   'no_replicado',
 ]
+const PENDING_QUESTION_COMMENT_MARKER = '[Pregunta pendiente]'
 
 // ─── Ciclo de vida ──────────────────────────────────────────────────────────
 // Separa lo ACCIONABLE (requiere trabajo) de lo ARCHIVADO (cerrado / no se pudo
@@ -978,11 +979,6 @@ export default function BugTable({
                       >
                         {r.analysis.summary}
                       </div>
-                      {r.analysis.missingInformation.length > 0 && (
-                        <span className="font-mono text-xs" style={{ color: col.amber }}>
-                          ⚠ falta info
-                        </span>
-                      )}
                     </td>
                     <td className="px-4 py-2.5">
                       {onSetStatus ? (
@@ -1291,20 +1287,30 @@ export function ExpandedDetail({
     }
   }
 
-  const handleAddComment = async () => {
-    const body = commentBody.trim()
-    if (!body || commentSaving || !onAddComment) return
+  const saveCommentBody = async (body: string): Promise<BugComment | null> => {
+    if (!body || commentSaving || !onAddComment) return null
     setCommentSaving(true)
     setCommentError('')
     try {
       const comment = await onAddComment(result, body)
       setComments((prev) => [comment, ...prev])
-      setCommentBody('')
+      return comment
     } catch (err) {
       setCommentError(err instanceof Error ? err.message : String(err))
+      return null
     } finally {
       setCommentSaving(false)
     }
+  }
+
+  const handleAddComment = async () => {
+    const comment = await saveCommentBody(commentBody.trim())
+    if (comment) setCommentBody('')
+  }
+
+  const handleAnswerPendingQuestion = async (question: string, answer: string) => {
+    const comment = await saveCommentBody(buildPendingQuestionComment(question, answer))
+    return Boolean(comment)
   }
 
   const externalAgentSilenceMs = externalAgentRunning
@@ -1320,7 +1326,7 @@ export function ExpandedDetail({
     rw.steps.length > 0 ? `Pasos:\n${rw.steps.map((s, i) => `  ${i + 1}. ${s}`).join('\n')}` : '',
     `Ambiente: ${rw.environment}`,
     analysis.missingInformation.length > 0
-      ? `Falta: ${analysis.missingInformation.join('; ')}`
+      ? `Preguntas pendientes: ${analysis.missingInformation.join('; ')}`
       : '',
   ]
     .filter(Boolean)
@@ -1352,12 +1358,13 @@ export function ExpandedDetail({
             {analysis.missingInformation.length > 0 && (
               <OmBadge
                 style={{
-                  text: col.amber,
-                  bg: alpha(col.amberDeep, 0.08),
-                  border: alpha(col.amberDeep, 0.28),
+                  text: col.fgMuted,
+                  bg: alpha(col.fgMuted, 0.07),
+                  border: alpha(col.fgMuted, 0.2),
                 }}
               >
-                faltan {analysis.missingInformation.length} datos
+                {analysis.missingInformation.length} pregunta
+                {analysis.missingInformation.length === 1 ? '' : 's'} pendiente
               </OmBadge>
             )}
           </div>
@@ -1504,6 +1511,17 @@ export function ExpandedDetail({
             </div>
           </SectionCard>
 
+          {analysis.missingInformation.length > 0 && (
+            <PendingQuestionsCard
+              questions={analysis.missingInformation}
+              comments={comments}
+              saving={commentSaving}
+              error={commentError}
+              canAnswer={Boolean(onAddComment)}
+              onAnswer={handleAnswerPendingQuestion}
+            />
+          )}
+
           <BugCommentsCard
             comments={comments}
             value={commentBody}
@@ -1513,21 +1531,6 @@ export function ExpandedDetail({
             onChange={setCommentBody}
             onSubmit={handleAddComment}
           />
-
-          {analysis.missingInformation.length > 0 && (
-            <SectionCard title="datos que faltan">
-              <ul className="missing-list">
-                {analysis.missingInformation.map((m, i) => (
-                  <li key={i} className="missing-item">
-                    <span style={{ color: col.amber }}>
-                      <IconHelp size={12} />
-                    </span>
-                    <span>{m}</span>
-                  </li>
-                ))}
-              </ul>
-            </SectionCard>
-          )}
 
           {!externalAgentResult && !externalAgentRunning && (
             <SectionCard title="agente configurado">
@@ -1736,6 +1739,134 @@ function ExternalAgentHistoryPanel({ items }: { items: ExternalAgentResult[] }) 
             onClick={() => setExpanded((value) => !value)}
           >
             {expanded ? 'mostrar menos' : `mostrar ${hiddenCount} anteriores`}
+          </button>
+        )}
+      </div>
+    </SectionCard>
+  )
+}
+
+function normalizePendingQuestionKey(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function buildPendingQuestionComment(question: string, answer: string): string {
+  return [
+    PENDING_QUESTION_COMMENT_MARKER,
+    `Pregunta: ${question.trim()}`,
+    `Respuesta: ${answer.trim()}`,
+  ].join('\n')
+}
+
+function extractPendingQuestionAnswer(comment: BugComment, question: string): string | null {
+  if (!comment.body.includes(PENDING_QUESTION_COMMENT_MARKER)) return null
+  const commentQuestion = comment.body.match(/^Pregunta:\s*(.+)$/m)?.[1]?.trim()
+  if (!commentQuestion) return null
+  if (normalizePendingQuestionKey(commentQuestion) !== normalizePendingQuestionKey(question)) {
+    return null
+  }
+  return comment.body.match(/^Respuesta:\s*([\s\S]+)$/m)?.[1]?.trim() ?? ''
+}
+
+function PendingQuestionsCard({
+  questions,
+  comments,
+  saving,
+  error,
+  canAnswer,
+  onAnswer,
+}: {
+  questions: string[]
+  comments: BugComment[]
+  saving: boolean
+  error: string
+  canAnswer: boolean
+  onAnswer: (question: string, answer: string) => Promise<boolean>
+}) {
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [expanded, setExpanded] = useState(false)
+  const visibleQuestions = expanded ? questions : questions.slice(0, 3)
+  const hiddenCount = Math.max(0, questions.length - visibleQuestions.length)
+
+  return (
+    <SectionCard title="preguntas pendientes">
+      <div className="pending-question-list">
+        {visibleQuestions.map((question, index) => {
+          const key = normalizePendingQuestionKey(question)
+          const answeredComment = comments.find((comment) =>
+            extractPendingQuestionAnswer(comment, question),
+          )
+          const answer = answeredComment
+            ? extractPendingQuestionAnswer(answeredComment, question)
+            : null
+          const draft = drafts[key] ?? ''
+
+          return (
+            <div key={`${key}-${index}`} className="pending-question">
+              <div className="pending-question-header">
+                <span className="pending-question-icon" aria-hidden="true">
+                  {answer === null ? <IconHelp size={12} /> : <IconCheck size={12} />}
+                </span>
+                <span className="pending-question-text">{question}</span>
+              </div>
+
+              {answer === null ? (
+                <div className="grid gap-2">
+                  <textarea
+                    className="input min-h-20 resize-y text-xs"
+                    value={draft}
+                    onChange={(event) =>
+                      setDrafts((current) => ({ ...current, [key]: event.target.value }))
+                    }
+                    placeholder="Responder esta pregunta..."
+                    disabled={!canAnswer || saving}
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs" style={{ color: error ? col.red : col.fgMuted }}>
+                      {error ||
+                        (canAnswer
+                          ? 'la respuesta se guarda como nota de seguimiento'
+                          : 'sin conexión para guardar respuestas')}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-mini"
+                      disabled={!canAnswer || saving || !draft.trim()}
+                      onClick={async () => {
+                        const saved = await onAnswer(question, draft)
+                        if (saved) setDrafts((current) => ({ ...current, [key]: '' }))
+                      }}
+                    >
+                      {saving ? 'guardando...' : 'responder'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="pending-question-answer">
+                  <div className="pending-question-answer-meta">
+                    respondida
+                    {answeredComment?.createdAt
+                      ? ` · ${formatTimelineDate(answeredComment.createdAt)}`
+                      : ''}
+                  </div>
+                  <p>{answer || 'Sin detalle.'}</p>
+                </div>
+              )}
+            </div>
+          )
+        })}
+        {questions.length > 3 && (
+          <button
+            type="button"
+            className="history-toggle"
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? 'mostrar menos' : `mostrar ${hiddenCount} pendientes`}
           </button>
         )}
       </div>
@@ -2342,7 +2473,8 @@ const AGENT_SECTION_HEADINGS: Record<string, string> = {
   'hallazgos laterales': 'Hallazgos laterales',
   'estado probable del bug': 'Estado probable del bug',
   'proximos pasos': 'Próximos pasos',
-  'informacion faltante': 'Información faltante',
+  'informacion faltante': 'Preguntas pendientes',
+  'preguntas pendientes': 'Preguntas pendientes',
 }
 
 function canonicalAgentSectionHeading(line: string): string {
@@ -2410,7 +2542,9 @@ function parseAgentCoverageLine(line: string, section: string): AgentCoverageIte
 }
 
 function shouldRenderLineAsListItem(line: string, section: string): boolean {
-  if (!['proximos pasos', 'informacion faltante'].includes(section)) return false
+  if (!['proximos pasos', 'informacion faltante', 'preguntas pendientes'].includes(section)) {
+    return false
+  }
   return cleanAgentReportText(line).length > 0
 }
 
