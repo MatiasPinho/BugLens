@@ -223,7 +223,7 @@ describe('writeBugsExcel (genera xlsx desde cero)', () => {
     expect(rows[0]['Severidad']).toBe('high')
     expect(rows[0]['Confianza']).toBe('0.90')
     expect(rows[0]['Pasos']).toBe('abrir login | click en entrar')
-    expect(rows[0]['Falta info']).toBe('versión del navegador')
+    expect(rows[0]['Preguntas pendientes']).toBe('versión del navegador')
     expect(rows[1]['Título']).toBe('Otro bug')
     expect(rows[1]['Categoría']).toBe('backend')
   })

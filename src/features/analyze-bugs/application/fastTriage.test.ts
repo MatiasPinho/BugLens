@@ -16,7 +16,7 @@ const FULL = JSON.stringify({
     steps: ['paso 1', 'paso 2'],
     environment: 'dev',
   },
-  missingInformation: ['falta el mensaje de error'],
+  missingInformation: ['qué mensaje de error ve QA'],
 })
 
 describe('parseAnalysis', () => {
@@ -27,7 +27,7 @@ describe('parseAnalysis', () => {
     expect(a.confidence).toBe(0.9)
     expect(a.rewritten.steps).toEqual(['paso 1', 'paso 2'])
     expect(a.rewritten.problemCount).toBe(2)
-    expect(a.missingInformation).toEqual(['falta el mensaje de error'])
+    expect(a.missingInformation).toEqual(['qué mensaje de error ve QA'])
   })
 
   it('tolera ```json fences``` y texto antes/después', () => {
@@ -67,6 +67,20 @@ describe('parseAnalysis', () => {
   it('steps con valores no-string y vacíos se limpian', () => {
     const a = parseAnalysis(JSON.stringify({ rewritten: { steps: ['ok', '', '  ', 3] } }))
     expect(a.rewritten.steps).toEqual(['ok', '3'])
+  })
+
+  it('ignora faltantes genéricos o no accionables del modelo', () => {
+    const a = parseAnalysis(
+      JSON.stringify({
+        missingInformation: [
+          '  qué usuario exacto reprodujo el error  ',
+          'Falta más información.',
+          'No informado',
+          'ninguna',
+        ],
+      }),
+    )
+    expect(a.missingInformation).toEqual(['qué usuario exacto reprodujo el error'])
   })
 
   it('problemCount se DERIVA del texto numerado, no del campo del modelo', () => {

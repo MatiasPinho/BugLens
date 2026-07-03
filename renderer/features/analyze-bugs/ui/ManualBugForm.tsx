@@ -8,7 +8,7 @@ interface Props {
 }
 
 // Carga manual de un bug suelto, sin pasar por un Excel. Necesita al menos
-// título o descripción — el resto lo completa el LLM (lo que falte va a "falta info").
+// título o descripción — el resto lo completa el LLM; solo quedan preguntas si bloquean.
 export default function ManualBugForm({ onSubmit, onClose }: Props) {
   const [fields, setFields] = useState<ManualBugFields>({})
   const dialogRef = useRef<HTMLDivElement | null>(null)

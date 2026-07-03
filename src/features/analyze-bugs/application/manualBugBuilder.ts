@@ -4,7 +4,7 @@ import { extractGoogleLinks } from '../infrastructure/excelReader.js'
 /**
  * Campos que el usuario carga a mano en el formulario de bug manual.
  * Todos opcionales: el reporte del QA suele venir incompleto y el LLM
- * reescribe lo que haya (lo que falte va a `missingInformation`).
+ * reescribe lo que haya; `missingInformation` queda solo para preguntas bloqueantes.
  */
 export interface ManualBugFields {
   title?: string
