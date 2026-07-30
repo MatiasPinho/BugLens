@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ManualBugFields } from '../../../../src/features/analyze-bugs/application/manualBugBuilder'
-import { alpha, col } from '../../../theme'
+import { IconX } from '../../../components/icons'
+import { col } from '../../../theme'
 
 interface Props {
   onSubmit: (fields: ManualBugFields) => void
@@ -65,14 +66,13 @@ export default function ManualBugForm({ onSubmit, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
       {/* backdrop: botón real → click cierra. Fuera del tab order (Esc ya cierra). */}
       <button
         type="button"
         tabIndex={-1}
         aria-label="cerrar formulario"
-        className="absolute inset-0 cursor-default"
-        style={{ background: alpha(col.code, 0.85) }}
+        className="modal-backdrop"
         onClick={onClose}
       />
       <div
@@ -81,96 +81,66 @@ export default function ManualBugForm({ onSubmit, onClose }: Props) {
         aria-modal="true"
         aria-label="cargar bug manual"
         onKeyDown={handleKeyDown}
-        className="relative max-h-[90vh] w-full max-w-lg animate-fade-in overflow-y-auto rounded p-5"
-        style={{ background: col.surface, border: `1px solid ${alpha(col.border, 0.3)}` }}
+        className="modal-shell animate-fade-in"
       >
-        <div className="mb-4 flex items-center justify-between">
-          <span className="font-mono text-xs uppercase tracking-wider" style={{ color: col.cream }}>
-            cargar bug manual
-          </span>
+        <div className="modal-header">
+          <div className="grid min-w-0 gap-0.5">
+            <h2 className="modal-title">Cargar bug manual</h2>
+            <p className="modal-description">
+              Con título o descripción alcanza: el resto lo completa el análisis.
+            </p>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded transition-colors"
-            style={{ color: col.fgMuted }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = col.fg)}
-            onMouseLeave={(e) => (e.currentTarget.style.color = col.fgMuted)}
+            className="btn-icon btn-icon-sm"
             aria-label="cerrar"
           >
-            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 10 10" fill="none">
-              <line
-                x1="1"
-                y1="1"
-                x2="9"
-                y2="9"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-              <line
-                x1="9"
-                y1="1"
-                x2="1"
-                y2="9"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            <IconX size={12} />
           </button>
         </div>
 
-        {/* ── Principal: al menos uno de estos dos es obligatorio ── */}
-        <div className="mb-1 flex items-center gap-2">
-          <span className="section-label mb-0">reporte</span>
-          <span className="font-mono text-xs" style={{ color: col.dim }}>
-            título o descripción (al menos uno)
-          </span>
-        </div>
-        <div className="space-y-3">
+        <div className="modal-body grid gap-4">
           <div>
             <label className="label" htmlFor="manual-bug-title">
-              título
+              Título
             </label>
             <input
               ref={firstFieldRef}
               id="manual-bug-title"
               type="text"
-              className="input text-xs"
-              placeholder="ej: el botón de login no responde"
+              className="input"
+              placeholder="Ej: el botón de login no responde"
               value={fields.title ?? ''}
               onChange={(e) => set('title', e.target.value)}
             />
           </div>
           <div>
             <label className="label" htmlFor="manual-bug-description">
-              descripción
+              Descripción
             </label>
             <textarea
               id="manual-bug-description"
-              className="input resize-y text-xs"
+              className="input resize-y"
               rows={3}
-              placeholder="qué pasa, en las palabras del QA"
+              placeholder="Qué pasa, en las palabras del QA"
               value={fields.description ?? ''}
               onChange={(e) => set('description', e.target.value)}
             />
           </div>
-        </div>
 
-        {/* ── Detalle: opcional, lo que el QA tenga a mano ── */}
-        <div className="mt-4 mb-1">
-          <span className="section-label mb-0">detalle (opcional)</span>
-        </div>
-        <div className="space-y-3">
+          <div className="detail-divider" />
+          <span className="kicker">Detalle opcional</span>
+
           <div>
             <label className="label" htmlFor="manual-bug-steps">
-              pasos para reproducir
+              Pasos para reproducir
             </label>
             <textarea
               id="manual-bug-steps"
-              className="input resize-y text-xs"
+              className="input resize-y"
               rows={3}
-              placeholder="uno por línea"
+              placeholder="Uno por línea"
               value={fields.stepsToReproduce ?? ''}
               onChange={(e) => set('stepsToReproduce', e.target.value)}
             />
@@ -178,26 +148,26 @@ export default function ManualBugForm({ onSubmit, onClose }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label" htmlFor="manual-bug-expected">
-                resultado esperado
+                Resultado esperado
               </label>
               <input
                 id="manual-bug-expected"
                 type="text"
-                className="input text-xs"
-                placeholder="qué debería pasar"
+                className="input"
+                placeholder="Qué debería pasar"
                 value={fields.expectedResult ?? ''}
                 onChange={(e) => set('expectedResult', e.target.value)}
               />
             </div>
             <div>
               <label className="label" htmlFor="manual-bug-actual">
-                resultado actual
+                Resultado actual
               </label>
               <input
                 id="manual-bug-actual"
                 type="text"
-                className="input text-xs"
-                placeholder="qué pasa en su lugar"
+                className="input"
+                placeholder="Qué pasa en su lugar"
                 value={fields.actualResult ?? ''}
                 onChange={(e) => set('actualResult', e.target.value)}
               />
@@ -205,37 +175,38 @@ export default function ManualBugForm({ onSubmit, onClose }: Props) {
           </div>
           <div>
             <label className="label" htmlFor="manual-bug-environment">
-              ambiente
+              Ambiente
             </label>
             <input
               id="manual-bug-environment"
               type="text"
-              className="input text-xs"
+              className="input"
               placeholder="dev / prod / local…"
               value={fields.environment ?? ''}
               onChange={(e) => set('environment', e.target.value)}
             />
           </div>
+
+          {/* Estado de validación, anunciado a lectores de pantalla */}
+          <div role="status" aria-live="polite" className="min-h-4">
+            {!isValid && (
+              <span className="text-xs" style={{ color: col.fgDim }}>
+                Cargá al menos título o descripción para continuar
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="mt-5 flex items-center gap-3">
-          <button type="button" className="btn-primary" onClick={handleSubmit} disabled={!isValid}>
-            agregar y analizar
-          </button>
-          <button type="button" className="btn-secondary" onClick={onClose}>
-            cancelar
-          </button>
-          <span className="ml-auto font-mono text-xs" style={{ color: col.dim }}>
-            ⌘/Ctrl + ↵
+        <div className="modal-footer">
+          <span className="text-2xs" style={{ color: col.fgDim }}>
+            ⌘/Ctrl + ↵ para agregar
           </span>
-        </div>
-        {/* Estado de validación, anunciado a lectores de pantalla */}
-        <div role="status" aria-live="polite" className="mt-2 min-h-4">
-          {!isValid && (
-            <span className="font-mono text-xs" style={{ color: col.dim }}>
-              cargá al menos título o descripción para continuar
-            </span>
-          )}
+          <button type="button" className="btn-secondary ml-auto" onClick={onClose}>
+            Cancelar
+          </button>
+          <button type="button" className="btn-primary" onClick={handleSubmit} disabled={!isValid}>
+            Agregar y analizar
+          </button>
         </div>
       </div>
     </div>

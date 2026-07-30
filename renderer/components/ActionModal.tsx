@@ -48,8 +48,8 @@ export function ActionModal({
 
   if (!open) return null
 
-  const accent = tone === 'danger' ? col.red : col.cream
-  const shellClassName = `modal-shell animate-fade-in font-mono ${
+  const accent = tone === 'danger' ? col.critical : col.fg
+  const shellClassName = `modal-shell animate-fade-in ${
     tone === 'danger' ? 'modal-shell-danger' : ''
   }`
 
@@ -74,23 +74,19 @@ export function ActionModal({
           <div className="min-w-0">
             <div className="modal-title-row">
               {tone === 'danger' && <IconWarning size={16} className="flex-shrink-0 self-center" />}
-              <h2
-                id={titleId}
-                className="font-semibold text-sm leading-5"
-                style={{ color: accent }}
-              >
+              <h2 id={titleId} className="modal-title" style={{ color: accent }}>
                 {title}
               </h2>
             </div>
             {description && (
-              <p id={descriptionId} className="modal-description mt-1 text-xs">
+              <p id={descriptionId} className="modal-description mt-1">
                 {description}
               </p>
             )}
           </div>
           <button
             type="button"
-            className="btn-mini flex-shrink-0"
+            className="btn-icon btn-icon-sm"
             onClick={onClose}
             aria-label="cerrar"
           >

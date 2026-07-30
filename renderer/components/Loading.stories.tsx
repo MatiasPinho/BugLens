@@ -23,7 +23,7 @@ export const Inline = {
 
 export const Overlay = {
   render: () => (
-    <div className="relative h-80 bg-om-base">
+    <div className="relative h-80 bg-bl-canvas">
       <LoadingOverlay visible title="creando proyecto" detail="cliente / producto" />
     </div>
   ),

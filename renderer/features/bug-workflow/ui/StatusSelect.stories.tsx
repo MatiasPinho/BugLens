@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { useState } from 'react'
 import type { BugStatus } from '../../../../src/shared/contracts'
-import { StatusSelect } from './BugTable'
+import { StatusSelect } from './BugAtoms'
 
 const meta = {
   title: 'buglens/StatusSelect',

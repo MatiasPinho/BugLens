@@ -32,15 +32,15 @@ export function LoadingInline({ label }: { label: string }) {
 
 export function LoadingPanel({ title, detail }: { title: string; detail?: string }) {
   return (
-    <div role="status" aria-live="polite" className="loading-panel animate-fade-in rounded-md p-4">
-      <div className="mb-2 flex items-center gap-2">
+    <div role="status" aria-live="polite" className="loading-panel animate-fade-in p-5">
+      <div className="mb-2 flex items-center gap-2.5">
         <LoadingGlyph size={16} />
-        <span className="font-mono font-semibold text-xs" style={{ color: col.cream }}>
+        <span className="font-semibold text-md" style={{ color: col.fg }}>
           {title}
         </span>
       </div>
       {detail && (
-        <p className="font-mono text-xs" style={{ color: col.fgMuted }}>
+        <p className="text-sm" style={{ color: col.fgMuted }}>
           {detail}
         </p>
       )}

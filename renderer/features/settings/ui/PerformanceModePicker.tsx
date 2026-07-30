@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { IconCheck, IconInfo, IconWarning } from '../../../components/icons'
-import { alpha, col } from '../../../theme'
+import { col } from '../../../theme'
 
 export type PerformanceMode = 'gpu' | 'cpu'
 
@@ -20,12 +20,12 @@ interface Props {
 const MODE_OPTIONS: Array<{ id: PerformanceMode; name: string; description: string }> = [
   {
     id: 'gpu',
-    name: 'con placa de video (GPU)',
-    description: 'Rápido. El modelo corre acelerado por la GPU.',
+    name: 'Con placa de video (GPU)',
+    description: 'Rápido: el modelo corre acelerado por la GPU y analiza varios bugs en paralelo.',
   },
   {
     id: 'cpu',
-    name: 'sin placa de video (CPU)',
+    name: 'Sin placa de video (CPU)',
     description: 'Mucho más lento. Analiza de a un bug y espera más antes de cortar.',
   },
 ]
@@ -56,88 +56,63 @@ export default function PerformanceModePicker({ value, onChange }: Props) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="grid gap-3.5">
       <div className="flex flex-wrap items-center gap-2.5">
         <button
           type="button"
-          className="btn-secondary text-xs"
+          className="btn-secondary justify-self-start"
           onClick={analyze}
           disabled={probing}
           aria-busy={probing}
         >
-          {probing ? 'analizando tu equipo…' : 'analizar mi equipo'}
+          {probing ? 'Analizando tu equipo…' : 'Analizar mi equipo'}
         </button>
         {probing && (
           <span className="flex items-center gap-2 text-xs" style={{ color: col.fgMuted }}>
             <span
               className="h-1.5 w-1.5 flex-shrink-0 animate-scan rounded-full"
-              style={{ background: col.cream }}
+              style={{ background: col.accent }}
             />
-            cargando el modelo para medir (puede tardar)
+            Cargando el modelo para medir (puede tardar)
           </span>
         )}
       </div>
 
       {probe && !probing && <ProbeNotice accelerator={probe.accelerator} detail={probe.detail} />}
 
-      <div className="space-y-1.5" role="radiogroup" aria-label="modo de rendimiento">
-        {MODE_OPTIONS.map((opt) => {
-          const isSelected = value === opt.id
-          const isRecommended = recommended === opt.id
+      <div
+        className="grid gap-3 md:grid-cols-2"
+        role="radiogroup"
+        aria-label="modo de rendimiento"
+      >
+        {MODE_OPTIONS.map((option) => {
+          const isSelected = value === option.id
           return (
             <label
-              key={opt.id}
-              className="choice-card flex cursor-pointer items-start gap-3 rounded p-2.5 transition-colors duration-200"
-              style={{
-                border: `1px solid ${isSelected ? alpha(col.cream, 0.3) : alpha(col.border, 0.22)}`,
-                background: isSelected ? alpha(col.cream, 0.05) : 'transparent',
-              }}
+              key={option.id}
+              className={`choice-card ${isSelected ? 'choice-card-selected' : ''}`}
             >
-              <div
-                className="mt-0.5 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full border transition-all"
-                style={{
-                  borderColor: isSelected ? col.cream : alpha(col.border, 0.45),
-                  background: isSelected ? col.cream : 'transparent',
-                }}
-              >
-                {isSelected && (
-                  <div className="h-1.5 w-1.5 rounded-full" style={{ background: col.base }} />
-                )}
-              </div>
+              <span className="choice-radio" aria-hidden="true" />
               <input
                 type="radio"
                 name="performanceMode"
-                value={opt.id}
+                value={option.id}
                 checked={isSelected}
-                onChange={() => onChange(opt.id)}
+                onChange={() => onChange(option.id)}
                 className="sr-only"
               />
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="font-medium text-xs"
-                    style={{ color: isSelected ? col.fg : col.fgMuted }}
-                  >
-                    {opt.name}
-                  </span>
-                  {isRecommended && (
-                    <span
-                      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-2xs"
-                      style={{
-                        color: col.green,
-                        border: `1px solid ${alpha(col.green, 0.4)}`,
-                        background: alpha(col.green, 0.08),
-                      }}
-                    >
+              <span className="grid gap-1">
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="choice-title">{option.name}</span>
+                  {recommended === option.id && (
+                    <span className="badge badge-solved">
                       <IconCheck size={8} />
-                      recomendado
+                      Recomendado
                     </span>
                   )}
-                </div>
-                <div className="mt-0.5 text-xs" style={{ color: col.fgMuted }}>
-                  {opt.description}
-                </div>
-              </div>
+                </span>
+                <span className="choice-text">{option.description}</span>
+              </span>
             </label>
           )
         })}
@@ -148,20 +123,21 @@ export default function PerformanceModePicker({ value, onChange }: Props) {
 
 function ProbeNotice({ accelerator, detail }: { accelerator: Accelerator; detail: string }) {
   // CPU/unknown → aviso ámbar; GPU → confirmación verde. Color + ícono + texto (no solo color).
-  const tone = accelerator === 'gpu' ? col.green : accelerator === 'cpu' ? col.amber : col.fgMuted
-  const Icon = accelerator === 'gpu' ? IconCheck : accelerator === 'cpu' ? IconWarning : IconInfo
+  const tone =
+    accelerator === 'gpu'
+      ? { fg: col.solved, bg: col.solvedTint, line: col.solvedLine, Icon: IconCheck }
+      : accelerator === 'cpu'
+        ? { fg: col.warn, bg: col.warnBg, line: col.warnLine, Icon: IconWarning }
+        : { fg: col.fgBody, bg: col.subtle, line: col.borderCard, Icon: IconInfo }
+
   return (
     <div
-      className="flex animate-fade-in items-start gap-2 rounded p-2.5 text-xs"
+      className="flex animate-fade-in items-start gap-2 rounded-lg p-3 text-sm"
       role="status"
       aria-live="polite"
-      style={{
-        border: `1px solid ${alpha(tone, 0.35)}`,
-        background: alpha(tone, 0.06),
-        color: tone,
-      }}
+      style={{ border: `1px solid ${tone.line}`, background: tone.bg, color: tone.fg }}
     >
-      <Icon size={12} className="mt-px flex-shrink-0" />
+      <tone.Icon size={14} className="mt-0.5 flex-shrink-0" />
       <span>{detail}</span>
     </div>
   )

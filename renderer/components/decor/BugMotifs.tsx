@@ -2,11 +2,11 @@
  * BugMotifs.tsx
  *
  * Motivos decorativos temáticos (bichos / bugs) para complementar la UI. Son
- * line-art mono a un trazo (`currentColor`), pensados para usarse como marca de
+ * line-art a un trazo (`currentColor`), pensados para usarse como marca de
  * agua / ornamento. Son DECORATIVOS: `aria-hidden`, sin texto alt; el color y la
  * opacidad los pone quien los usa (vía `style`/`color`).
  *
- * On-brand omarchy: nada de imágenes externas ni color hardcodeado — solo trazo
+ * On-brand BugLens: nada de imágenes externas ni color hardcodeado — solo trazo
  * que hereda el color del contenedor.
  */
 
@@ -62,7 +62,7 @@ export function BeetleMark({ className, style }: MarkProps) {
   )
 }
 
-// Lupa sobre un bicho — eco del logo (búsqueda) + el bug. Line-art mono.
+// Lupa sobre un bicho — eco del logo (búsqueda) + el bug. Line-art a un trazo.
 export function BugUnderLensMark({ className, style }: MarkProps) {
   return (
     <svg

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BugUnderLensMark } from '../../../components/decor/BugMotifs'
 import { IconCheck } from '../../../components/icons'
-import { alpha, col } from '../../../theme'
+import { col } from '../../../theme'
 import { DEFAULT_OLLAMA_TEXT_MODEL, DEFAULT_OLLAMA_VISION_MODEL } from './llmOptions'
 import PerformanceModePicker, { type PerformanceMode } from './PerformanceModePicker'
 
@@ -17,7 +17,7 @@ interface WizardState {
   ollamaBaseUrl: string
 }
 
-const STEPS = ['rendimiento', 'modelo', 'google docs'] as const
+const STEPS = ['Rendimiento', 'Modelo', 'Google Docs'] as const
 
 /**
  * Wizard de primer arranque: captura las decisiones importantes (rendimiento GPU/CPU,
@@ -78,184 +78,169 @@ export default function Onboarding({ onDone }: Props) {
   const isLast = step === STEPS.length - 1
 
   return (
-    <div className="flex h-full items-center justify-center p-6 font-mono">
-      <div className="w-full max-w-xl">
-        <div className="mb-6 flex flex-col items-center text-center">
-          <BugUnderLensMark
-            className="motif-sway mb-2"
-            style={{ width: 40, height: 40, color: col.cream }}
-          />
-          <div className="font-semibold text-sm" style={{ color: col.cream }}>
-            bienvenido a buglens
-          </div>
-          <p className="mt-1 text-xs" style={{ color: col.fgMuted }}>
-            configuremos lo importante. todo se puede cambiar después en configuración.
+    <div className="onboarding-page flex h-full items-center justify-center p-10">
+      <div className="onboarding-shell grid w-full max-w-[38.75rem] gap-5">
+        <div className="onboarding-intro flex flex-col items-center gap-2 text-center">
+          <span className="app-brand-mark" style={{ width: '2.5rem', height: '2.5rem' }}>
+            <BugUnderLensMark className="motif-sway" style={{ width: 21 }} />
+          </span>
+          <span className="font-bold text-3xl" style={{ letterSpacing: '-0.02em' }}>
+            Bienvenido a BugLens
+          </span>
+          <p className="text-sm" style={{ color: col.fgMuted }}>
+            Configuremos lo importante. Todo se puede cambiar después en Configuración.
           </p>
         </div>
 
-        {/* Stepper */}
-        <ol className="mb-5 flex items-center justify-center gap-2" aria-label="progreso">
-          {STEPS.map((label, i) => {
-            const done = i < step
-            const active = i === step
+        <ol className="stepper" aria-label="progreso del wizard">
+          {STEPS.map((label, index) => {
+            const done = index < step
+            const active = index === step
             return (
-              <li
-                key={label}
-                className="flex items-center gap-1.5 text-2xs"
-                aria-current={active ? 'step' : undefined}
-              >
+              <li key={label} className="contents">
                 <span
-                  className="flex h-5 w-5 items-center justify-center rounded-full transition-colors duration-200"
-                  style={{
-                    border: `1px solid ${i <= step ? col.cream : alpha(col.border, 0.4)}`,
-                    background: done ? alpha(col.cream, 0.12) : 'transparent',
-                    color: i <= step ? col.cream : col.fgMuted,
-                  }}
+                  className={`stepper-item ${index <= step ? 'stepper-item-active' : ''}`}
+                  aria-current={active ? 'step' : undefined}
                 >
-                  {done ? <IconCheck size={12} /> : i + 1}
+                  <span className="stepper-bullet">
+                    {done ? <IconCheck size={12} /> : index + 1}
+                  </span>
+                  {label}
                 </span>
-                <span style={{ color: active ? col.fg : col.fgMuted }}>{label}</span>
-                {i < STEPS.length - 1 && (
-                  <span
-                    aria-hidden="true"
-                    className="ml-1 h-px w-5"
-                    style={{ background: alpha(col.border, 0.5) }}
-                  />
-                )}
+                {index < STEPS.length - 1 && <span aria-hidden="true" className="stepper-line" />}
               </li>
             )
           })}
         </ol>
 
-        <div key={step} className="card animate-fade-in">
+        <div key={step} className="onboarding-card card grid animate-fade-in gap-4">
           {step === 0 && (
-            <Section
-              title="rendimiento"
-              hint="¿tu equipo tiene placa de video? sin GPU el análisis es lento y puede cortar por timeout."
+            <WizardSection
+              title="Rendimiento"
+              hint="¿Tu equipo tiene placa de video? Sin GPU el análisis es lento y puede cortar por timeout."
             >
               <PerformanceModePicker
                 value={state.performanceMode}
-                onChange={(m) => set('performanceMode', m)}
+                onChange={(mode) => set('performanceMode', mode)}
               />
-            </Section>
+            </WizardSection>
           )}
 
           {step === 1 && (
-            <Section title="modelo llm" hint="dónde corre el análisis.">
-              <div className="space-y-3">
-                <div
-                  className="grid gap-2 md:grid-cols-2"
-                  role="radiogroup"
-                  aria-label="modo de análisis"
-                >
-                  <label
-                    className="cursor-pointer rounded p-2 text-left transition-all"
-                    style={{
-                      border: `1px solid ${!analyzeImages ? alpha(col.cream, 0.35) : alpha(col.border, 0.22)}`,
-                      background: !analyzeImages ? alpha(col.cream, 0.06) : 'transparent',
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="onboarding-analysis-mode"
-                      checked={!analyzeImages}
-                      className="sr-only"
-                      onChange={() => set('llmVisionModel', '')}
-                    />
-                    <span className="block font-medium text-xs" style={{ color: col.fg }}>
-                      Solo texto
-                    </span>
-                    <span className="mt-1 block text-xs" style={{ color: col.fgMuted }}>
-                      ignora capturas al analizar
-                    </span>
-                    <span className="mt-1 block font-mono text-xs" style={{ color: col.border }}>
+            <WizardSection
+              title="Modelo LLM"
+              hint="Solo Ollama local, sin API key. Elegí si el análisis mira también las capturas."
+            >
+              <div
+                className="grid gap-3 md:grid-cols-2"
+                role="radiogroup"
+                aria-label="modo de análisis"
+              >
+                <label className={`choice-card ${!analyzeImages ? 'choice-card-selected' : ''}`}>
+                  <span className="choice-radio" aria-hidden="true" />
+                  <input
+                    type="radio"
+                    name="onboarding-analysis-mode"
+                    checked={!analyzeImages}
+                    className="sr-only"
+                    onChange={() => set('llmVisionModel', '')}
+                  />
+                  <span className="grid gap-1">
+                    <span className="choice-title">Solo texto</span>
+                    <span className="choice-text">Ignora las capturas al analizar. Más rápido.</span>
+                    <span className="mono text-2xs" style={{ color: col.fgDim }}>
                       {DEFAULT_OLLAMA_TEXT_MODEL}
                     </span>
-                  </label>
-                  <label
-                    className="cursor-pointer rounded p-2 text-left transition-all"
-                    style={{
-                      border: `1px solid ${analyzeImages ? alpha(col.cream, 0.35) : alpha(col.border, 0.22)}`,
-                      background: analyzeImages ? alpha(col.cream, 0.06) : 'transparent',
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="onboarding-analysis-mode"
-                      checked={analyzeImages}
-                      className="sr-only"
-                      onChange={() => set('llmVisionModel', DEFAULT_OLLAMA_VISION_MODEL)}
-                    />
-                    <span className="block font-medium text-xs" style={{ color: col.fg }}>
-                      Texto + capturas
-                    </span>
-                    <span className="mt-1 block text-xs" style={{ color: col.fgMuted }}>
-                      usa visión si el bug trae imágenes
-                    </span>
-                    <span className="mt-1 block font-mono text-xs" style={{ color: col.border }}>
+                  </span>
+                </label>
+                <label className={`choice-card ${analyzeImages ? 'choice-card-selected' : ''}`}>
+                  <span className="choice-radio" aria-hidden="true" />
+                  <input
+                    type="radio"
+                    name="onboarding-analysis-mode"
+                    checked={analyzeImages}
+                    className="sr-only"
+                    onChange={() => set('llmVisionModel', DEFAULT_OLLAMA_VISION_MODEL)}
+                  />
+                  <span className="grid gap-1">
+                    <span className="choice-title">Texto + capturas</span>
+                    <span className="choice-text">Usa visión cuando el bug trae imágenes.</span>
+                    <span className="mono text-2xs" style={{ color: col.fgDim }}>
                       {DEFAULT_OLLAMA_TEXT_MODEL} + {DEFAULT_OLLAMA_VISION_MODEL}
                     </span>
-                  </label>
-                </div>
+                  </span>
+                </label>
               </div>
-            </Section>
+            </WizardSection>
           )}
 
           {step === 2 && (
-            <Section
-              title="acceso a google docs"
-              hint="opcional. conecta el login del navegador para traer la evidencia de los docs. podés saltarlo y hacerlo después."
+            <WizardSection
+              title="Acceso a Google Docs"
+              hint="Opcional. La sesión del navegador trae texto y capturas de los docs enlazados. Podés saltarlo y hacerlo después."
             >
               {browserAuth?.authenticated ? (
                 <span
-                  className="inline-flex items-center gap-1.5 text-xs"
-                  style={{ color: col.green }}
+                  className="inline-flex items-center gap-1.5 text-sm"
+                  style={{ color: col.solved }}
                 >
-                  <IconCheck size={12} />
-                  sesión activa
+                  <IconCheck size={14} />
+                  Sesión activa
                 </span>
               ) : (
                 <button
                   type="button"
-                  className="btn-secondary text-xs"
+                  className="btn-secondary justify-self-start"
                   onClick={connectGoogle}
                   disabled={authLoading}
                 >
-                  {authLoading ? 'esperando login…' : 'conectar con navegador'}
+                  {authLoading ? 'Esperando login…' : 'Conectar con el navegador'}
                 </button>
               )}
-            </Section>
+            </WizardSection>
           )}
         </div>
 
-        {/* Nav */}
-        <div className="mt-4 flex items-center justify-between">
-          <button
-            type="button"
-            className="btn-secondary text-xs"
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
-            disabled={step === 0}
-            style={{ visibility: step === 0 ? 'hidden' : 'visible' }}
-          >
-            atrás
-          </button>
-
-          {isLast ? (
-            <button type="button" className="btn-primary" onClick={finish} disabled={saving}>
-              {saving ? 'guardando…' : 'empezar'}
-            </button>
-          ) : (
-            <button type="button" className="btn-primary" onClick={() => setStep((s) => s + 1)}>
-              siguiente
-            </button>
-          )}
+        <div className="wizard-footer flex items-center justify-between">
+          <span className="text-xs" style={{ color: col.fgDim }}>
+            Paso {step + 1} de {STEPS.length}
+          </span>
+          <div className="flex items-center gap-2">
+            {step > 0 && (
+              <button
+                type="button"
+                className="btn-secondary btn-lg"
+                onClick={() => setStep((s) => Math.max(0, s - 1))}
+              >
+                Atrás
+              </button>
+            )}
+            {isLast ? (
+              <button
+                type="button"
+                className="btn-primary btn-lg"
+                onClick={finish}
+                disabled={saving}
+              >
+                {saving ? 'Guardando…' : 'Empezar'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-primary btn-lg"
+                onClick={() => setStep((s) => s + 1)}
+              >
+                Siguiente
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-function Section({
+function WizardSection({
   title,
   hint,
   children,
@@ -265,11 +250,13 @@ function Section({
   children: React.ReactNode
 }) {
   return (
-    <div>
-      <div className="section-label mb-1">{title}</div>
-      <p className="mb-3 text-xs" style={{ color: col.fgMuted }}>
-        {hint}
-      </p>
+    <div className="grid gap-4">
+      <div className="grid gap-1">
+        <span className="font-bold text-xl">{title}</span>
+        <p className="text-sm" style={{ color: col.fgMuted, lineHeight: 1.55 }}>
+          {hint}
+        </p>
+      </div>
       {children}
     </div>
   )

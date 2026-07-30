@@ -2,10 +2,13 @@ import type { ManualBugFields } from '../src/features/analyze-bugs/application/m
 import type {
   AnalyzedBug,
   BugComment,
+  CommentVote,
+  CommentVoteTotals,
   ExternalAgentProgress,
   ExternalAgentRepository,
   ExternalAgentResult,
   IPCEvent,
+  TeamMember,
 } from '../src/shared/contracts'
 
 interface ElectronAPI {
@@ -93,7 +96,18 @@ interface ElectronAPI {
   addBugComment(
     bug: AnalyzedBug,
     body: string,
+    parentId?: string | null,
   ): Promise<{ ok: boolean; comment?: BugComment; error?: string }>
+  setBugAssignees(bug: AnalyzedBug, userIds: string[]): Promise<{ ok: boolean; error?: string }>
+  setBugDueDate(
+    bug: AnalyzedBug,
+    dueDate: string | null,
+  ): Promise<{ ok: boolean; error?: string }>
+  voteBugComment(
+    commentId: string,
+    value: CommentVote,
+  ): Promise<{ ok: boolean; totals?: CommentVoteTotals; error?: string }>
+  listProjectMembers(): Promise<{ ok: boolean; members?: TeamMember[]; error?: string }>
   deleteBug(bug: AnalyzedBug): Promise<{ ok: boolean; error?: string }>
   analyzeWithExternalAgent(bug: AnalyzedBug): Promise<ExternalAgentResult>
   onExternalAgentProgress(cb: (event: ExternalAgentProgress) => void): () => void

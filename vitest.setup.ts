@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 
-// jsdom no implementa scrollIntoView — BugTable lo llama en la fila enfocada.
+// jsdom no implementa scrollIntoView — BugsScreen lo usa para mantener visible el bug enfocado.
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {}
 }

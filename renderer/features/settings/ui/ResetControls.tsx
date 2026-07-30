@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { LogLine } from '../../../App'
 import { ConfirmActionModal } from '../../../components/ActionModal'
 import { IconRestore, IconTrash } from '../../../components/icons'
-import { alpha, col } from '../../../theme'
+import { col } from '../../../theme'
 
 type ResetScope = 'bug-data' | 'config'
 
@@ -41,7 +41,7 @@ const ACTIONS: ResetAction[] = [
  */
 export default function ResetControls({ addLog }: Props) {
   return (
-    <div className="space-y-2">
+    <div className="grid gap-3">
       {ACTIONS.map((action) => (
         <ResetRow key={action.scope} action={action} addLog={addLog} />
       ))}
@@ -64,28 +64,11 @@ function ResetRow({ action, addLog }: { action: ResetAction; addLog: Props['addL
   // Acento destructivo en reposo (rojo tenue) + ícono distintivo; el hover intensifica.
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <button
-        type="button"
-        className="inline-flex flex-shrink-0 items-center gap-1.5 rounded px-2.5 py-1.5 font-mono text-xs transition-colors duration-200"
-        onClick={() => setConfirming(true)}
-        style={{
-          color: col.red,
-          border: `1px solid ${alpha(col.red, 0.32)}`,
-          background: alpha(col.red, 0.07),
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = alpha(col.red, 0.16)
-          e.currentTarget.style.borderColor = alpha(col.red, 0.5)
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = alpha(col.red, 0.07)
-          e.currentTarget.style.borderColor = alpha(col.red, 0.32)
-        }}
-      >
-        <Icon size={12} className="flex-shrink-0" />
+      <button type="button" className="btn-danger flex-shrink-0" onClick={() => setConfirming(true)}>
+        <Icon size={12} className="button-icon" />
         {label}
       </button>
-      <span className="flex-1 text-xs" style={{ color: col.fgMuted }}>
+      <span className="flex-1 text-sm" style={{ color: col.fgMuted }}>
         {description}
       </span>
       <ConfirmActionModal

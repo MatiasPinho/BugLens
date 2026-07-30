@@ -31,23 +31,23 @@ describe('PerformanceModePicker', () => {
     stubProbe({ accelerator: 'cpu', detail: 'El modelo corre en CPU — será lento' })
     render(<Harness initial="gpu" />)
 
-    await userEvent.click(screen.getByRole('button', { name: 'analizar mi equipo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Analizar mi equipo' }))
 
     // Auto-selección al modo detectado.
     expect(screen.getByTestId('mode')).toHaveTextContent('cpu')
     // Aviso visible + badge "recomendado".
     expect(screen.getByText(/será lento/)).toBeInTheDocument()
-    expect(screen.getByText('recomendado')).toBeInTheDocument()
+    expect(screen.getByText('Recomendado')).toBeInTheDocument()
   })
 
   it('al detectar GPU no fuerza CPU', async () => {
     stubProbe({ accelerator: 'gpu', detail: 'El modelo corre en la GPU' })
     render(<Harness initial="gpu" />)
 
-    await userEvent.click(screen.getByRole('button', { name: 'analizar mi equipo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Analizar mi equipo' }))
 
     expect(screen.getByTestId('mode')).toHaveTextContent('gpu')
-    expect(screen.getByText('recomendado')).toBeInTheDocument()
+    expect(screen.getByText('Recomendado')).toBeInTheDocument()
   })
 
   it('expone las opciones como un grupo de radios accesible', () => {
