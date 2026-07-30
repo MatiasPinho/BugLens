@@ -699,23 +699,9 @@
     color: rgb(var(--c-avatar-6));
   }
 
-  /* Grupo superpuesto (miembros del proyecto, assignees de un bug). El anillo del
-     color de la superficie es lo que separa un avatar del siguiente. */
-  .avatar-stack {
-    display: inline-flex;
-    align-items: center;
-  }
-
-  .avatar-stack > * + * {
-    margin-left: -0.4375rem;
-  }
-
-  .avatar-stack > * {
-    box-shadow: 0 0 0 2px rgb(var(--c-surface));
-  }
-
-  /* Fila sin superponer. El stack funciona con fotos, pero con iniciales de dos
-     letras cada avatar tapa las del anterior y el grupo se vuelve ilegible. */
+  /* Grupo de personas (miembros del proyecto, responsables). NO se superponen:
+     el stack clásico funciona con fotos, pero acá los avatares son iniciales de
+     dos letras y cada uno taparía las del anterior. */
   .avatar-row {
     display: inline-flex;
     align-items: center;
@@ -3457,6 +3443,48 @@
   .bug-activity-time {
     color: rgb(var(--c-fg-dim));
     font-size: var(--text-3xs);
+  }
+
+  /* ═══ Bloque plegable ═══════════════════════════════════════════════════ */
+  .collapsible-block {
+    display: grid;
+    gap: 0.5rem;
+  }
+
+  .collapsible-block-content {
+    min-width: 0;
+  }
+
+  /* El degradado avisa que el texto sigue: un corte duro se confunde con el
+     final del bloque.
+     `black` acá NO es un color: en una máscara solo cuenta el canal alfa, así
+     que el valor es una plantilla de opacidad y no sale de la paleta. */
+  .collapsible-block-clipped {
+    position: relative;
+    overflow: hidden;
+    mask-image: linear-gradient(to bottom, black 65%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, black 65%, transparent 100%);
+  }
+
+  .collapsible-block-toggle {
+    justify-self: start;
+    padding: 0.25rem 0.625rem;
+    border: 1px solid rgb(var(--c-border));
+    border-radius: var(--radius-pill);
+    background: rgb(var(--c-surface));
+    color: rgb(var(--c-accent));
+    font-family: inherit;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      background 0.15s;
+  }
+
+  .collapsible-block-toggle:hover {
+    border-color: rgb(var(--c-accent-line));
+    background: rgb(var(--c-accent-soft));
   }
 
   /* ═══ Comentarios con hilo ══════════════════════════════════════════════ */

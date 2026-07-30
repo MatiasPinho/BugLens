@@ -14,6 +14,7 @@ import type {
   ExternalAgentResult,
 } from '../../../../src/shared/contracts'
 import { ActionModal } from '../../../components/ActionModal'
+import CollapsibleBlock from '../../../components/CollapsibleBlock'
 import { IconChevronLeft } from '../../../components/icons'
 import { col } from '../../../theme'
 import {
@@ -224,17 +225,25 @@ export default function BugDetail({
           title="Reporte reescrito"
           aside={rewritten.problemCount > 1 ? <ProblemCountBadge count={rewritten.problemCount} /> : undefined}
         >
-          <BugRewrittenReport bug={bug} />
+          {/* Los bloques largos se recortan para que los comentarios queden al
+              alcance sin atravesar varias pantallas de reporte. */}
+          <CollapsibleBlock label="el reporte">
+            <BugRewrittenReport bug={bug} />
+          </CollapsibleBlock>
         </SectionCard>
 
         {(externalAgentResult || externalAgentRunning) && (
-          <ExternalAgentPanel
-            running={externalAgentRunning}
-            result={externalAgentResult}
-            elapsedMs={externalAgentElapsedMs}
-            statusText={externalAgentStatusText}
-            runningOutput={externalAgentRunningOutput}
-          />
+          // Mientras corre no se pliega: la salida en vivo es justamente lo que
+          // se está mirando.
+          <CollapsibleBlock label="el aporte del agente" disabled={externalAgentRunning}>
+            <ExternalAgentPanel
+              running={externalAgentRunning}
+              result={externalAgentResult}
+              elapsedMs={externalAgentElapsedMs}
+              statusText={externalAgentStatusText}
+              runningOutput={externalAgentRunningOutput}
+            />
+          </CollapsibleBlock>
         )}
 
         {previousExternalAgentRuns.length > 0 && (

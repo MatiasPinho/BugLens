@@ -46,10 +46,15 @@ tickets de Jira, manteniendo el estado y la evidencia útil para QA/dev.
 
 ## Interfaz y sistema de diseño
 
-BugLens usa una interfaz clara y aireada, con acento índigo, Public Sans, navegación por
-sidebar y tarjetas blancas sobre un canvas gris muy claro. La pantalla de Bugs ofrece dos
-layouts: **tarjetas con paginación** y **lista agrupada con vista previa**. El reporte
-completo se abre en una pantalla dedicada con un rail de contexto.
+BugLens usa una interfaz clara y aireada, con acento azul, Public Sans y superficies
+blancas sobre un canvas gris muy claro. La navegación es un **rail de iconos** de 56 px;
+el contexto global (proyecto, motor, equipo, identidad y acciones) vive en el topbar.
+
+La pantalla de Bugs son **tres columnas**: la lista a la izquierda —hermana del rail y de
+altura completa—, el reporte del bug elegido con sus comentarios en el centro, y las
+propiedades y la actividad a la derecha. El bug elegido está siempre a la vista: no hay
+pantalla de detalle aparte. Los bloques largos se recortan con un "Ver más" para que los
+comentarios queden al alcance sin scrollear el reporte entero.
 
 La especificación canónica —tokens, tipografía, componentes, accesibilidad, comportamiento
 y correspondencia de pantallas— está en
@@ -252,7 +257,7 @@ service keys. Al abrir la app, la tabla se hidrata desde Supabase y un canal rea
 cambios remotos para refrescar la vista.
 
 Un usuario puede pertenecer a varios proyectos. El proyecto activo se elige desde el
-selector del sidebar y la pantalla **Proyectos** permite crear y administrar proyectos;
+selector del topbar y la pantalla **Proyectos** permite crear y administrar proyectos;
 cada uno tiene sus propios bugs, análisis, estados, imports y eventos realtime.
 
 La colaboración no requiere MCP. MCP solo tendría sentido para integrar herramientas externas
@@ -315,7 +320,7 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | Función | Qué hace |
 |---|---|
 | `bugRecordKey(raw)` | Identidad estable por contenido (titulo + descripcion). |
-| `manageBugWorkflow` | Carga bugs, cambia estado, agrega comentarios y borra con soft-delete. |
+| `manageBugWorkflow` | Carga bugs, cambia estado, asigna responsables, pone fecha límite, comenta, vota y borra con soft-delete. |
 | `projectAnalysisRun` | Crea imports remotos y guarda resultados de analisis en el proyecto activo. |
 | `teamClient` / `teamBugs` | Infraestructura Supabase de proyectos, auth, imports, estados y restore remoto. |
 
@@ -346,10 +351,12 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | Pieza | Qué hace |
 |---|---|
 | `App.tsx` | Estado global, shell, navegación, eventos IPC, atajos y restore remoto desde Supabase. |
-| `AppSidebar.tsx` | Navegación principal, proyecto activo, resumen y sesión del usuario. |
-| `BugsScreen.tsx` | Pestañas **activos/históricos/todos**, KPI, filtros, búsqueda y selección del layout. |
-| `BugCardsView.tsx` / `BugSplitView.tsx` | Vista de tarjetas paginadas y vista de lista agrupada con preview. |
-| `BugDetail.tsx` | Pantalla dedicada con reporte reescrito, contexto, actividad, comentarios, borrado y agente externo. |
+| `AppRail.tsx` / `AppTopbar.tsx` | Rail de iconos (56 px) y barra superior: migas, proyecto, motor, acciones, equipo e identidad. |
+| `BugsScreen.tsx` | Contenedor de las tres columnas. Dueño del estado compartido: filtros, pestañas y bug elegido. |
+| `BugList.tsx` | Columna izquierda: buscador, pestañas **activos/históricos/todos**, filtros, KPI y lista. |
+| `BugDetail.tsx` / `BugComments.tsx` | Columna central: reporte reescrito, capturas, agente externo y el hilo de comentarios con voto. |
+| `BugPropertiesRail.tsx` | Columna derecha: responsables, fecha límite, estado, contexto y feed de actividad. |
+| `CollapsibleBlock.tsx` | Recorta los bloques largos con "Ver más" para que los comentarios queden al alcance. |
 | `UploadBugsScreen.tsx` / `AnalysisProgressScreen.tsx` | Carga del Excel y seguimiento de las fases de análisis. |
 | `ManualBugForm.tsx` | Modal para cargar un bug a mano (Esc/Tab-trap/autofocus, ⌘/Ctrl+Enter). |
 | `ProjectsScreen.tsx` / `ProjectSwitcher.tsx` | Gestión de proyectos y selección del proyecto activo. |
@@ -410,11 +417,12 @@ npm run test:watch  # modo watch
 La suite (Vitest + React Testing Library) cubre la **lógica de negocio**: identidad por
 contenido, parsing del Excel, construcción del bug manual, mapeo Supabase, parseo robusto
 del LLM, caché, selección de sección de doc, dedup de docs, prompt/ejecución del agente
-externo, persistencia del aporte externo, `bugPresentation` y las interacciones de
-`BugsScreen` y `BugDetail` (estados, pestañas, filtros, layouts, paginación, agente,
-progreso, errores, cobertura por pasos y sugerencia manual de "resuelto"). La integración
-(LLM real, IPC, comandos externos, lectores de docs, auth/red/realtime de Supabase) se
-verifica corriendo la app.
+externo, persistencia del aporte externo, `bugPresentation`, `bugActivity` (árbol de
+hilos, redacción de la actividad, vencimiento), `avatarTone` y las interacciones de
+`BugsScreen` y `BugDetail` (estados, pestañas, filtros, selección, agente, progreso,
+errores, cobertura por pasos y sugerencia manual de "resuelto"). La integración
+(LLM real, IPC, comandos externos, lectores de docs, auth/realtime de Supabase y **los RPC
+de Supabase contra la base real**) se verifica corriendo la app.
 
 El **CI** (`.github/workflows/ci.yml`) corre `lint → typecheck → test → build` en cada push
 y PR.

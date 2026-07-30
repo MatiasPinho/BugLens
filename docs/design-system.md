@@ -149,6 +149,22 @@ El shell de escritorio se compone de:
 `ProjectsScreen.tsx`, `ProjectSwitcher.tsx` y `NewProjectModal.tsx` extienden el
 mismo lenguaje para la gestión de proyectos.
 
+### Bloques largos
+
+`CollapsibleBlock` recorta el contenido y ofrece "Ver más". Se usa en el reporte reescrito
+y en el aporte del agente externo para que los comentarios queden al alcance sin atravesar
+varias pantallas de reporte.
+
+Tres reglas:
+
+- **Solo se pliega si vale la pena.** El control aparece únicamente si lo que se oculta
+  supera un mínimo (`shouldOfferCollapse`); un botón que esconde diez píxeles molesta más
+  de lo que ayuda.
+- **Se corta con un degradado, no a filo.** Un corte duro se confunde con el final del
+  bloque.
+- **Lo recortado queda `inert`.** Si no, sus botones seguirían siendo alcanzables con Tab
+  y se llegaría a un control invisible.
+
 ## Patrones de interacción
 
 - **Bugs:** las tres columnas comparten el estado de filtros y el bug elegido. Si un

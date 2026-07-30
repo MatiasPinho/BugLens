@@ -59,8 +59,8 @@ capas técnicas. No volver a organizar el código por carpetas raíz como `pipel
   framework. Deben delegar en módulos de `features/`, `shared/` o `platform/`; no concentrar
   ahí reglas de negocio nuevas.
 - `renderer/features/*/ui` contiene UI de negocio por feature. `renderer/components/` queda
-  para piezas genéricas: shell/sidebar, modales, loading, iconos, empty states, decor y
-  controles comunes.
+  para piezas genéricas: rail y topbar del shell, modales, loading, iconos, empty states,
+  bloque plegable, decor y controles comunes.
 - Dentro de `renderer/features/bug-workflow/ui/` la separación es: `bugPresentation.ts`
   (lógica pura: labels, filtros, agrupación, KPIs), `bugActivity.ts` (lógica pura: árbol de
   hilos, redacción de la actividad, vencimiento), `BugAtoms.tsx` (badges, pestañas, status
@@ -257,7 +257,7 @@ Vitest + React Testing Library (jsdom). Cubre **lógica pura** (excelReader, `bu
 mapper Supabase, parseo del LLM, caché, identidad por contenido, dedup del enricher,
 `bugPresentation`, `bugActivity` (hilos, actividad, vencimiento), `avatarTone`,
 `slugifyProjectName`, `normalizeBugsViewMode`) + las interacciones de
-`BugsScreen` (estados + pestañas activos/históricos + filtros + paginación + toggle de layout),
+`BugsScreen` (estados + pestañas activos/históricos + filtros + selección del bug),
 `BugDetail` (borrado, agente externo, notas), `AppRail`/`AppTopbar` (labels accesibles, migas)
 y `ManualBugForm`. La **integración** (LLM real, IPC de Electron, doc readers con red/auth,
 auth/realtime de Supabase, y **los RPC de Supabase contra la base real**) **no** se testea por

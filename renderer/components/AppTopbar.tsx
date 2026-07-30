@@ -28,13 +28,13 @@ interface Props {
   /** Estado del motor de análisis u otros indicadores globales. */
   statusSlot?: React.ReactNode
   actions?: React.ReactNode
-  /** Miembros del proyecto activo, para el stack de avatares del equipo. */
+  /** Miembros del proyecto activo, para los avatares del equipo. */
   members?: TeamMember[]
   user?: TopbarUser
   onSignOut?: () => void
 }
 
-/** Más allá de esto el stack se vuelve ilegible y se resume con un contador. */
+/** Más allá de esto la fila no entra en el topbar y se resume con un contador. */
 const MAX_VISIBLE_MEMBERS = 4
 
 export default function AppTopbar({
@@ -82,8 +82,8 @@ export default function AppTopbar({
             <span className="app-topbar-team-label">Equipo</span>
             <span
               className="avatar-row"
-              // El stack es decorativo; la lista real de nombres va en el título
-              // para no obligar a pasar por cada avatar.
+              // Los avatares son decorativos; la lista real de nombres va en el
+              // título para no obligar a pasar por cada uno.
               title={members.map((member) => member.displayName ?? member.email).join(', ')}
             >
               {visibleMembers.map((member) => (
