@@ -47,7 +47,7 @@ export default function NewProjectModal({ open, busy = false, onClose, onCreate 
   return (
     <ActionModal
       open={open}
-      title="nuevo proyecto"
+      title="Nuevo proyecto"
       description="Creá un espacio separado para bugs, estados y análisis."
       onClose={onClose}
     >

@@ -70,8 +70,8 @@ describe('BugDetail — borrar bug', () => {
     await userEvent.click(screen.getByRole('button', { name: 'más acciones del bug' }))
     await userEvent.click(screen.getByRole('menuitem', { name: /Borrar bug/ }))
     expect(onDelete).not.toHaveBeenCalled() // hasta confirmar, no borra
-    const dialog = screen.getByRole('dialog', { name: 'borrar bug' })
-    await userEvent.click(within(dialog).getByRole('button', { name: 'borrar bug' }))
+    const dialog = screen.getByRole('dialog', { name: 'Borrar bug' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Borrar bug' }))
 
     expect(onDelete).toHaveBeenCalledTimes(1)
   })
@@ -80,11 +80,11 @@ describe('BugDetail — borrar bug', () => {
     const onDelete = renderWithDelete()
     await userEvent.click(screen.getByRole('button', { name: 'más acciones del bug' }))
     await userEvent.click(screen.getByRole('menuitem', { name: /Borrar bug/ }))
-    const dialog = screen.getByRole('dialog', { name: 'borrar bug' })
-    await userEvent.click(within(dialog).getByRole('button', { name: 'cancelar' }))
+    const dialog = screen.getByRole('dialog', { name: 'Borrar bug' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
 
     expect(onDelete).not.toHaveBeenCalled()
-    expect(screen.queryByRole('dialog', { name: 'borrar bug' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Borrar bug' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'más acciones del bug' })).toBeInTheDocument()
   })
 
@@ -92,7 +92,7 @@ describe('BugDetail — borrar bug', () => {
     renderWithDelete()
     await userEvent.click(screen.getByRole('button', { name: 'más acciones del bug' }))
     await userEvent.click(screen.getByRole('menuitem', { name: /Borrar bug/ }))
-    expect(screen.getByRole('dialog', { name: 'borrar bug' })).toHaveFocus()
+    expect(screen.getByRole('dialog', { name: 'Borrar bug' })).toHaveFocus()
   })
 
   it('Escape cancela la confirmación y cierra el modal', async () => {
@@ -102,13 +102,13 @@ describe('BugDetail — borrar bug', () => {
     await userEvent.keyboard('{Escape}')
 
     expect(onDelete).not.toHaveBeenCalled()
-    expect(screen.queryByRole('dialog', { name: 'borrar bug' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Borrar bug' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'más acciones del bug' })).toBeInTheDocument()
   })
 })
 
 describe('BugDetail — agente externo', () => {
-  const AGENT_DIALOG = 'analizar con el agente externo'
+  const AGENT_DIALOG = 'Analizar con el agente externo'
 
   it('envía el bug al agente externo y muestra la salida', async () => {
     const bug = makeBug({ id: 'a', title: 'Activo nuevo' })
@@ -126,7 +126,7 @@ describe('BugDetail — agente externo', () => {
     expect(screen.getByText('calidad variable')).toBeInTheDocument()
     expect(screen.getByText('acceso al repositorio')).toBeInTheDocument()
     expect(onAnalyzeExternalAgent).not.toHaveBeenCalled()
-    await userEvent.click(screen.getByRole('button', { name: 'iniciar análisis' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Iniciar análisis' }))
 
     expect(onAnalyzeExternalAgent).toHaveBeenCalledTimes(1)
     expect(onAnalyzeExternalAgent.mock.calls[0][0].enriched.raw.id).toBe('a')
@@ -146,7 +146,7 @@ describe('BugDetail — agente externo', () => {
       />,
     )
     await userEvent.click(screen.getByRole('button', { name: 'Analizar con agente' }))
-    await userEvent.click(screen.getByRole('button', { name: 'cancelar' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
 
     expect(onAnalyzeExternalAgent).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog', { name: AGENT_DIALOG })).not.toBeInTheDocument()
@@ -182,7 +182,7 @@ describe('BugDetail — agente externo', () => {
         />,
       )
       await userEvent.click(screen.getByRole('button', { name: 'Analizar con agente' }))
-      await userEvent.click(screen.getByRole('button', { name: 'iniciar análisis' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Iniciar análisis' }))
 
       act(() => {
         progressHandler?.({
@@ -466,7 +466,7 @@ describe('BugDetail — agente externo', () => {
       />,
     )
     await userEvent.click(screen.getByRole('button', { name: 'Analizar con agente' }))
-    await userEvent.click(screen.getByRole('button', { name: 'iniciar análisis' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Iniciar análisis' }))
 
     expect(
       await screen.findByText('Configurá un comando de agente externo en Settings.'),
@@ -490,7 +490,7 @@ describe('BugDetail — agente externo', () => {
       />,
     )
     await userEvent.click(screen.getByRole('button', { name: 'Analizar con agente' }))
-    await userEvent.click(screen.getByRole('button', { name: 'iniciar análisis' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Iniciar análisis' }))
 
     expect(
       await screen.findByText(

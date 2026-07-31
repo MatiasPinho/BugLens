@@ -1,5 +1,6 @@
 import type React from 'react'
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { col } from '../theme'
 import { IconWarning, IconX } from './icons'
 import { LoadingInline } from './Loading'
@@ -53,7 +54,10 @@ export function ActionModal({
     tone === 'danger' ? 'modal-shell-danger' : ''
   }`
 
-  return (
+  // Portal a `document.body`: un modal abierto desde el topbar quedaba dentro de
+  // su contexto de apilado (`z-index: 20`) y el rail (`z-index: 30`) le pasaba por
+  // encima — el `z-50` de acá adentro no alcanza para salir del subárbol.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
         type="button"
@@ -95,7 +99,8 @@ export function ActionModal({
         </div>
         <div className="modal-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -124,7 +129,7 @@ export function ConfirmActionModal({
     <ActionModal open={open} title={title} description={description} tone={tone} onClose={onClose}>
       <div className="modal-actions">
         <button type="button" className="btn-secondary" onClick={onClose} disabled={busy}>
-          cancelar
+          Cancelar
         </button>
         <button
           type="button"

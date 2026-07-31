@@ -195,7 +195,7 @@ export function DeleteControl({ onConfirm, title }: { onConfirm: () => void; tit
       <button
         type="button"
         onClick={() => setOpen(true)}
-        title="borrar bug"
+        title="Borrar bug"
         className="btn-danger flex-shrink-0"
       >
         <IconTrash size={12} className="button-icon" />
@@ -203,10 +203,10 @@ export function DeleteControl({ onConfirm, title }: { onConfirm: () => void; tit
       </button>
       <ConfirmActionModal
         open={open}
-        title="borrar bug"
+        title="Borrar bug"
         description={`Se ocultará "${title}" del proyecto compartido.`}
-        confirmLabel="borrar bug"
-        busyLabel="borrando"
+        confirmLabel="Borrar bug"
+        busyLabel="Borrando"
         onClose={() => setOpen(false)}
         onConfirm={() => {
           setOpen(false)

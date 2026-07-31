@@ -21,14 +21,14 @@ interface ResetAction {
 const ACTIONS: ResetAction[] = [
   {
     scope: 'bug-data',
-    label: 'vaciar vista local',
+    label: 'Vaciar vista local',
     description: 'Reinicia la app sin borrar bugs ni estados del proyecto compartido.',
     confirmMessage: 'esto reinicia la app sin borrar datos de Supabase',
     Icon: IconTrash,
   },
   {
     scope: 'config',
-    label: 'restablecer configuración',
+    label: 'Restablecer configuración',
     description: 'Vuelve a los valores por defecto y reabre el asistente de primer arranque.',
     confirmMessage: 'esto restablece la configuración y reinicia la app',
     Icon: IconRestore,
@@ -75,8 +75,8 @@ function ResetRow({ action, addLog }: { action: ResetAction; addLog: Props['addL
         open={confirming}
         title={label}
         description={confirmMessage}
-        confirmLabel="restablecer"
-        busyLabel="reiniciando"
+        confirmLabel="Restablecer"
+        busyLabel="Reiniciando"
         busy={busy}
         onClose={() => {
           if (!busy) setConfirming(false)

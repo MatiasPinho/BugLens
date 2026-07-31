@@ -865,13 +865,13 @@ export default function Settings({ addLog, onTeamStatusChange, onNewProject }: P
                 }
               }}
             >
-              <option value="">sin agente configurado</option>
+              <option value="">Sin agente configurado</option>
               {EXTERNAL_AGENT_PRESETS.map((preset) => (
                 <option key={preset.id} value={preset.id}>
                   {preset.name}
                 </option>
               ))}
-              <option value={CUSTOM_EXTERNAL_AGENT_ID}>personalizado</option>
+              <option value={CUSTOM_EXTERNAL_AGENT_ID}>Personalizado</option>
             </select>
           </Field>
 

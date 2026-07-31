@@ -1,9 +1,14 @@
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { AnalyzedBug } from '../../../shared/contracts/bugTypes'
-import { buildExternalAgentPrompt, runExternalAgent, stripAnsi } from './externalAgent'
+import {
+  buildExternalAgentPrompt,
+  resolveSilenceTimeoutMs,
+  runExternalAgent,
+  stripAnsi,
+} from './externalAgent'
 
 function shellQuotePath(value: string): string {
   if (process.platform === 'win32') return `"${value.replace(/"/g, '\\"')}"`
@@ -71,7 +76,12 @@ describe('externalAgent', () => {
 
     expect(prompt).toContain('Título: Login roto')
     expect(prompt).toContain('Qué pasa: al enviar credenciales queda cargando')
-    expect(prompt).toContain('Información faltante: usuario de prueba')
+    // Rótulo distinto al de la sección de salida: si se llaman igual, el agente
+    // devuelve esta entrada como si fuera su propia conclusión.
+    expect(prompt).toContain(
+      'Datos que BugLens marcó como faltantes en el reporte de QA: usuario de prueba',
+    )
+    expect(prompt).toContain('Alcance revisado:')
     expect(prompt).toContain('captura con error 500')
     expect(prompt).toContain('No modifiques archivos')
     expect(prompt).toContain('No uses subagentes')
@@ -326,5 +336,40 @@ describe('externalAgent', () => {
 
     expect(result.ok).toBe(false)
     expect(result.error).toMatch(/Configurá/)
+  })
+})
+
+describe('resolveSilenceTimeoutMs', () => {
+  const previo = process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS']
+  afterEach(() => {
+    if (previo === undefined) delete process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS']
+    else process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS'] = previo
+  })
+
+  it('usa el default cuando no hay env var', () => {
+    delete process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS']
+    expect(resolveSilenceTimeoutMs(20 * 60 * 1000)).toBe(4 * 60 * 1000)
+  })
+
+  it('nunca supera el timeout general: cortar después de que ya venció no sirve', () => {
+    delete process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS']
+    expect(resolveSilenceTimeoutMs(30_000)).toBe(30_000)
+  })
+
+  it('respeta la env var', () => {
+    process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS'] = '15000'
+    expect(resolveSilenceTimeoutMs(20 * 60 * 1000)).toBe(15_000)
+  })
+
+  it('la env var tampoco puede pasarse del timeout general', () => {
+    process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS'] = '999999'
+    expect(resolveSilenceTimeoutMs(60_000)).toBe(60_000)
+  })
+
+  it('ignora valores inválidos y cae al default', () => {
+    process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS'] = 'ni idea'
+    expect(resolveSilenceTimeoutMs(20 * 60 * 1000)).toBe(4 * 60 * 1000)
+    process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS'] = '-5'
+    expect(resolveSilenceTimeoutMs(20 * 60 * 1000)).toBe(4 * 60 * 1000)
   })
 })

@@ -171,6 +171,12 @@ capas técnicas. No volver a organizar el código por carpetas raíz como `pipel
   es Electron offline, no se usa el CDN de Google Fonts). **Iosevka** queda reservada para
   **código, rutas, keys y timestamps del log**: se aplica con la clase `.mono` (o
   `font-mono`), nunca al chrome ni al cuerpo de texto.
+- **Modales por portal**: `ActionModal` monta en `document.body`. Adentro del árbol
+  quedaba atrapado en el contexto de apilado de quien lo abriera — abierto desde el
+  topbar (`z-index: 20`) el rail (`z-index: 30`) le pasaba por encima, y el `z-50`
+  interno no alcanza para salir del subárbol.
+- **Rótulos con mayúscula inicial**: títulos de pantalla, panel, sección y modal, y
+  etiquetas de botón. Las VERSALES son solo para kickers y micro-labels.
 - **Accesibilidad**: focus-visible global y `prefers-reduced-motion` (en `styles.css`) —
   respetarlos; `aria-label` en controles de solo-icono y en los selects de filtro; los badges
   comunican con **color + texto**, no solo color.
@@ -213,6 +219,21 @@ capas técnicas. No volver a organizar el código por carpetas raíz como `pipel
   (8 = carets/disclosure, 12 = acciones chicas, 16 = estándar, 20/24/28 = medios/marcas). No usar
   valores fuera de esa escala. (Los atributos `width`/`height` del SVG no aceptan CSS vars; los
   motivos decorativos de `decor/` se dimensionan aparte, por contexto.)
+- **Prompt del agente externo**: el contrato de salida obliga a declarar **"Alcance revisado"**.
+  Midiendo 12 informes reales, 7 afirmaban exhaustividad ("el único", "la única") y uno era
+  falso: el agente trata los ejemplos del reporte como el alcance completo. La regla de
+  mantenerse dentro del bug se conserva a propósito —sin ella cada análisis se vuelve una
+  auditoría general— pero el informe tiene que decir hasta dónde miró.
+  Los rótulos de **entrada** no deben repetir el nombre de una sección de **salida**: con
+  ambos llamados "Información faltante", el agente devolvía la entrada como conclusión propia.
+- **Agente externo, procesos**: se lanza a través de un shell, así que el agente es
+  **nieto** del proceso que BugLens conoce. Para matarlo hace falta bajar el árbol entero:
+  en Windows `taskkill /T` (ni `child.kill()` ni los grupos de procesos con PID negativo
+  funcionan ahí), en POSIX el grupo con `detached`. Con `child.kill()` a secas quedaban
+  huérfanos de ~500 MB acumulándose. Además hay un **corte por silencio**
+  (`EXTERNAL_AGENT_SILENCE_TIMEOUT_MS`, 4 min): si no llega ninguna salida se corta, sin
+  depender de que el texto matchee el patrón de "progreso operativo" — si no, un proceso
+  muerto por fuera deja la UI en "Analizando…" hasta el timeout general.
 - **Electron Linux**: `app.disableHardwareAcceleration()` evita un crash de GPU (SIGTRAP).
   No correr onnxruntime/embeddings en el proceso main (era la causa del crash del índice removido).
 

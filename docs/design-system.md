@@ -104,8 +104,12 @@ línea con caja propia, y `.code-block` el bloque multilínea.
   18, 20, 22 y 24 px).
 - El cuerpo base usa 13 px con `line-height: 1.6`. Los pesos habituales son
   500 para énfasis medio, 600 para controles y subtítulos, y 700 para títulos.
-- Las mayúsculas se reservan para kickers y micro-labels; no se usan en textos
+- Las VERSALES se reservan para kickers y micro-labels; no se usan en textos
   largos ni acciones principales.
+- **Mayúscula inicial en todo lo que se lee como rótulo**: títulos de pantalla, de
+  panel, de sección, de modal y etiquetas de botón. Los modales venían en minúscula
+  ("nuevo proyecto", "borrar bug") y quedaban como una excepción sin motivo dentro de
+  una app que capitaliza el resto.
 
 ### Forma, controles y profundidad
 

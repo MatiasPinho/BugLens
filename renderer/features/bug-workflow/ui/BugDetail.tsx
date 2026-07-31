@@ -231,10 +231,10 @@ export default function BugDetail({
       {onDelete && (
         <ConfirmActionModal
           open={deleteOpen}
-          title="borrar bug"
+          title="Borrar bug"
           description={`Se ocultará "${raw.title}" del proyecto compartido.`}
-          confirmLabel="borrar bug"
-          busyLabel="borrando"
+          confirmLabel="Borrar bug"
+          busyLabel="Borrando"
           onClose={() => setDeleteOpen(false)}
           onConfirm={() => {
             setDeleteOpen(false)
@@ -492,7 +492,7 @@ function ExternalAgentConfirmModal({
   return (
     <ActionModal
       open={open}
-      title="analizar con el agente externo"
+      title="Analizar con el agente externo"
       description="BugLens va a enviar este bug al agente externo configurado para pedir una revisión adicional."
       onClose={onClose}
     >
@@ -518,10 +518,10 @@ function ExternalAgentConfirmModal({
 
         <div className="modal-actions">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={busy}>
-            cancelar
+            Cancelar
           </button>
           <button type="button" className="btn-primary" onClick={onConfirm} disabled={busy}>
-            iniciar análisis
+            Iniciar análisis
           </button>
         </div>
       </div>
