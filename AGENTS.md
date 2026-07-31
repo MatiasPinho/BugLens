@@ -265,8 +265,10 @@ mapper Supabase, parseo del LLM, caché, identidad por contenido, dedup del enri
 `bugPresentation`, `bugActivity` (hilos, actividad, vencimiento), `avatarTone`,
 `slugifyProjectName`, `normalizeBugsViewMode`) + las interacciones de
 `BugsScreen` (estados + pestañas activos/históricos + filtros + selección del bug),
-`BugDetail` (borrado, agente externo, notas), `AppRail`/`AppTopbar` (labels accesibles, migas)
-y `ManualBugForm`. La **integración** (LLM real, IPC de Electron, doc readers con red/auth,
+`BugDetail` (borrado, agente externo), `BugList` (selección, filtros, anuncios),
+`BugPropertiesRail` (responsables, fecha límite, vencimiento, actividad), `BugComments`
+(hilos, voto, composer), `MenuButton` (Esc, click afuera, foco), `AppRail`/`AppTopbar`
+(labels accesibles, migas, menú de cuenta) y `ManualBugForm`. La **integración** (LLM real, IPC de Electron, doc readers con red/auth,
 auth/realtime de Supabase, y **los RPC de Supabase contra la base real**) **no** se testea por
 unit — se verifica corriendo. CI corre `lint → typecheck → test → build` en cada push.
 
