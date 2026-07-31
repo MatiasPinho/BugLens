@@ -270,9 +270,7 @@ export function mapRemoteBugRow(row: RemoteBugRow, index: number): AnalyzedBug {
     dueDate: typeof row.dueDate === 'string' ? row.dueDate : null,
     reportedBy: toTeamMember(row.reportedBy),
     activity: Array.isArray(row.activity)
-      ? row.activity
-          .map(toActivityEntry)
-          .filter((item): item is BugActivityEntry => Boolean(item))
+      ? row.activity.map(toActivityEntry).filter((item): item is BugActivityEntry => Boolean(item))
       : [],
     error: row.error ?? undefined,
     processingMs: typeof row.processingMs === 'number' ? row.processingMs : 0,

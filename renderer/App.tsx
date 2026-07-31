@@ -30,8 +30,8 @@ import UploadBugsScreen from './features/analyze-bugs/ui/UploadBugsScreen'
 import type { BugDetailAgentInfo } from './features/bug-workflow/ui/BugDetail'
 import BugsScreen from './features/bug-workflow/ui/BugsScreen'
 import NewProjectModal from './features/projects/ui/NewProjectModal'
-import ProjectsScreen from './features/projects/ui/ProjectsScreen'
 import ProjectSwitcher from './features/projects/ui/ProjectSwitcher'
+import ProjectsScreen from './features/projects/ui/ProjectsScreen'
 import TeamLogin, { type TeamAuthStatus } from './features/projects/ui/TeamLogin'
 import Onboarding from './features/settings/ui/Onboarding'
 import Settings from './features/settings/ui/Settings'
@@ -56,8 +56,8 @@ function MissingElectronApi() {
         <div className="font-bold text-lg">BugLens necesita Electron</div>
         <p className="mt-2 text-sm" style={{ color: col.fgMuted }}>
           Esta pantalla requiere el preload de Electron para comunicarse con archivos, Supabase y el
-          proceso principal. Abrí la app con <code className="code-inline">npm run dev</code> o desde
-          el ejecutable.
+          proceso principal. Abrí la app con <code className="code-inline">npm run dev</code> o
+          desde el ejecutable.
         </p>
       </div>
     </div>
@@ -662,10 +662,7 @@ function ElectronApp() {
   }
 
   // La miga final es el bug abierto cuando hay detalle; si no, la sección.
-  const breadcrumb = [
-    routeLabel[route],
-    ...(detailBug ? [detailBug.enriched.raw.title] : []),
-  ]
+  const breadcrumb = [routeLabel[route], ...(detailBug ? [detailBug.enriched.raw.title] : [])]
 
   const showBugs = phase !== 'analyzing' && route === 'bugs' && results.length > 0
 
@@ -696,11 +693,7 @@ function ElectronApp() {
       actions={
         showBugs ? (
           <>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => setShowManualForm(true)}
-            >
+            <button type="button" className="btn-secondary" onClick={() => setShowManualForm(true)}>
               <IconPlus size={14} className="button-icon button-icon-plus" />
               Cargar bug manual
             </button>
@@ -775,47 +768,47 @@ function ElectronApp() {
       ) : (
         <div className="app-content">
           {topbar}
-        <main className="app-main min-h-0 flex-1 overflow-hidden">
-          {phase === 'analyzing' ? (
-            <AnalysisProgressScreen
-              current={progress.current}
-              total={progress.total}
-              message={progress.message}
-              phase={progress.phase}
-              logs={logs}
-              engineLabel={engineLabel}
-            />
-          ) : route === 'settings' ? (
-            <Settings
-              addLog={addLog}
-              onTeamStatusChange={setTeamStatus}
-              onNewProject={() => setRoute('projects')}
-            />
-          ) : route === 'projects' ? (
-            <ProjectsScreen
-              projects={projects}
-              activeProjectId={activeProjectId ?? undefined}
-              activeProjectBugCount={results.length}
-              busy={projectBusy}
-              onSelect={(projectId) => void handleSelectProject(projectId)}
-              onCreate={() => setShowNewProject(true)}
-            />
-          ) : route === 'upload' ? (
-            <UploadBugsScreen
-              excelPath={excelPath}
-              onFileSelected={setExcelPath}
-              onManualBug={() => setShowManualForm(true)}
-              onAnalyze={() => void handleAnalyze()}
-            />
-          ) : (
-            <UploadBugsScreen
-              excelPath={excelPath}
-              onFileSelected={setExcelPath}
-              onManualBug={() => setShowManualForm(true)}
-              onAnalyze={() => void handleAnalyze()}
-            />
-          )}
-        </main>
+          <main className="app-main min-h-0 flex-1 overflow-hidden">
+            {phase === 'analyzing' ? (
+              <AnalysisProgressScreen
+                current={progress.current}
+                total={progress.total}
+                message={progress.message}
+                phase={progress.phase}
+                logs={logs}
+                engineLabel={engineLabel}
+              />
+            ) : route === 'settings' ? (
+              <Settings
+                addLog={addLog}
+                onTeamStatusChange={setTeamStatus}
+                onNewProject={() => setRoute('projects')}
+              />
+            ) : route === 'projects' ? (
+              <ProjectsScreen
+                projects={projects}
+                activeProjectId={activeProjectId ?? undefined}
+                activeProjectBugCount={results.length}
+                busy={projectBusy}
+                onSelect={(projectId) => void handleSelectProject(projectId)}
+                onCreate={() => setShowNewProject(true)}
+              />
+            ) : route === 'upload' ? (
+              <UploadBugsScreen
+                excelPath={excelPath}
+                onFileSelected={setExcelPath}
+                onManualBug={() => setShowManualForm(true)}
+                onAnalyze={() => void handleAnalyze()}
+              />
+            ) : (
+              <UploadBugsScreen
+                excelPath={excelPath}
+                onFileSelected={setExcelPath}
+                onManualBug={() => setShowManualForm(true)}
+                onAnalyze={() => void handleAnalyze()}
+              />
+            )}
+          </main>
         </div>
       )}
 

@@ -18,9 +18,7 @@ function Frame({ label, children }: { label: string; children: React.ReactNode }
       className="flex flex-col items-center justify-center gap-3 rounded p-6"
       style={{ background: col.surface, border: `1px solid ${col.borderCard}` }}
     >
-      <div className="kicker">
-        {label}
-      </div>
+      <div className="kicker">{label}</div>
       {children}
     </div>
   )

@@ -66,9 +66,7 @@ export const ConHilo: Story = {
 /** Sin permisos de escritura: se lee el hilo pero no se comenta ni se vota. */
 export const SoloLectura: Story = {
   args: {
-    comments: [
-      makeComment({ id: 'c1', body: 'Reproducido en prod.', authorName: 'Lucía Gómez' }),
-    ],
+    comments: [makeComment({ id: 'c1', body: 'Reproducido en prod.', authorName: 'Lucía Gómez' })],
     onAddComment: undefined,
     onVote: undefined,
   },

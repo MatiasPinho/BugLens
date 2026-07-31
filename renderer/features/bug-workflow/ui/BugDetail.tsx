@@ -15,8 +15,8 @@ import type {
 } from '../../../../src/shared/contracts'
 import { ActionModal, ConfirmActionModal } from '../../../components/ActionModal'
 import CollapsibleBlock from '../../../components/CollapsibleBlock'
-import MenuButton, { MenuItem } from '../../../components/MenuButton'
 import { IconChevronLeft, IconMore, IconTrash } from '../../../components/icons'
+import MenuButton, { MenuItem } from '../../../components/MenuButton'
 import { col } from '../../../theme'
 import {
   AgentAccessIssueCard,
@@ -36,8 +36,8 @@ import {
   SeverityBadge,
   StatusBadge,
 } from './BugAtoms'
-import { bugReportAsText, formatAgentDuration, formatTimelineDate } from './bugPresentation'
 import { BugRewrittenReport } from './BugRewrittenReport'
+import { bugReportAsText, formatAgentDuration, formatTimelineDate } from './bugPresentation'
 
 export interface BugDetailAgentInfo {
   command: string
@@ -256,7 +256,11 @@ export default function BugDetail({
       <div className="bug-detail-main">
         <SectionCard
           title="Reporte reescrito"
-          aside={rewritten.problemCount > 1 ? <ProblemCountBadge count={rewritten.problemCount} /> : undefined}
+          aside={
+            rewritten.problemCount > 1 ? (
+              <ProblemCountBadge count={rewritten.problemCount} />
+            ) : undefined
+          }
         >
           {/* Los bloques largos se recortan para que los comentarios queden al
               alcance sin atravesar varias pantallas de reporte. */}
@@ -307,10 +311,8 @@ export default function BugDetail({
   )
 }
 
-
 // Solo muestra hechos con fecha real registrada (notas y corridas del agente) más
 // el tiempo de proceso del análisis. Nada inventado: si no hay datos, no se rinde.
-
 
 // ─── Reporte original (para auditar la reescritura) ──────────────────────────
 
@@ -327,14 +329,13 @@ function OriginalReportDisclosure({ bug }: { bug: AnalyzedBug }) {
           Para auditar la reescritura
         </span>
       </summary>
-      <div
-        className="grid gap-2 px-4 pb-4 text-sm"
-        style={{ color: col.fgMuted, lineHeight: 1.6 }}
-      >
+      <div className="grid gap-2 px-4 pb-4 text-sm" style={{ color: col.fgMuted, lineHeight: 1.6 }}>
         {raw.description && <p>{raw.description}</p>}
         {raw.stepsToReproduce && <OriginalField label="Pasos" value={raw.stepsToReproduce} />}
         {raw.actualResult && <OriginalField label="Resultado actual" value={raw.actualResult} />}
-        {raw.expectedResult && <OriginalField label="Resultado esperado" value={raw.expectedResult} />}
+        {raw.expectedResult && (
+          <OriginalField label="Resultado esperado" value={raw.expectedResult} />
+        )}
         {raw.environment && <OriginalField label="Ambiente" value={raw.environment} />}
       </div>
     </details>
@@ -428,9 +429,9 @@ function ExternalAgentPanel({
               <CloudAgentReport>{result.output}</CloudAgentReport>
             ) : (
               <p className="text-sm" style={{ color: col.fgMuted }}>
-                El agente terminó sin escribir nada en su salida. BugLens solo puede mostrar lo
-                que el comando escribe en stdout o stderr: si el agente registra sus errores en
-                un log propio, la causa está ahí.
+                El agente terminó sin escribir nada en su salida. BugLens solo puede mostrar lo que
+                el comando escribe en stdout o stderr: si el agente registra sus errores en un log
+                propio, la causa está ahí.
               </p>
             )}
             {result.command && (

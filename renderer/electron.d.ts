@@ -99,10 +99,7 @@ interface ElectronAPI {
     parentId?: string | null,
   ): Promise<{ ok: boolean; comment?: BugComment; error?: string }>
   setBugAssignees(bug: AnalyzedBug, userIds: string[]): Promise<{ ok: boolean; error?: string }>
-  setBugDueDate(
-    bug: AnalyzedBug,
-    dueDate: string | null,
-  ): Promise<{ ok: boolean; error?: string }>
+  setBugDueDate(bug: AnalyzedBug, dueDate: string | null): Promise<{ ok: boolean; error?: string }>
   voteBugComment(
     commentId: string,
     value: CommentVote,

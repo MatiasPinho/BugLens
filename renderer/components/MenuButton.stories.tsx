@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import MenuButton, { MenuItem } from './MenuButton'
 import { IconMore, IconTrash } from './icons'
+import MenuButton, { MenuItem } from './MenuButton'
 
 const meta = {
   title: 'buglens/MenuButton',

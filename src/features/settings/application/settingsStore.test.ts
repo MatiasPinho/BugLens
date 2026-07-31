@@ -78,5 +78,4 @@ describe('settingsStore', () => {
       activeProjectId: 'project-1',
     })
   })
-
 })

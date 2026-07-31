@@ -48,9 +48,7 @@ describe('AppTopbar', () => {
 
   it('cierra sesión desde el menú de la cuenta', async () => {
     const onSignOut = vi.fn()
-    render(
-      <AppTopbar breadcrumb={['Bugs']} user={{ id: 'perfil-1' }} onSignOut={onSignOut} />,
-    )
+    render(<AppTopbar breadcrumb={['Bugs']} user={{ id: 'perfil-1' }} onSignOut={onSignOut} />)
 
     await userEvent.click(screen.getByRole('button', { name: 'cuenta y equipo' }))
     await userEvent.click(screen.getByRole('menuitem', { name: /Cerrar sesión/ }))

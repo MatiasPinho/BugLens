@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import BugsScreen from '../features/bug-workflow/ui/BugsScreen'
-import { makeBug } from './_storyFixtures'
 import ProjectSwitcher from '../features/projects/ui/ProjectSwitcher'
+import { makeBug } from './_storyFixtures'
 import AppRail, { type AppRailItem } from './AppRail'
 import AppTopbar from './AppTopbar'
 import { IconBug, IconFolder, IconSettings, IconUpload } from './icons'
@@ -65,15 +65,9 @@ const previewProjects = [
 ]
 
 function AppShellPreview() {
-
   return (
     <div className="app-shell">
-      <AppRail
-        items={navItems}
-        footerItems={railFooterItems}
-        active="bugs"
-        onSelect={() => {}}
-      />
+      <AppRail items={navItems} footerItems={railFooterItems} active="bugs" onSelect={() => {}} />
 
       <div className="app-content">
         <AppTopbar
@@ -97,10 +91,7 @@ function AppShellPreview() {
         />
 
         <main className="app-main min-h-0 flex-1 overflow-hidden">
-          <BugsScreen
-            results={previewBugs}
-            onSetStatus={() => {}}
-          />
+          <BugsScreen results={previewBugs} onSetStatus={() => {}} />
         </main>
       </div>
     </div>

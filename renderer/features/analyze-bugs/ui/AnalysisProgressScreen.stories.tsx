@@ -3,7 +3,12 @@ import type { LogLine } from '../../../App'
 import AnalysisProgressScreen, { PhaseSteps } from './AnalysisProgressScreen'
 
 const logs: LogLine[] = [
-  { id: 1, level: 'info', message: 'excel leído: 24 filas válidas', timestamp: '2026-03-11T14:02:11Z' },
+  {
+    id: 1,
+    level: 'info',
+    message: 'excel leído: 24 filas válidas',
+    timestamp: '2026-03-11T14:02:11Z',
+  },
   {
     id: 2,
     level: 'info',
@@ -16,14 +21,24 @@ const logs: LogLine[] = [
     message: 'doc sin permisos: informe-qa-marzo',
     timestamp: '2026-03-11T14:02:31Z',
   },
-  { id: 4, level: 'info', message: 'bug 11/24 analizado en 4.2s', timestamp: '2026-03-11T14:03:02Z' },
+  {
+    id: 4,
+    level: 'info',
+    message: 'bug 11/24 analizado en 4.2s',
+    timestamp: '2026-03-11T14:03:02Z',
+  },
   {
     id: 5,
     level: 'error',
     message: 'timeout en la fila 19 — se reintenta',
     timestamp: '2026-03-11T14:03:09Z',
   },
-  { id: 6, level: 'info', message: 'bug 13/24 analizado en 3.8s', timestamp: '2026-03-11T14:03:18Z' },
+  {
+    id: 6,
+    level: 'info',
+    message: 'bug 13/24 analizado en 3.8s',
+    timestamp: '2026-03-11T14:03:18Z',
+  },
 ]
 
 const meta = {

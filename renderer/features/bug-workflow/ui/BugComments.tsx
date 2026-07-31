@@ -11,7 +11,7 @@ import { useMemo, useState } from 'react'
 import type { AnalyzedBug, BugComment, CommentVote } from '../../../../src/shared/contracts'
 import { avatarToneClass, initialsOf } from '../../../components/avatarTone'
 import { col } from '../../../theme'
-import { type CommentNode, buildCommentThread, countThread } from './bugActivity'
+import { buildCommentThread, type CommentNode, countThread } from './bugActivity'
 import { formatTimelineDate } from './bugPresentation'
 
 /** Más allá de este nivel el sangrado deja sin ancho al texto. */
@@ -91,7 +91,9 @@ function CommentBranch({
   return (
     <li
       className="comment-item"
-      style={{ marginLeft: node.depth > 0 ? `${Math.min(node.depth, MAX_INDENT_DEPTH) * 1.25}rem` : 0 }}
+      style={{
+        marginLeft: node.depth > 0 ? `${Math.min(node.depth, MAX_INDENT_DEPTH) * 1.25}rem` : 0,
+      }}
     >
       <div className="comment-body">
         <span

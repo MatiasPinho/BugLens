@@ -18,8 +18,7 @@ interface Props {
 const STEPS = [
   {
     title: 'Cargar un Excel — o un bug a mano',
-    detail:
-      'Detecta columnas en español e inglés y los links a Google Docs de cualquier celda.',
+    detail: 'Detecta columnas en español e inglés y los links a Google Docs de cualquier celda.',
   },
   {
     title: 'Clasificar y reescribir',
@@ -47,9 +46,7 @@ export default function UploadBugsScreen({
             <span className="page-eyebrow-dot" aria-hidden="true" />
             Nueva entrada
           </span>
-          <h2 className="page-title">
-          Cargar bugs
-          </h2>
+          <h2 className="page-title">Cargar bugs</h2>
           <p className="page-description">
             Traé un Excel de QA o cargá un bug a mano. BugLens clasifica y reescribe cada reporte.
           </p>

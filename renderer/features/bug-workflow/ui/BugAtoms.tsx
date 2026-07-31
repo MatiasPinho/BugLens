@@ -156,13 +156,7 @@ export function LifecycleTabs({
 
 // ─── Acciones ────────────────────────────────────────────────────────────────
 
-export function CopyButton({
-  text,
-  label = 'Copiar',
-}: {
-  text: string
-  label?: string
-}) {
+export function CopyButton({ text, label = 'Copiar' }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <button
@@ -253,7 +247,10 @@ export function DocImageGallery({ images }: { images: DocImage[] }) {
 
   return (
     <>
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(9rem, 1fr))' }}>
+      <div
+        className="grid gap-3"
+        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(9rem, 1fr))' }}
+      >
         {images.map((image, index) => (
           <button
             type="button"

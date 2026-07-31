@@ -47,11 +47,7 @@ export default function AnalysisProgressScreen({
           <h2 className="page-title">
             {total > 0 ? `Analizando ${total} bug${total === 1 ? '' : 's'}` : 'Analizando bugs'}
           </h2>
-          {engineLabel && (
-            <p className="page-description">
-              {engineLabel}
-            </p>
-          )}
+          {engineLabel && <p className="page-description">{engineLabel}</p>}
         </div>
       </div>
 

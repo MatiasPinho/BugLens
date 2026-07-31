@@ -109,9 +109,7 @@ export default function AppTopbar({
                           >
                             {initialsOf(member.displayName ?? member.email ?? '')}
                           </span>
-                          <span className="truncate">
-                            {member.displayName ?? member.email}
-                          </span>
+                          <span className="truncate">{member.displayName ?? member.email}</span>
                         </li>
                       ))}
                     </ul>
