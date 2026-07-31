@@ -128,6 +128,50 @@ npm run build      # compila renderer + main
 npm run package    # genera el instalador en release/
 ```
 
+### Evaluaciones reales de los agentes
+
+El banco de evaluaciones ejecuta los mismos recorridos de producción que usa la app:
+`runBugAnalysisBatch`/`analyzeBug` para el análisis normal y `runExternalAgent` para el
+análisis profundo. No duplica prompts ni parsers, no usa mocks y no escribe en Supabase.
+
+El catálogo versionado contiene 20 reportes en `evals/cases.json`. Se puede correr una
+muestra de 5, 10, 15 o 20 casos y repetir cada uno para observar variabilidad:
+
+```bash
+npm run eval:agents
+```
+
+Sin parámetros abre un menú numérico para elegir una prueba rápida, ejecutar 5/10/20
+casos, seleccionar un caso concreto o abrir el último reporte. Al terminar también ofrece
+abrir el reporte automáticamente.
+
+Los parámetros quedan disponibles para automatización o uso avanzado:
+
+```bash
+npm run eval:agents -- --list
+npm run eval:agents -- --suite 5 --agents both
+npm run eval:agents -- --suite 20 --agents normal --repeats 3
+npm run eval:agents -- --case due-date-shifts-day --agents both
+```
+
+Por defecto usa el `settings.json` guardado por BugLens y ejecuta el modelo sin caché. Para
+reproducir también la caché real de la aplicación:
+
+```bash
+npm run eval:agents -- --suite 10 --cache app
+```
+
+Cada corrida queda en `eval-results/<fecha>/` con el resultado exacto de ambos agentes,
+las respuestas crudas, `results.json`, `results.jsonl` y un `report.html` navegable. Para
+comparar puntajes con una corrida anterior:
+
+```bash
+npm run eval:agents -- --suite 10 --baseline eval-results/<corrida-anterior>
+```
+
+El agente profundo siempre recibe el `AnalyzedBug` producido por el análisis normal, igual
+que en la app. Por eso `--agents deep` también ejecuta primero el normal como prerrequisito.
+
 ---
 
 ## Modelo LLM

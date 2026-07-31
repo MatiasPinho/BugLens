@@ -782,6 +782,7 @@ function ElectronApp() {
               <Settings
                 addLog={addLog}
                 onTeamStatusChange={setTeamStatus}
+                onOllamaAvailabilityChange={setOllamaAvailable}
                 onNewProject={() => setRoute('projects')}
               />
             ) : route === 'projects' ? (

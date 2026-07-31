@@ -50,7 +50,7 @@ import {
   exportFullDataJson,
   fullDataDefaultName,
 } from '../src/features/export-bugs/application/exportBugReports.js'
-import { runExternalAgent } from '../src/features/external-agent/application/externalAgent.js'
+import { analyzeBugWithExternalAgent } from '../src/features/external-agent/application/externalAgent.js'
 import {
   checkOpenCode,
   repairOpenCode,
@@ -541,7 +541,7 @@ ipcMain.handle(
       const { externalAgentCommand, externalAgentTimeoutMs, externalAgentRepositories } =
         loadSettings()
       log('info', `Enviando bug a agente externo: ${bug.enriched.raw.title}`)
-      const externalAgentResult = await runExternalAgent(
+      const result = await analyzeBugWithExternalAgent(
         externalAgentCommand,
         bug,
         externalAgentTimeoutMs,
@@ -550,7 +550,6 @@ ipcMain.handle(
         },
         externalAgentRepositories,
       )
-      const result = { ...externalAgentResult, createdAt: new Date().toISOString() }
       if (result.ok) {
         log('info', `Agente externo terminó en ${Math.round(result.durationMs / 1000)}s`)
       } else {

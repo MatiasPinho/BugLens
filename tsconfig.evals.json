@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.electron.json",
+  "compilerOptions": {
+    "outDir": ".eval-dist",
+    "rootDir": "."
+  },
+  "include": ["scripts/evals/**/*.ts", "src/**/*.ts"],
+  "exclude": ["node_modules", "dist", ".eval-dist", "**/*.test.ts", "**/*.test.tsx"]
+}

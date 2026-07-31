@@ -34,7 +34,7 @@ export interface RunBugAnalysisBatchOptions {
   enricher: BugEnricherLike
   llmConfig: LLMConfig
   performanceMode: PerformanceMode
-  cacheDir: string
+  cacheDir?: string
   saveResult(result: AnalyzedBug, analysisConfig?: LLMConfig): Promise<unknown>
   onBugResult(payload: BatchBugResult): void
   onProgress(progress: BatchProgress): void

@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { ExternalAgentRepository } from '../../../../src/shared/contracts'
 import type { LogLine } from '../../../App'
 import { IconCheck, IconPlus, IconRestore, IconX } from '../../../components/icons'
@@ -45,6 +45,7 @@ interface SettingsData {
 interface Props {
   addLog: (level: LogLine['level'], message: string) => void
   onTeamStatusChange?: (status: TeamAuthStatus) => void
+  onOllamaAvailabilityChange?: (available: boolean) => void
   onNewProject?: () => void
 }
 
@@ -146,7 +147,12 @@ function openCodeErrorStatus(error: unknown): OpenCodeStatus {
   }
 }
 
-export default function Settings({ addLog, onTeamStatusChange, onNewProject }: Props) {
+export default function Settings({
+  addLog,
+  onTeamStatusChange,
+  onOllamaAvailabilityChange,
+  onNewProject,
+}: Props) {
   const [settings, setSettings] = useState<SettingsData>({
     googleClientId: '',
     googleClientSecret: '',
@@ -186,6 +192,13 @@ export default function Settings({ addLog, onTeamStatusChange, onNewProject }: P
   const [showOAuth, setShowOAuth] = useState(false)
   const analyzeImages = settings.llmVisionModel.trim().length > 0
   const openCodeReady = Boolean(openCodeStatus?.installed && openCodeStatus.hasBigPickle)
+  const applyOllamaStatus = useCallback(
+    (status: { available: boolean; models?: string[] }) => {
+      setOllamaStatus(status)
+      onOllamaAvailabilityChange?.(status.available)
+    },
+    [onOllamaAvailabilityChange],
+  )
 
   useEffect(() => {
     window.electronAPI.getSettings().then((s: SettingsData) => {
@@ -206,7 +219,6 @@ export default function Settings({ addLog, onTeamStatusChange, onNewProject }: P
     window.electronAPI.getAuthStatus().then(setGoogleAuth)
     window.electronAPI.getBrowserAuthStatus().then(setBrowserAuth)
     window.electronAPI.getSupabaseStatus().then(setSupabaseStatus)
-    window.electronAPI.checkOllama().then(setOllamaStatus)
     setCheckingOpenCode(true)
     window.electronAPI
       .checkOpenCode()
@@ -215,6 +227,10 @@ export default function Settings({ addLog, onTeamStatusChange, onNewProject }: P
       .finally(() => setCheckingOpenCode(false))
     window.electronAPI.cacheStats().then(setCacheStats)
   }, [])
+
+  useEffect(() => {
+    window.electronAPI.checkOllama().then(applyOllamaStatus)
+  }, [applyOllamaStatus])
 
   const handleClearCache = async () => {
     setClearingCache(true)
@@ -375,7 +391,7 @@ export default function Settings({ addLog, onTeamStatusChange, onNewProject }: P
 
   const checkOllama = async () => {
     const status = await window.electronAPI.checkOllama()
-    setOllamaStatus(status)
+    applyOllamaStatus(status)
   }
 
   const startOllama = async () => {
@@ -384,7 +400,7 @@ export default function Settings({ addLog, onTeamStatusChange, onNewProject }: P
     addLog(result.ok ? 'info' : 'error', result.message)
     if (result.ok) {
       const status = await window.electronAPI.checkOllama()
-      setOllamaStatus(status)
+      applyOllamaStatus(status)
     }
   }
 

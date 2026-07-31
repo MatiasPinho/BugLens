@@ -12,6 +12,12 @@ export interface OllamaAvailability {
   models: string[]
 }
 
+interface OllamaProcessTreeStopDependencies {
+  platform?: NodeJS.Platform
+  runTaskkill?: (pid: number) => void
+  killProcess?: (pid: number, signal: NodeJS.Signals) => void
+}
+
 let ollamaProcess: cp.ChildProcess | null = null
 
 export function findOllamaBin(env: NodeJS.ProcessEnv = process.env): string | null {
@@ -74,8 +80,12 @@ export async function ensureOllamaRunning(
 
   onLog?.(`Levantando Ollama: ${bin}`)
   ollamaProcess = cp.spawn(bin, ['serve'], {
-    detached: false,
+    // En POSIX crea un grupo propio para poder cerrar `ollama serve` y todos
+    // sus runners con una sola señal. Windows no soporta PIDs negativos: ahí
+    // el cierre usa `taskkill /T`.
+    detached: process.platform !== 'win32',
     stdio: 'ignore',
+    windowsHide: true,
     env: {
       ...process.env,
       ...(process.platform === 'linux' ? { HSA_OVERRIDE_GFX_VERSION: '10.3.0' } : {}),
@@ -96,8 +106,50 @@ export async function ensureOllamaRunning(
   return { started: false, alreadyRunning: false }
 }
 
+export function stopOllamaProcessTree(
+  pid: number,
+  dependencies: OllamaProcessTreeStopDependencies = {},
+): boolean {
+  const platform = dependencies.platform ?? process.platform
+
+  if (platform === 'win32') {
+    const runTaskkill =
+      dependencies.runTaskkill ??
+      ((processId: number) => {
+        cp.execFileSync('taskkill', ['/PID', String(processId), '/T', '/F'], {
+          stdio: 'ignore',
+          windowsHide: true,
+        })
+      })
+    try {
+      runTaskkill(pid)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const killProcess = dependencies.killProcess ?? process.kill
+  try {
+    killProcess(-pid, 'SIGTERM')
+    return true
+  } catch {
+    // Si el proceso no llegó a crear su grupo, conserva el fallback anterior.
+    try {
+      killProcess(pid, 'SIGTERM')
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+
 export function stopManagedOllama(): void {
   if (!ollamaProcess) return
-  ollamaProcess.kill()
+  const managedProcess = ollamaProcess
   ollamaProcess = null
+  const pid = managedProcess.pid
+  if (!pid || !stopOllamaProcessTree(pid)) {
+    managedProcess.kill()
+  }
 }
