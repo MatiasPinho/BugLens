@@ -9,10 +9,21 @@ const meta: Meta<typeof EmptyState> = {
 export default meta
 type Story = StoryObj<typeof EmptyState>
 
-export const SinExcel: Story = {
-  args: { hasExcel: false },
+export const SinBugs: Story = {
+  args: {
+    title: 'Todavía no hay bugs analizados',
+    description: 'Cargá un Excel de QA o un bug a mano para que BugLens los reescriba.',
+  },
 }
 
-export const ConExcel: Story = {
-  args: { hasExcel: true },
+export const SinResultados: Story = {
+  args: {
+    title: 'Ningún bug coincide con estos filtros',
+    description: 'Probá con menos filtros o buscá otro texto.',
+    action: (
+      <button type="button" className="btn-secondary">
+        Limpiar filtros
+      </button>
+    ),
+  },
 }

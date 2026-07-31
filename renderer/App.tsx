@@ -5,26 +5,39 @@ import type {
   BugComment,
   BugResultEvent,
   BugStatus,
+  CommentVote,
   ExternalAgentResult,
   IPCEvent,
   LogEvent,
   ProgressEvent,
+  TeamMember,
 } from '../src/shared/contracts'
-import { BeetleMark } from './components/decor/BugMotifs'
-import EmptyState from './components/EmptyState'
-import FileUpload from './components/FileUpload'
-import { IconPlus } from './components/icons'
+import AppRail, { type AppRailItem } from './components/AppRail'
+import AppTopbar from './components/AppTopbar'
+import {
+  IconBug,
+  IconFolder,
+  IconHelp,
+  IconPlus,
+  IconSettings,
+  IconUpload,
+  IconX,
+} from './components/icons'
 import { LoadingOverlay } from './components/Loading'
-import ProgressLog from './components/ProgressLog'
+import AnalysisProgressScreen from './features/analyze-bugs/ui/AnalysisProgressScreen'
 import ManualBugForm from './features/analyze-bugs/ui/ManualBugForm'
-import BugTable, { severityLabel } from './features/bug-workflow/ui/BugTable'
+import UploadBugsScreen from './features/analyze-bugs/ui/UploadBugsScreen'
+import type { BugDetailAgentInfo } from './features/bug-workflow/ui/BugDetail'
+import BugsScreen from './features/bug-workflow/ui/BugsScreen'
+import NewProjectModal from './features/projects/ui/NewProjectModal'
 import ProjectSwitcher from './features/projects/ui/ProjectSwitcher'
+import ProjectsScreen from './features/projects/ui/ProjectsScreen'
 import TeamLogin, { type TeamAuthStatus } from './features/projects/ui/TeamLogin'
 import Onboarding from './features/settings/ui/Onboarding'
 import Settings from './features/settings/ui/Settings'
-import { alpha, col } from './theme'
+import { col } from './theme'
 
-type Tab = 'main' | 'settings'
+type Route = 'bugs' | 'upload' | 'projects' | 'settings'
 type Phase = 'idle' | 'analyzing' | 'done'
 
 export interface LogLine {
@@ -38,29 +51,13 @@ let logCounter = 0
 
 function MissingElectronApi() {
   return (
-    <div
-      className="min-h-screen bg-om-base text-om-fg"
-      style={{
-        display: 'grid',
-        placeItems: 'center',
-        padding: 24,
-        background: col.base,
-        color: col.fg,
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 420,
-          border: `1px solid ${alpha(col.border, 0.8)}`,
-          borderRadius: 6,
-          background: col.surface,
-          padding: 20,
-        }}
-      >
-        <div className="font-semibold text-sm">BugLens necesita Electron</div>
-        <p className="mt-2 text-om-fgdim text-xs leading-relaxed">
+    <div className="grid h-screen place-items-center p-6">
+      <div className="card max-w-md">
+        <div className="font-bold text-lg">BugLens necesita Electron</div>
+        <p className="mt-2 text-sm" style={{ color: col.fgMuted }}>
           Esta pantalla requiere el preload de Electron para comunicarse con archivos, Supabase y el
-          proceso principal. Abri la app con <code>npm run dev</code> o desde el ejecutable.
+          proceso principal. Abrí la app con <code className="code-inline">npm run dev</code> o
+          desde el ejecutable.
         </p>
       </div>
     </div>
@@ -76,7 +73,7 @@ export default function App() {
 }
 
 function ElectronApp() {
-  const [tab, setTab] = useState<Tab>('main')
+  const [route, setRoute] = useState<Route>('bugs')
   const [phase, setPhase] = useState<Phase>('idle')
   const [excelPath, setExcelPath] = useState<string | null>(null)
   const [results, setResults] = useState<AnalyzedBug[]>([])
@@ -87,23 +84,27 @@ function ElectronApp() {
     message: string
     phase?: import('../src/shared/contracts').AnalysisPhase
   }>({ current: 0, total: 0, message: '' })
-  const [showLogs, setShowLogs] = useState(false)
   const [showManualForm, setShowManualForm] = useState(false)
+  const [showNewProject, setShowNewProject] = useState(false)
   // Primer arranque: null = cargando settings; false = mostrar wizard; true = app normal.
   const [onboarded, setOnboarded] = useState<boolean | null>(null)
+  const [engineLabel, setEngineLabel] = useState('')
+  const [agentInfo, setAgentInfo] = useState<BugDetailAgentInfo | undefined>()
+  const [ollamaAvailable, setOllamaAvailable] = useState<boolean | null>(null)
   const [teamStatus, setTeamStatus] = useState<TeamAuthStatus | null>(null)
   const [teamAuthLoading, setTeamAuthLoading] = useState(false)
   const [projectBusy, setProjectBusy] = useState(false)
-  const [requestLoading, setRequestLoading] = useState<{
-    title: string
-    detail?: string
-  } | null>(null)
+  const [requestLoading, setRequestLoading] = useState<{ title: string; detail?: string } | null>(
+    null,
+  )
   const [focusedBugId, setFocusedBugId] = useState<string | null>(null)
-  const [expandedBugId, setExpandedBugId] = useState<string | null>(null)
+  const [detailBugId, setDetailBugId] = useState<string | null>(null)
   const [showHelp, setShowHelp] = useState(false)
+  const [projectMembers, setProjectMembers] = useState<TeamMember[]>([])
   const searchInputRef = React.useRef<HTMLInputElement | null>(null)
   const remoteReloadTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const activeProjectId = teamStatus?.project?.id ?? null
+  const detailBug = results.find((bug) => bug.enriched.raw.id === detailBugId) ?? null
 
   const addLog = useCallback((level: LogLine['level'], message: string, timestamp?: string) => {
     setLogs((prev) => [
@@ -157,11 +158,45 @@ function ElectronApp() {
     }
   }, [addLog])
 
-  // Saber si hay que mostrar el wizard de primer arranque.
-  useEffect(() => {
-    window.electronAPI.getSettings().then((s) => setOnboarded(Boolean(s.onboarded)))
-    window.electronAPI.getSupabaseStatus().then(setTeamStatus)
+  // Settings que la UI del shell necesita: wizard de primer arranque, layout de
+  // bugs, etiqueta del motor y agente configurado (para el rail del detalle).
+  const loadShellSettings = useCallback(async () => {
+    const settings = await window.electronAPI.getSettings()
+    setOnboarded(Boolean(settings.onboarded))
+    setEngineLabel(
+      `${settings.llmModel} en ${settings.performanceMode === 'cpu' ? 'CPU' : 'GPU'} · ${
+        settings.performanceMode === 'cpu' ? 'de a un bug' : 'varios bugs en paralelo'
+      }`,
+    )
+    const repository = settings.externalAgentRepositories?.[0]
+    setAgentInfo(
+      settings.externalAgentCommand
+        ? {
+            command: settings.externalAgentCommand,
+            repository: repository?.path,
+            branch: repository?.branch,
+          }
+        : undefined,
+    )
   }, [])
+
+  useEffect(() => {
+    void loadShellSettings()
+    window.electronAPI.getSupabaseStatus().then(setTeamStatus)
+    window.electronAPI.checkOllama().then((status) => setOllamaAvailable(status.available))
+  }, [loadShellSettings])
+
+  // Miembros del proyecto activo: son las personas asignables y las que aparecen
+  // en la actividad. Se recargan al cambiar de proyecto.
+  useEffect(() => {
+    if (!activeProjectId) {
+      setProjectMembers([])
+      return
+    }
+    window.electronAPI.listProjectMembers().then((result) => {
+      setProjectMembers(result.ok && result.members ? result.members : [])
+    })
+  }, [activeProjectId])
 
   const handleTeamLogin = useCallback(async () => {
     setTeamAuthLoading(true)
@@ -181,6 +216,15 @@ function ElectronApp() {
     }
   }, [addLog])
 
+  const handleSignOut = useCallback(async () => {
+    await window.electronAPI.signOutSupabase()
+    const status = await window.electronAPI.getSupabaseStatus()
+    setTeamStatus(status)
+    setResults([])
+    setDetailBugId(null)
+    addLog('info', 'sesión del equipo cerrada')
+  }, [addLog])
+
   const handleSelectProject = useCallback(
     async (projectId: string) => {
       if (!projectId || projectId === activeProjectId) return
@@ -193,7 +237,7 @@ function ElectronApp() {
         const status = await window.electronAPI.selectSupabaseProject(projectId)
         setTeamStatus(status)
         setResults([])
-        setExpandedBugId(null)
+        setDetailBugId(null)
         setFocusedBugId(null)
         if (status.project) addLog('info', `proyecto activo: ${status.project.name}`)
         else addLog('error', `error seleccionando proyecto: ${status.error ?? 'sin detalle'}`)
@@ -208,15 +252,12 @@ function ElectronApp() {
   const handleCreateProject = useCallback(
     async (name: string, slug: string) => {
       setProjectBusy(true)
-      setRequestLoading({
-        title: 'creando proyecto',
-        detail: `${name} / ${slug}`,
-      })
+      setRequestLoading({ title: 'creando proyecto', detail: `${name} / ${slug}` })
       try {
         const status = await window.electronAPI.createSupabaseProject(name, slug)
         setTeamStatus(status)
         setResults([])
-        setExpandedBugId(null)
+        setDetailBugId(null)
         setFocusedBugId(null)
         if (status.project) addLog('info', `proyecto creado: ${status.project.name}`)
         else addLog('error', `error creando proyecto: ${status.error ?? 'sin detalle'}`)
@@ -258,16 +299,8 @@ function ElectronApp() {
   // Restaurar la tabla desde Supabase al abrir. La sesión local dejó de ser la
   // fuente de verdad: si el equipo está conectado, lo que se ve sale del proyecto remoto.
   useEffect(() => {
-    let cancelled = false
     if (!teamStatus?.authenticated || !activeProjectId) return
-
-    loadRemoteResults(true, true).then(() => {
-      if (cancelled) return
-    })
-
-    return () => {
-      cancelled = true
-    }
+    void loadRemoteResults(true, true)
   }, [activeProjectId, loadRemoteResults, teamStatus?.authenticated])
 
   useEffect(() => {
@@ -290,20 +323,13 @@ function ElectronApp() {
     }
   }, [activeProjectId, addLog, loadRemoteResults, phase, teamStatus?.authenticated])
 
-  // Si la tabla queda vacía estando en 'done' (borraste el último bug), volver al
-  // inicio para mostrar la pantalla de carga.
-  useEffect(() => {
-    if (phase === 'done' && results.length === 0) setPhase('idle')
-  }, [phase, results.length])
-
   const handleAnalyze = useCallback(async () => {
     if (!excelPath) return
     setPhase('analyzing')
     setResults([])
     setLogs([])
-    setShowLogs(false)
-    setProgress({ current: 0, total: 0, message: 'iniciando...' })
-    addLog('info', 'iniciando análisis...')
+    setProgress({ current: 0, total: 0, message: 'iniciando…' })
+    addLog('info', 'iniciando análisis…')
 
     const result = await window.electronAPI.runAnalysis(excelPath)
     if (!result.ok) {
@@ -311,22 +337,23 @@ function ElectronApp() {
       setPhase('idle')
     } else {
       await loadRemoteResults(false)
+      setRoute('bugs')
     }
   }, [excelPath, addLog, loadRemoteResults])
 
-  // Analizar un bug cargado a mano: lo appendea a la tabla (no resetea).
+  // Analizar un bug cargado a mano: lo agrega al listado (no resetea).
   const handleAddManualBug = useCallback(
     async (fields: ManualBugFields) => {
       setPhase('analyzing')
-      setShowLogs(false)
-      setProgress({ current: 0, total: 1, message: 'analizando bug manual...' })
-      addLog('info', 'analizando bug manual...')
+      setProgress({ current: 0, total: 1, message: 'analizando bug manual…' })
+      addLog('info', 'analizando bug manual…')
 
       try {
         const result = await window.electronAPI.analyzeManualBug(fields)
         if (result.ok) {
           await loadRemoteResults(false)
           setPhase('done')
+          setRoute('bugs')
           return
         }
         addLog('error', `error: ${result.error}`)
@@ -352,21 +379,8 @@ function ElectronApp() {
       !excelPath || hasManualBug
         ? await window.electronAPI.exportBugs(results)
         : await window.electronAPI.exportExcel(excelPath, results)
-    if (result.ok) {
-      addLog('info', `exportado: ${result.filePath}`)
-    } else if (result.error) {
-      addLog('error', `error al exportar: ${result.error}`)
-    }
-  }, [excelPath, results, addLog])
-
-  const handleExportFullData = useCallback(async () => {
-    if (results.length === 0) return
-    const result = await window.electronAPI.exportFullData(excelPath, results)
-    if (result.ok) {
-      addLog('info', `datos completos exportados: ${result.filePath}`)
-    } else if (result.error) {
-      addLog('error', `error al exportar datos completos: ${result.error}`)
-    }
+    if (result.ok) addLog('info', `exportado: ${result.filePath}`)
+    else if (result.error) addLog('error', `error al exportar: ${result.error}`)
   }, [excelPath, results, addLog])
 
   // Cambiar el estado de un bug: update optimista en la UI + persistir en Supabase.
@@ -385,19 +399,18 @@ function ElectronApp() {
     [addLog],
   )
 
-  // Borrar un bug: soft-delete remoto en Supabase + update optimista de la tabla.
+  // Borrar un bug: soft-delete remoto en Supabase + update optimista del listado.
   const handleDeleteBug = useCallback(
     async (bug: AnalyzedBug) => {
       const id = bug.enriched.raw.id
       const previousResults = results
       setResults((prev) => prev.filter((r) => r.enriched.raw.id !== id))
-      setExpandedBugId((curr) => (curr === id ? null : curr))
+      setDetailBugId((curr) => (curr === id ? null : curr))
       setFocusedBugId((curr) => (curr === id ? null : curr))
 
       const result = await window.electronAPI.deleteBug(bug)
-      if (result.ok) {
-        addLog('info', `bug borrado: ${bug.enriched.raw.title}`)
-      } else {
+      if (result.ok) addLog('info', `bug borrado: ${bug.enriched.raw.title}`)
+      else {
         setResults(previousResults)
         addLog('error', `error borrando bug: ${result.error ?? 'sin detalle'}`)
       }
@@ -434,8 +447,8 @@ function ElectronApp() {
   )
 
   const handleAddBugComment = useCallback(
-    async (bug: AnalyzedBug, body: string): Promise<BugComment> => {
-      const result = await window.electronAPI.addBugComment(bug, body)
+    async (bug: AnalyzedBug, body: string, parentId: string | null = null): Promise<BugComment> => {
+      const result = await window.electronAPI.addBugComment(bug, body, parentId)
       if (!result.ok || !result.comment) {
         throw new Error(result.error ?? 'No se pudo guardar el comentario.')
       }
@@ -453,18 +466,75 @@ function ElectronApp() {
     [addLog],
   )
 
+  const handleSetAssignees = useCallback(
+    async (bug: AnalyzedBug, userIds: string[]) => {
+      const result = await window.electronAPI.setBugAssignees(bug, userIds)
+      if (!result.ok) {
+        addLog('error', `no se pudieron asignar responsables: ${result.error ?? 'error remoto'}`)
+        return
+      }
+      // El servidor es la fuente de verdad de los responsables (valida que sean
+      // miembros del proyecto), así que se recarga en vez de adivinar el estado.
+      await loadRemoteResults()
+    },
+    [addLog, loadRemoteResults],
+  )
+
+  const handleSetDueDate = useCallback(
+    async (bug: AnalyzedBug, dueDate: string | null) => {
+      const result = await window.electronAPI.setBugDueDate(bug, dueDate)
+      if (!result.ok) {
+        addLog('error', `no se pudo cambiar la fecha límite: ${result.error ?? 'error remoto'}`)
+        return
+      }
+      setResults((prev) =>
+        prev.map((item) =>
+          item.enriched.raw.id === bug.enriched.raw.id ? { ...item, dueDate } : item,
+        ),
+      )
+    },
+    [addLog],
+  )
+
+  const handleVoteComment = useCallback(
+    async (commentId: string, value: CommentVote) => {
+      const result = await window.electronAPI.voteBugComment(commentId, value)
+      if (!result.ok || !result.totals) {
+        addLog('error', `no se pudo votar: ${result.error ?? 'error remoto'}`)
+        return
+      }
+      // El servidor devuelve los totales ya recalculados: se aplican tal cual en
+      // vez de sumar de a uno, que se desincronizaría con los votos de otros.
+      const totals = result.totals
+      setResults((prev) =>
+        prev.map((item) => ({
+          ...item,
+          comments: item.comments?.map((comment) =>
+            comment.id === commentId
+              ? {
+                  ...comment,
+                  upvotes: totals.upvotes,
+                  downvotes: totals.downvotes,
+                  myVote: totals.myVote,
+                }
+              : comment,
+          ),
+        })),
+      )
+    },
+    [addLog],
+  )
+
   // ─── Keyboard shortcuts ────────────────────────────────────────────────────
-  // j/k: next/prev bug, Enter: expandir, Esc: cerrar, /: focus search, d: deep analysis del bug abierto, ?: help
+  // j/k: siguiente/anterior bug · Enter: abrir detalle · Esc: volver · /: buscar
+  // 1-5: marcar estado · ?: ayuda
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      // Ignorar si estamos escribiendo en un input/textarea/select
       const target = e.target as HTMLElement
       const isTyping =
         target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT'
       if (isTyping && e.key !== 'Escape') return
-
-      // Solo activos en la tab main
-      if (tab !== 'main') return
+      if (route !== 'bugs') return
 
       switch (e.key) {
         case '?':
@@ -482,8 +552,8 @@ function ElectronApp() {
             setShowHelp(false)
             break
           }
-          if (expandedBugId) {
-            setExpandedBugId(null)
+          if (detailBugId) {
+            setDetailBugId(null)
             break
           }
           if (isTyping) (target as HTMLInputElement).blur()
@@ -491,23 +561,25 @@ function ElectronApp() {
         case 'j': {
           if (results.length === 0) return
           e.preventDefault()
-          const idx = results.findIndex((r) => r.enriched.raw.id === focusedBugId)
-          const next = results[Math.min(idx + 1, results.length - 1)] ?? results[0]
+          const index = results.findIndex((r) => r.enriched.raw.id === focusedBugId)
+          const next = results[Math.min(index + 1, results.length - 1)] ?? results[0]
           setFocusedBugId(next.enriched.raw.id)
+          if (detailBugId) setDetailBugId(next.enriched.raw.id)
           break
         }
         case 'k': {
           if (results.length === 0) return
           e.preventDefault()
-          const idx = results.findIndex((r) => r.enriched.raw.id === focusedBugId)
-          const prev = results[Math.max(idx - 1, 0)] ?? results[0]
-          setFocusedBugId(prev.enriched.raw.id)
+          const index = results.findIndex((r) => r.enriched.raw.id === focusedBugId)
+          const previous = results[Math.max(index - 1, 0)] ?? results[0]
+          setFocusedBugId(previous.enriched.raw.id)
+          if (detailBugId) setDetailBugId(previous.enriched.raw.id)
           break
         }
         case 'Enter': {
           if (!focusedBugId) return
           e.preventDefault()
-          setExpandedBugId((curr) => (curr === focusedBugId ? null : focusedBugId))
+          setDetailBugId((curr) => (curr === focusedBugId ? null : focusedBugId))
           break
         }
         // 1-5: marcar estado del bug enfocado, sin abrirlo.
@@ -519,7 +591,7 @@ function ElectronApp() {
           if (!focusedBugId) return
           const bug = results.find((r) => r.enriched.raw.id === focusedBugId)
           if (!bug) return
-          const map: Record<string, BugStatus> = {
+          const statusByKey: Record<string, BugStatus> = {
             '1': 'nuevo',
             '2': 'en_progreso',
             '3': 'solucionado',
@@ -527,21 +599,26 @@ function ElectronApp() {
             '5': 'no_replicado',
           }
           e.preventDefault()
-          handleSetStatus(bug, map[e.key])
+          void handleSetStatus(bug, statusByKey[e.key])
           break
         }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [tab, results, focusedBugId, expandedBugId, showHelp, handleSetStatus])
+  }, [route, results, focusedBugId, detailBugId, showHelp, handleSetStatus])
 
   // Primer arranque: mientras carga no parpadeamos nada; si falta onboarding, wizard.
-  if (onboarded === null) return <div className="h-screen bg-om-base" />
+  if (onboarded === null) return <div className="h-screen" style={{ background: col.canvas }} />
   if (!onboarded) {
     return (
-      <div className="h-screen bg-om-base text-om-fg">
-        <Onboarding onDone={() => setOnboarded(true)} />
+      <div className="h-screen" style={{ background: col.canvas }}>
+        <Onboarding
+          onDone={() => {
+            setOnboarded(true)
+            void loadShellSettings()
+          }}
+        />
       </div>
     )
   }
@@ -559,282 +636,181 @@ function ElectronApp() {
     )
   }
 
-  return (
-    <div className="relative flex h-screen flex-col bg-om-base text-om-fg">
-      {/* Header */}
-      <header className="flex flex-shrink-0 items-center justify-between border-om-border/25 border-b bg-om-surface px-4 py-2">
-        <div className="flex items-center gap-2.5">
-          <svg
-            aria-hidden="true"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            style={{ color: col.cream, flexShrink: 0 }}
-          >
-            <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="1.5" />
-            <line
-              x1="21"
-              y1="21"
-              x2="16.65"
-              y2="16.65"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-            <circle cx="11" cy="11" r="2.5" fill="currentColor" opacity="0.7" />
-          </svg>
-          <span
-            className="font-mono font-semibold text-sm tracking-tight"
-            style={{ color: col.cream }}
-          >
-            buglens
-          </span>
-        </div>
+  const navItems: AppRailItem<Route>[] = [
+    { key: 'bugs', label: 'Bugs', count: results.length, icon: <IconBug size={18} /> },
+    { key: 'upload', label: 'Cargar bugs', icon: <IconUpload size={18} /> },
+    {
+      key: 'projects',
+      label: 'Proyectos',
+      count: teamStatus.projects?.length,
+      icon: <IconFolder size={18} />,
+    },
+  ]
 
-        <nav className="flex items-center gap-1">
-          {(['main', 'settings'] as Tab[]).map((t) => (
-            <button
-              type="button"
-              key={t}
-              onClick={() => setTab(t)}
-              className="cursor-pointer rounded px-3 py-1 font-mono text-xs transition-colors"
-              style={
-                tab === t
-                  ? {
-                      background: alpha(col.cream, 0.12),
-                      color: col.cream,
-                      border: `1px solid ${alpha(col.cream, 0.22)}`,
-                    }
-                  : {
-                      color: col.fgMuted,
-                      background: 'transparent',
-                      border: '1px solid transparent',
-                    }
-              }
-              onMouseEnter={(e) => {
-                if (tab !== t) {
-                  e.currentTarget.style.color = col.fg
-                  e.currentTarget.style.background = col.raised
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (tab !== t) {
-                  e.currentTarget.style.color = col.fgMuted
-                  e.currentTarget.style.background = 'transparent'
-                }
-              }}
-            >
-              {t === 'main' ? 'principal' : 'configuración'}
+  // Configuración va al pie del rail, separada de los destinos de trabajo.
+  const railFooterItems: AppRailItem<Route>[] = [
+    { key: 'settings', label: 'Configuración', icon: <IconSettings size={18} /> },
+  ]
+
+  const projects = teamStatus.projects ?? (teamStatus.project ? [teamStatus.project] : [])
+
+  const routeLabel: Record<Route, string> = {
+    bugs: 'Bugs',
+    upload: 'Cargar bugs',
+    projects: 'Proyectos',
+    settings: 'Configuración',
+  }
+
+  // La miga final es el bug abierto cuando hay detalle; si no, la sección.
+  const breadcrumb = [routeLabel[route], ...(detailBug ? [detailBug.enriched.raw.title] : [])]
+
+  const showBugs = phase !== 'analyzing' && route === 'bugs' && results.length > 0
+
+  // Las acciones de trabajo viven en el topbar: ya no hay banda de encabezado
+  // que cruce la pantalla.
+  const topbar = (
+    <AppTopbar
+      breadcrumb={breadcrumb}
+      projectSlot={
+        <ProjectSwitcher
+          activeProject={teamStatus.project}
+          projects={projects}
+          busy={projectBusy || phase === 'analyzing'}
+          onSelect={(projectId) => void handleSelectProject(projectId)}
+          onCreate={(name, slug) => void handleCreateProject(name, slug)}
+        />
+      }
+      statusSlot={
+        <span
+          className={`badge ${ollamaAvailable === false ? 'badge-severity-critical' : 'badge-accent'}`}
+          title="modelo local de análisis"
+          role="status"
+        >
+          <span className="dot" aria-hidden="true" />
+          {ollamaAvailable === false ? 'Ollama no disponible' : 'Ollama local'}
+        </span>
+      }
+      actions={
+        showBugs ? (
+          <>
+            <button type="button" className="btn-secondary" onClick={() => setShowManualForm(true)}>
+              <IconPlus size={14} className="button-icon button-icon-plus" />
+              Cargar bug manual
             </button>
-          ))}
+            <button type="button" className="btn-secondary" onClick={handleExport}>
+              Exportar Excel
+            </button>
+            <button type="button" className="btn-primary" onClick={() => setRoute('upload')}>
+              Analizar bugs
+            </button>
+          </>
+        ) : undefined
+      }
+      members={projectMembers}
+      user={{
+        id: teamStatus.user?.id,
+        email: teamStatus.user?.email,
+        provider: 'Google Auth',
+      }}
+      onSignOut={() => void handleSignOut()}
+    />
+  )
+
+  return (
+    <div className="app-shell relative">
+      <AppRail
+        items={navItems}
+        footerItems={railFooterItems}
+        active={route}
+        onSelect={(next) => {
+          setRoute(next)
+          setDetailBugId(null)
+        }}
+        actions={
           <button
             type="button"
             onClick={() => setShowHelp((v) => !v)}
-            className="ml-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded font-mono text-xs transition-colors"
-            style={{ color: col.fgMuted, border: '1px solid transparent' }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = col.fg
-              e.currentTarget.style.background = col.raised
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = col.fgMuted
-              e.currentTarget.style.background = 'transparent'
-            }}
+            className="app-rail-item"
             title="atajos de teclado (?)"
-            aria-label="ayuda"
+            aria-label="atajos de teclado"
           >
-            ?
+            <IconHelp size={18} />
           </button>
-        </nav>
-      </header>
+        }
+      />
 
-      <main className="min-h-0 flex-1 overflow-hidden">
-        {tab === 'settings' ? (
-          <Settings addLog={addLog} onTeamStatusChange={setTeamStatus} />
-        ) : (
-          <div className="flex h-full">
-            {/* Left panel */}
-            <div className="side-panel flex flex-shrink-0 flex-col gap-3 overflow-y-auto border-om-border/20 border-r p-4">
-              <ProjectSwitcher
-                activeProject={teamStatus.project}
-                projects={teamStatus.projects ?? (teamStatus.project ? [teamStatus.project] : [])}
-                busy={projectBusy || phase === 'analyzing'}
-                onSelect={(projectId) => void handleSelectProject(projectId)}
-                onCreate={(name, slug) => void handleCreateProject(name, slug)}
+      {showBugs ? (
+        <BugsScreen
+          topbar={topbar}
+          results={results}
+          project={
+            teamStatus.project
+              ? {
+                  name: teamStatus.project.name,
+                  slug: teamStatus.project.slug,
+                  bugCount: results.length,
+                }
+              : undefined
+          }
+          agent={agentInfo}
+          members={projectMembers}
+          searchInputRef={searchInputRef}
+          focusedId={focusedBugId}
+          onFocus={setFocusedBugId}
+          onSetStatus={(bug, status) => void handleSetStatus(bug, status)}
+          onSetAssignees={(bug, userIds) => void handleSetAssignees(bug, userIds)}
+          onSetDueDate={(bug, dueDate) => void handleSetDueDate(bug, dueDate)}
+          onAddComment={handleAddBugComment}
+          onVoteComment={(commentId, value) => void handleVoteComment(commentId, value)}
+          onDelete={(bug) => void handleDeleteBug(bug)}
+          onAnalyzeExternalAgent={handleAnalyzeExternalAgent}
+        />
+      ) : (
+        <div className="app-content">
+          {topbar}
+          <main className="app-main min-h-0 flex-1 overflow-hidden">
+            {phase === 'analyzing' ? (
+              <AnalysisProgressScreen
+                current={progress.current}
+                total={progress.total}
+                message={progress.message}
+                phase={progress.phase}
+                logs={logs}
+                engineLabel={engineLabel}
               />
-
-              <FileUpload
+            ) : route === 'settings' ? (
+              <Settings
+                addLog={addLog}
+                onTeamStatusChange={setTeamStatus}
+                onNewProject={() => setRoute('projects')}
+              />
+            ) : route === 'projects' ? (
+              <ProjectsScreen
+                projects={projects}
+                activeProjectId={activeProjectId ?? undefined}
+                activeProjectBugCount={results.length}
+                busy={projectBusy}
+                onSelect={(projectId) => void handleSelectProject(projectId)}
+                onCreate={() => setShowNewProject(true)}
+              />
+            ) : route === 'upload' ? (
+              <UploadBugsScreen
                 excelPath={excelPath}
                 onFileSelected={setExcelPath}
-                disabled={phase === 'analyzing'}
+                onManualBug={() => setShowManualForm(true)}
+                onAnalyze={() => void handleAnalyze()}
               />
-
-              {phase !== 'analyzing' && (
-                <button
-                  type="button"
-                  className="btn-secondary side-action w-full"
-                  onClick={() => setShowManualForm(true)}
-                >
-                  <IconPlus size={12} className="button-icon button-icon-plus" />
-                  cargar bug manual
-                </button>
-              )}
-
-              {phase === 'idle' && (
-                <button
-                  type="button"
-                  className="btn-primary side-action w-full"
-                  onClick={handleAnalyze}
-                  disabled={!excelPath}
-                >
-                  analizar bugs
-                </button>
-              )}
-
-              {phase === 'analyzing' && (
-                <div className="card">
-                  {/* Pasos visuales — el segmento activo está iluminado */}
-                  <PhaseSteps current={progress.phase} />
-
-                  <div className="mt-3 mb-2.5 flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 flex-shrink-0 animate-scan rounded-full bg-om-cream" />
-                    <span className="flex-1 truncate font-mono text-om-fgmuted text-sm">
-                      {progress.message}
-                    </span>
-                  </div>
-                  <div
-                    className="h-1 w-full rounded-full"
-                    style={{ background: alpha(col.muted, 0.35) }}
-                  >
-                    <div
-                      className="h-1 rounded-full transition-all duration-500"
-                      style={{
-                        background: col.cream,
-                        width:
-                          progress.total > 0
-                            ? `${(progress.current / progress.total) * 100}%`
-                            : '5%',
-                      }}
-                    />
-                  </div>
-                  {progress.total > 0 && (
-                    <div className="mt-1.5 flex items-center justify-between">
-                      <span className="font-mono text-xs" style={{ color: col.dim }}>
-                        {Math.round((progress.current / progress.total) * 100)}%
-                      </span>
-                      <span className="font-mono text-om-muted text-xs">
-                        {progress.current}/{progress.total}
-                      </span>
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setShowLogs((v) => !v)}
-                    className="mt-2.5 flex w-full cursor-pointer items-center gap-1.5 font-mono text-xs transition-colors"
-                    style={{ color: showLogs ? col.fgMuted : col.muted }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = col.fgMuted)}
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.color = showLogs ? col.fgMuted : col.muted)
-                    }
-                  >
-                    <svg
-                      aria-hidden="true"
-                      width="8"
-                      height="8"
-                      viewBox="0 0 8 8"
-                      fill="currentColor"
-                      style={{
-                        transform: showLogs ? 'rotate(90deg)' : 'none',
-                        transition: 'transform 0.15s',
-                      }}
-                    >
-                      <path d="M2 1l4 3-4 3V1z" />
-                    </svg>
-                    log
-                    {logs.length > 0 && <span style={{ color: col.dim }}>({logs.length})</span>}
-                  </button>
-                </div>
-              )}
-
-              {phase === 'done' && (
-                <div className="flex flex-col gap-2">
-                  <button
-                    type="button"
-                    className="btn-primary side-action w-full"
-                    onClick={handleExport}
-                  >
-                    exportar excel
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-secondary side-action w-full"
-                    onClick={handleExportFullData}
-                  >
-                    exportar datos completos
-                  </button>
-                </div>
-              )}
-
-              {phase === 'done' && results.length > 0 && (
-                <div className="card">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="section-label mb-0">resumen</div>
-                    <span className="font-mono text-xs" style={{ color: col.fgMuted }}>
-                      {results.length} bugs
-                    </span>
-                  </div>
-                  <StatsGrid results={results} />
-                </div>
-              )}
-
-              {/* Escarabajo ambiente al pie del panel (decorativo, balanceo sutil) */}
-              <div aria-hidden="true" className="mt-auto flex justify-center pt-6">
-                <BeetleMark
-                  className="motif-sway"
-                  style={{ width: 84, color: col.fgDim, opacity: 0.12 }}
-                />
-              </div>
-            </div>
-
-            {/* Right panel */}
-            <div className="flex flex-1 flex-col overflow-hidden">
-              {results.length > 0 ? (
-                <div className="flex h-full flex-col">
-                  <div className="flex-1 overflow-hidden">
-                    <BugTable
-                      results={results}
-                      analyzing={phase === 'analyzing'}
-                      onSetStatus={handleSetStatus}
-                      onDelete={handleDeleteBug}
-                      onAnalyzeExternalAgent={handleAnalyzeExternalAgent}
-                      onAddComment={handleAddBugComment}
-                      focusedId={focusedBugId}
-                      expandedId={expandedBugId}
-                      onFocus={setFocusedBugId}
-                      onToggleExpand={(id) => setExpandedBugId((curr) => (curr === id ? null : id))}
-                      searchInputRef={searchInputRef}
-                    />
-                  </div>
-                  {showLogs && (
-                    <div className="h-40 flex-shrink-0 border-om-border/20 border-t">
-                      <ProgressLog logs={logs} />
-                    </div>
-                  )}
-                </div>
-              ) : phase === 'analyzing' ? (
-                <div className="flex-1 overflow-hidden">
-                  <ProgressLog logs={logs} />
-                </div>
-              ) : (
-                <div className="flex-1 overflow-hidden">
-                  <EmptyState hasExcel={!!excelPath} />
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </main>
+            ) : (
+              <UploadBugsScreen
+                excelPath={excelPath}
+                onFileSelected={setExcelPath}
+                onManualBug={() => setShowManualForm(true)}
+                onAnalyze={() => void handleAnalyze()}
+              />
+            )}
+          </main>
+        </div>
+      )}
 
       <LoadingOverlay
         visible={Boolean(requestLoading)}
@@ -844,8 +820,17 @@ function ElectronApp() {
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
       {showManualForm && (
-        <ManualBugForm onSubmit={handleAddManualBug} onClose={() => setShowManualForm(false)} />
+        <ManualBugForm
+          onSubmit={(fields) => void handleAddManualBug(fields)}
+          onClose={() => setShowManualForm(false)}
+        />
       )}
+      <NewProjectModal
+        open={showNewProject}
+        busy={projectBusy}
+        onClose={() => setShowNewProject(false)}
+        onCreate={(name, slug) => void handleCreateProject(name, slug)}
+      />
     </div>
   )
 }
@@ -855,66 +840,40 @@ function ElectronApp() {
 
 function HelpModal({ onClose }: { onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
       {/* backdrop: botón real → click/Enter/Space cierra y es accesible por teclado */}
       <button
         type="button"
         aria-label="cerrar ayuda"
-        className="absolute inset-0 cursor-default"
-        style={{ background: alpha(col.code, 0.85) }}
+        className="modal-backdrop"
         onClick={onClose}
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="atajos de teclado"
-        className="relative w-full max-w-md rounded p-5"
-        style={{ background: col.surface, border: `1px solid ${alpha(col.border, 0.3)}` }}
+        className="modal-shell animate-fade-in"
+        style={{ maxWidth: '26rem' }}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <span className="font-mono text-xs uppercase tracking-wider" style={{ color: col.cream }}>
-            atajos de teclado
-          </span>
+        <div className="modal-header">
+          <h2 className="modal-title">Atajos de teclado</h2>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded transition-colors"
-            style={{ color: col.fgMuted }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = col.fg)}
-            onMouseLeave={(e) => (e.currentTarget.style.color = col.fgMuted)}
+            className="btn-icon btn-icon-sm"
             aria-label="cerrar"
           >
-            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 10 10" fill="none">
-              <line
-                x1="1"
-                y1="1"
-                x2="9"
-                y2="9"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-              <line
-                x1="9"
-                y1="1"
-                x2="1"
-                y2="9"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            <IconX size={12} />
           </button>
         </div>
-
-        <div className="space-y-1.5">
-          <ShortcutRow keys={['j']} label="siguiente bug" />
-          <ShortcutRow keys={['k']} label="bug anterior" />
-          <ShortcutRow keys={['enter']} label="expandir / colapsar bug" />
-          <ShortcutRow keys={['esc']} label="cerrar detalle / modal" />
-          <ShortcutRow keys={['/']} label="enfocar búsqueda" />
-          <ShortcutRow keys={['1', '…', '5']} label="marcar estado (nuevo→no replicado)" />
-          <ShortcutRow keys={['?']} label="mostrar / ocultar esta ayuda" />
+        <div className="modal-body grid gap-2">
+          <ShortcutRow keys={['j']} label="Siguiente bug" />
+          <ShortcutRow keys={['k']} label="Bug anterior" />
+          <ShortcutRow keys={['↵']} label="Abrir / cerrar el detalle" />
+          <ShortcutRow keys={['esc']} label="Volver a la lista" />
+          <ShortcutRow keys={['/']} label="Enfocar la búsqueda" />
+          <ShortcutRow keys={['1', '…', '5']} label="Marcar estado (nuevo → no replicado)" />
+          <ShortcutRow keys={['?']} label="Mostrar / ocultar esta ayuda" />
         </div>
       </div>
     </div>
@@ -923,137 +882,15 @@ function HelpModal({ onClose }: { onClose: () => void }) {
 
 function ShortcutRow({ keys, label }: { keys: string[]; label: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-1">
-      <span className="font-mono text-xs" style={{ color: col.fgDim }}>
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-sm" style={{ color: col.fgBody }}>
         {label}
       </span>
-      <div className="flex gap-1">
-        {keys.map((k, i) => (
-          <kbd
-            key={i}
-            className="rounded px-1.5 py-0.5 font-mono text-xs"
-            style={{
-              background: alpha(col.muted, 0.3),
-              border: `1px solid ${alpha(col.border, 0.3)}`,
-              color: col.cream,
-              minWidth: '1.4em',
-              textAlign: 'center',
-            }}
-          >
-            {k}
-          </kbd>
+      <span className="flex gap-1">
+        {keys.map((key, index) => (
+          <kbd key={index}>{key}</kbd>
         ))}
-      </div>
-    </div>
-  )
-}
-
-// Pasos visuales del pipeline. Cada chip se ilumina cuando es la fase activa,
-// los anteriores quedan en color completado, los futuros en gris.
-export function PhaseSteps({
-  current,
-}: {
-  current?: import('../src/shared/contracts').AnalysisPhase
-}) {
-  const steps: Array<{ key: import('../src/shared/contracts').AnalysisPhase; label: string }> = [
-    { key: 'reading_excel', label: 'excel' },
-    { key: 'reading_docs', label: 'docs' },
-    { key: 'analyzing', label: 'analizar' },
-    { key: 'done', label: 'listo' },
-  ]
-  const currentIdx = steps.findIndex((s) => s.key === current)
-  // Si la fase no aplica (todavía no se emitió), asumimos arrancando en 0
-  const activeIdx = currentIdx >= 0 ? currentIdx : 0
-
-  return (
-    <div className="flex items-center gap-1">
-      {steps.map((s, i) => {
-        const isPast = i < activeIdx
-        const isCurrent = i === activeIdx && current !== 'done'
-        const isDone = current === 'done' || isPast
-        const color = isCurrent ? col.cream : isDone ? col.fgDim : col.dim
-        return (
-          <div key={s.key} className="flex min-w-0 flex-1 items-center gap-1">
-            <div
-              className="h-0.5 flex-1 rounded-full"
-              style={{ background: color, opacity: isCurrent ? 1 : isDone ? 0.6 : 0.3 }}
-            />
-            <span
-              className="flex-shrink-0 font-mono text-xs uppercase tracking-wider"
-              style={{ color }}
-            >
-              {s.label}
-            </span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// Estados en orden de workflow, con etiqueta y color (mismos que la tabla).
-const STATUS_META: Array<{ key: string; label: string; color: string }> = [
-  { key: 'nuevo', label: 'nuevo', color: col.fgDim },
-  { key: 'en_progreso', label: 'en progreso', color: col.amber },
-  { key: 'solucionado', label: 'solucionado', color: col.green },
-  { key: 'cerrado', label: 'cerrado', color: col.fgMuted },
-  { key: 'no_replicado', label: 'no replicado', color: col.terracotta },
-]
-
-export function StatsGrid({ results }: { results: AnalyzedBug[] }) {
-  const counts = results.reduce(
-    (acc, r) => {
-      acc.categories[r.analysis.category] = (acc.categories[r.analysis.category] ?? 0) + 1
-      acc.severities[r.analysis.severity] = (acc.severities[r.analysis.severity] ?? 0) + 1
-      acc.statuses[r.status] = (acc.statuses[r.status] ?? 0) + 1
-      return acc
-    },
-    {
-      categories: {} as Record<string, number>,
-      severities: {} as Record<string, number>,
-      statuses: {} as Record<string, number>,
-    },
-  )
-
-  const severityColor: Record<string, string> = {
-    critical: 'text-om-red',
-    high: 'text-om-amber',
-    medium: 'text-om-cream',
-    low: 'text-om-fgdim',
-  }
-
-  return (
-    <div className="space-y-1 font-mono text-xs">
-      {/* Estado (workflow) — primero */}
-      {STATUS_META.filter((s) => counts.statuses[s.key]).map((s) => (
-        <div key={s.key} className="flex justify-between">
-          <span style={{ color: s.color }}>{s.label}</span>
-          <span className="text-om-fg">{counts.statuses[s.key]}</span>
-        </div>
-      ))}
-
-      <div className="mt-1.5 border-om-border/20 border-t pt-1.5">
-        {Object.entries(counts.severities)
-          .sort()
-          .map(([s, n]) => (
-            <div key={s} className="flex justify-between">
-              <span className={severityColor[s] ?? 'text-om-fgmuted'}>
-                {(severityLabel as Record<string, string>)[s] ?? s}
-              </span>
-              <span className="text-om-fg">{n}</span>
-            </div>
-          ))}
-      </div>
-      <div className="mt-1.5 border-om-border/20 border-t pt-1.5">
-        {Object.entries(counts.categories)
-          .sort()
-          .map(([c, n]) => (
-            <div key={c} className="flex justify-between">
-              <span className="text-om-fgmuted">{c}</span>
-              <span className="text-om-fg">{n}</span>
-            </div>
-          ))}
-      </div>
+      </span>
     </div>
   )
 }

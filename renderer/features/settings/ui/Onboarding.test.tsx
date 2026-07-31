@@ -37,11 +37,11 @@ describe('Onboarding', () => {
     render(<Onboarding onDone={onDone} />)
 
     // Paso 1 (rendimiento) → siguiente
-    await userEvent.click(screen.getByRole('button', { name: 'siguiente' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
     // Paso 2 (modelo) → siguiente
-    await userEvent.click(screen.getByRole('button', { name: 'siguiente' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
     // Paso 3 (google) → empezar
-    await userEvent.click(screen.getByRole('button', { name: 'empezar' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Empezar' }))
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledTimes(1))
     expect(saveSettings.mock.calls[0][0]).toMatchObject({ onboarded: true, performanceMode: 'gpu' })
@@ -53,7 +53,7 @@ describe('Onboarding', () => {
     render(<Onboarding onDone={vi.fn()} />)
 
     // Ir al paso "modelo".
-    await userEvent.click(screen.getByRole('button', { name: 'siguiente' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
 
     expect(screen.getByRole('radio', { name: /solo texto/i })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /texto \+ capturas/i })).toBeInTheDocument()
@@ -69,8 +69,8 @@ describe('Onboarding', () => {
     expect(textOnly).toBeChecked()
     expect(textWithImages).not.toBeChecked()
 
-    await userEvent.click(screen.getByRole('button', { name: 'siguiente' }))
-    await userEvent.click(screen.getByRole('button', { name: 'empezar' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Empezar' }))
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledTimes(1))
     expect(saveSettings.mock.calls[0][0]).toMatchObject({

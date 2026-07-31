@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
-import { ConfidenceBar } from '../features/bug-workflow/ui/BugTable'
+import { ConfidenceBar } from './BugAtoms'
 
 const meta = {
   title: 'buglens/ConfidenceBar',

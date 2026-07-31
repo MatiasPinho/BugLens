@@ -13,7 +13,7 @@ trabajar en equipo.
 ## Qué hace
 
 1. Cargás bugs **desde un Excel** (con links a Google Docs en cualquier celda, opcional)
-   o **uno a uno a mano** (botón "cargar bug manual"), que se appendea a la tabla.
+   o **uno a uno a mano** (botón "cargar bug manual"), que se agrega al listado.
 2. La app lee los documentos de evidencia de Google Docs (texto + capturas).
 3. Por cada bug, **una sola llamada al LLM** produce:
    - **Clasificación**: categoría, severidad, tipo, área/pantalla afectada, confianza.
@@ -23,15 +23,16 @@ trabajar en equipo.
    - **Datos que faltan**: lo que el QA no informó (para pedírselo) — nunca rechaza con
      "información insuficiente".
 4. Marcás el **estado** de cada bug; persiste en Supabase y lo ve todo el equipo.
-   La tabla separa **activos** (nuevo / en progreso) de **históricos** (solucionado /
-   cerrado / no replicado) con un control de pestañas (navegable con flechas).
+   La pantalla de Bugs separa **activos** (nuevo / en progreso) de **históricos**
+   (solucionado / cerrado / no replicado) y permite alternar entre tarjetas o una lista
+   con vista previa.
 5. Filtrás/agrupás/buscás/**borrás** bugs, y exportás un Excel enriquecido (incluso sin Excel original)
    o un JSON con los **datos completos** recopilados.
 6. Opcionalmente ejecutás un **agente externo por bug** (Codex CLI, OpenCode, Claude Code
    u otro comando local) para contrastar el reporte con repositorios configurados. El aporte
    se guarda junto al bug, muestra logs técnicos cuando falla y puede sugerir, con confirmación
    manual, si el bug parece resuelto.
-7. Al reabrir la app, la tabla se restaura desde el proyecto compartido en Supabase.
+7. Al reabrir la app, el listado se restaura desde el proyecto compartido en Supabase.
 
 ---
 
@@ -40,6 +41,29 @@ trabajar en equipo.
 El objetivo principal de integración para BugLens es **Jira**. La evolución del producto
 debe priorizar que los bugs analizados puedan convertirse, sincronizarse o vincularse con
 tickets de Jira, manteniendo el estado y la evidencia útil para QA/dev.
+
+---
+
+## Interfaz y sistema de diseño
+
+BugLens usa una interfaz clara y aireada, con acento azul, Public Sans y superficies
+blancas sobre un canvas gris muy claro. La navegación es un **rail de iconos** de 56 px;
+el contexto global (proyecto, motor, equipo, identidad y acciones) vive en el topbar.
+
+La pantalla de Bugs son **tres columnas**: la lista a la izquierda —hermana del rail y de
+altura completa—, el reporte del bug elegido con sus comentarios en el centro, y las
+propiedades y la actividad a la derecha. El bug elegido está siempre a la vista: no hay
+pantalla de detalle aparte. Los bloques largos se recortan con un "Ver más" para que los
+comentarios queden al alcance sin scrollear el reporte entero.
+
+La especificación canónica —tokens, tipografía, componentes, accesibilidad, comportamiento
+y correspondencia de pantallas— está en
+[`docs/design-system.md`](docs/design-system.md). Las historias de Storybook funcionan como
+documentación visual ejecutable:
+
+```bash
+npm run storybook
+```
 
 ---
 
@@ -192,14 +216,14 @@ Cada bug tiene un estado del ciclo de vida, **persistente entre corridas**:
 
 `nuevo` (default) · `en progreso` · `solucionado` · `cerrado` · `no replicado`
 
-- Se marca con el selector inline de cada fila, o con las teclas **1–5** sobre el bug enfocado.
+- Se marca desde la tarjeta, la lista o el detalle, o con las teclas **1–5** sobre el bug enfocado.
 - Persiste en Supabase dentro del proyecto activo, identificado por **contenido** del bug
   (título + descripción), así sobrevive aunque reordenes o re-exportes el Excel.
 - Los bugs `solucionado`/`cerrado` se atenúan; el resumen muestra el conteo por estado.
 
 ### Activos vs históricos
 
-La tabla separa lo accionable de lo archivado con un control de pestañas
+La pantalla de Bugs separa lo accionable de lo archivado con un control de pestañas
 (**activos | históricos | todos**), derivado del estado de cada bug:
 
 - **activos** (vista por defecto): `nuevo`, `en progreso`.
@@ -212,9 +236,9 @@ estado refina dentro de la pestaña activa. El control de pestañas se navega co
 
 ## Borrar bugs
 
-Desde el detalle expandido de un bug, el botón **borrar** abre un modal de confirmación
+Desde la pantalla de detalle de un bug, el botón **borrar** abre un modal de confirmación
 y hace un **soft-delete en Supabase** (`deleted_at`) si se confirma. El bug sale de la
-tabla compartida y la caché de análisis (por contenido) se conserva. Como no se edita el
+lista compartida y la caché de análisis (por contenido) se conserva. Como no se edita el
 Excel original, un bug que vino de un Excel puede volver a aparecer si se re-analiza. Si
 borrás el último bug, la app vuelve al inicio.
 
@@ -222,7 +246,7 @@ borrás el último bug, la app vuelve al inicio.
 
 Además del Excel, podés cargar un bug **a mano** con el botón **"cargar bug manual"**: un
 formulario con título, descripción, pasos, esperado, actual y ambiente (basta con título
-**o** descripción). Se analiza con el mismo pipeline y se **agrega** a la tabla sin
+**o** descripción). Se analiza con el mismo pipeline y se **agrega** al proyecto sin
 reemplazar lo ya cargado.
 
 ## Persistencia compartida
@@ -232,9 +256,9 @@ análisis. Electron usa sesión de usuario con Google Auth y una publishable key
 service keys. Al abrir la app, la tabla se hidrata desde Supabase y un canal realtime avisa
 cambios remotos para refrescar la vista.
 
-Un usuario puede pertenecer a varios proyectos. El proyecto activo se elige desde
-**config → equipo → proyectos**; cada proyecto tiene sus propios bugs, análisis, estados,
-imports y eventos realtime.
+Un usuario puede pertenecer a varios proyectos. El proyecto activo se elige desde el
+selector del topbar y la pantalla **Proyectos** permite crear y administrar proyectos;
+cada uno tiene sus propios bugs, análisis, estados, imports y eventos realtime.
 
 La colaboración no requiere MCP. MCP solo tendría sentido para integrar herramientas externas
 de investigación; la coexistencia real del equipo depende de autenticación, RLS y persistencia
@@ -268,7 +292,7 @@ al proveedor configurado. BugLens muestra esa advertencia antes de ejecutar el a
 | Tecla | Acción |
 |---|---|
 | `j` / `k` | siguiente / anterior bug |
-| `Enter` | expandir / colapsar |
+| `Enter` | abrir el detalle del bug |
 | `1`–`5` | marcar estado (nuevo → no replicado) |
 | `/` | enfocar búsqueda |
 | `Esc` | cerrar detalle / modal |
@@ -296,7 +320,7 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | Función | Qué hace |
 |---|---|
 | `bugRecordKey(raw)` | Identidad estable por contenido (titulo + descripcion). |
-| `manageBugWorkflow` | Carga bugs, cambia estado, agrega comentarios y borra con soft-delete. |
+| `manageBugWorkflow` | Carga bugs, cambia estado, asigna responsables, pone fecha límite, comenta, vota y borra con soft-delete. |
 | `projectAnalysisRun` | Crea imports remotos y guarda resultados de analisis en el proyecto activo. |
 | `teamClient` / `teamBugs` | Infraestructura Supabase de proyectos, auth, imports, estados y restore remoto. |
 
@@ -313,10 +337,10 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 | Handler | Qué hace |
 |---|---|
 | `analyze:run` | Orquesta el batch: lee Excel → enricher → `analyzeBug` por bug (con concurrencia) → adjunta el estado persistido. Emite resultados al renderer en streaming. |
-| `analyze:manual-bug` | Arma un bug desde los campos del formulario y lo analiza, streameándolo a la tabla **sin reemplazar** lo ya cargado. |
+| `analyze:manual-bug` | Arma un bug desde los campos del formulario y lo analiza, agregándolo al listado **sin reemplazar** lo ya cargado. |
 | `export:excel` / `export:bugs` | Exporta el Excel enriquecido (con original) o un `.xlsx` nuevo desde cero (manual / mezclado). |
 | `export:full-data` | Exporta un `.json` completo con todos los bugs analizados y la data recopilada sin aplanar. |
-| `bugs:load-remote` / `bugs:watch-remote` | Carga la tabla desde Supabase y escucha cambios realtime del proyecto. |
+| `bugs:load-remote` / `bugs:watch-remote` | Carga el listado desde Supabase y escucha cambios realtime del proyecto. |
 | `bug:set-status` / `bug:delete` | Persiste cambios de estado y soft-delete remoto. |
 | `bug:analyze-external-agent` | Ejecuta el agente externo para un bug seleccionado y guarda el aporte integrado al reporte. |
 | `ensureOllamaRunning(baseUrl)` | Levanta Ollama si no corre (con el override de GPU AMD y paralelismo). |
@@ -326,13 +350,21 @@ Flujo: **Excel → enriquecer (docs) → analizar (LLM) → tabla con estados �
 
 | Pieza | Qué hace |
 |---|---|
-| `App.tsx` | Estado global, eventos IPC, atajos de teclado, cambio de estado, borrado y restore remoto desde Supabase. |
-| `BugTable.tsx` | Tabla con pestañas **activos/históricos/todos** (navegables con flechas), filtros, búsqueda, agrupación por pantalla, detalle con el reporte reescrito, selector de estado inline, **borrado con confirmación** y panel del agente externo. |
+| `App.tsx` | Estado global, shell, navegación, eventos IPC, atajos y restore remoto desde Supabase. |
+| `AppRail.tsx` / `AppTopbar.tsx` | Rail de iconos (56 px) y barra superior: migas, proyecto, motor, acciones, equipo e identidad. |
+| `BugsScreen.tsx` | Contenedor de las tres columnas. Dueño del estado compartido: filtros, pestañas y bug elegido. |
+| `BugList.tsx` | Columna izquierda: buscador, pestañas **activos/históricos/todos**, filtros, KPI y lista. |
+| `BugDetail.tsx` / `BugComments.tsx` | Columna central: reporte reescrito, capturas, agente externo y el hilo de comentarios con voto. |
+| `BugPropertiesRail.tsx` | Columna derecha: responsables, fecha límite, estado, contexto y feed de actividad. |
+| `CollapsibleBlock.tsx` | Recorta los bloques largos con "Ver más" para que los comentarios queden al alcance. |
+| `UploadBugsScreen.tsx` / `AnalysisProgressScreen.tsx` | Carga del Excel y seguimiento de las fases de análisis. |
 | `ManualBugForm.tsx` | Modal para cargar un bug a mano (Esc/Tab-trap/autofocus, ⌘/Ctrl+Enter). |
-| `decor/BugMotifs.tsx` | Motivos decorativos temáticos (line-art mono): `BeetleMark` (escarabajo, ambiente) y `BugUnderLensMark` (lupa+bicho, marca/búsqueda). Usados en EmptyState, vacíos de la tabla y el panel izquierdo. |
+| `ProjectsScreen.tsx` / `ProjectSwitcher.tsx` | Gestión de proyectos y selección del proyecto activo. |
+| `decor/BugMotifs.tsx` | Motivos lineales de un trazo: `BeetleMark` y `BugUnderLensMark`, usados como marca y en estados vacíos. |
 | `Onboarding.tsx` | Wizard de primer arranque (rendimiento → modelo → Google Docs). Se muestra hasta que `onboarded` queda en `true`. |
 | `PerformanceModePicker.tsx` | Selector GPU/CPU con "analizar mi equipo" (sondea Ollama, marca recomendado, avisa si es CPU). Usado por el wizard y Settings. |
 | `Settings.tsx` | Modelo LLM, rendimiento (GPU/CPU), acceso a Google, agente externo, caché y proyectos Supabase. |
+| `styles.css` / `theme.ts` | Tokens y estilos del sistema descrito en `docs/design-system.md`. |
 
 ---
 
@@ -360,11 +392,14 @@ buglens/
 │       └── ipc/               # Canales IPC compartidos
 ├── renderer/
 │   ├── features/          # UI de negocio por feature
-│   ├── components/        # UI generica, decor, FileUpload, Loading, EmptyState
+│   ├── components/        # Shell, modales, iconos, estados y controles compartidos
 │   ├── App.tsx            # Root component + estado + atajos
 │   ├── main.tsx           # Entry point React
-│   ├── styles.css         # Tailwind
+│   ├── styles.css         # Tailwind + tokens del sistema de diseño
 │   └── electron.d.ts      # Tipos de window.electronAPI
+├── docs/
+│   ├── design-system.md       # Lenguaje visual, pantallas y contrato de implementación
+│   └── supabase-migration.md  # Persistencia compartida
 ├── .github/workflows/ci.yml   # CI: typecheck + tests + build
 ├── vitest.config.ts
 └── package.json
@@ -382,10 +417,12 @@ npm run test:watch  # modo watch
 La suite (Vitest + React Testing Library) cubre la **lógica de negocio**: identidad por
 contenido, parsing del Excel, construcción del bug manual, mapeo Supabase, parseo robusto
 del LLM, caché, selección de sección de doc, dedup de docs, prompt/ejecución del agente
-externo, persistencia del aporte externo y las interacciones de la tabla (estados, pestañas
-activos/históricos, panel del agente, progreso, errores, cobertura por pasos y sugerencia
-manual de "resuelto"). La integración (LLM real, IPC, comandos externos, lectores de docs,
-auth/red/realtime de Supabase) se verifica corriendo la app.
+externo, persistencia del aporte externo, `bugPresentation`, `bugActivity` (árbol de
+hilos, redacción de la actividad, vencimiento), `avatarTone` y las interacciones de
+`BugsScreen` y `BugDetail` (estados, pestañas, filtros, selección, agente, progreso,
+errores, cobertura por pasos y sugerencia manual de "resuelto"). La integración
+(LLM real, IPC, comandos externos, lectores de docs, auth/realtime de Supabase y **los RPC
+de Supabase contra la base real**) se verifica corriendo la app.
 
 El **CI** (`.github/workflows/ci.yml`) corre `lint → typecheck → test → build` en cada push
 y PR.

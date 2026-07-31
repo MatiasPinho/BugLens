@@ -14,7 +14,7 @@ describe('TeamLogin', () => {
       />,
     )
 
-    await userEvent.click(screen.getByRole('button', { name: 'continuar con google' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar con Google' }))
 
     expect(onLogin).toHaveBeenCalledTimes(1)
   })
@@ -28,7 +28,7 @@ describe('TeamLogin', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'continuar con google' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Continuar con Google' })).toBeDisabled()
     expect(screen.getByText(/Configurá Supabase/)).toBeInTheDocument()
   })
 
@@ -47,6 +47,6 @@ describe('TeamLogin', () => {
     )
 
     expect(screen.getByText('qa@example.com')).toBeInTheDocument()
-    expect(screen.getByText('proyecto: buglens')).toBeInTheDocument()
+    expect(screen.getByText('Proyecto: buglens')).toBeInTheDocument()
   })
 })

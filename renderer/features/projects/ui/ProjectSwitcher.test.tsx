@@ -54,9 +54,12 @@ describe('ProjectSwitcher', () => {
       />,
     )
 
-    await userEvent.click(screen.getByRole('button', { name: /nuevo proyecto/ }))
-    await userEvent.type(screen.getByLabelText('nombre'), 'Área QA')
-    await userEvent.click(screen.getByRole('button', { name: /crear/ }))
+    // "Nuevo proyecto" vive dentro del desplegable: el trigger del topbar solo
+    // tiene lugar para el proyecto activo.
+    await userEvent.click(screen.getByLabelText('proyecto activo'))
+    await userEvent.click(screen.getByRole('button', { name: /nuevo proyecto/i }))
+    await userEvent.type(screen.getByLabelText('Nombre'), 'Área QA')
+    await userEvent.click(screen.getByRole('button', { name: /crear proyecto/i }))
 
     expect(onCreate).toHaveBeenCalledWith('Área QA', 'area-qa')
   })

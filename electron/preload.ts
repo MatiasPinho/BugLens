@@ -2,9 +2,12 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AnalyzedBug,
   BugComment,
+  CommentVote,
+  CommentVoteTotals,
   ExternalAgentProgress,
   ExternalAgentResult,
   IPCEvent,
+  TeamMember,
 } from '../src/shared/contracts/index.js'
 import type { IPC_CHANNELS as SHARED_IPC_CHANNELS } from '../src/shared/ipc/channels.js'
 
@@ -29,6 +32,10 @@ const IPC_CHANNELS = {
   bugsWatchRemote: 'bugs:watch-remote',
   bugSetStatus: 'bug:set-status',
   bugAddComment: 'bug:add-comment',
+  bugSetAssignees: 'bug:set-assignees',
+  bugSetDueDate: 'bug:set-due-date',
+  bugVoteComment: 'bug:vote-comment',
+  projectMembers: 'project:members',
   bugDelete: 'bug:delete',
   bugAnalyzeExternalAgent: 'bug:analyze-external-agent',
   externalAgentProgress: 'external-agent-progress',
@@ -91,8 +98,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addBugComment: (
     bug: AnalyzedBug,
     body: string,
+    parentId?: string | null,
   ): Promise<{ ok: boolean; comment?: BugComment; error?: string }> =>
-    ipcRenderer.invoke(IPC_CHANNELS.bugAddComment, { bug, body }),
+    ipcRenderer.invoke(IPC_CHANNELS.bugAddComment, { bug, body, parentId }),
+  setBugAssignees: (
+    bug: AnalyzedBug,
+    userIds: string[],
+  ): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.bugSetAssignees, { bug, userIds }),
+  setBugDueDate: (
+    bug: AnalyzedBug,
+    dueDate: string | null,
+  ): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.bugSetDueDate, { bug, dueDate }),
+  voteBugComment: (
+    commentId: string,
+    value: CommentVote,
+  ): Promise<{ ok: boolean; totals?: CommentVoteTotals; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.bugVoteComment, { commentId, value }),
+  listProjectMembers: (): Promise<{ ok: boolean; members?: TeamMember[]; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.projectMembers),
   deleteBug: (bug: AnalyzedBug) => ipcRenderer.invoke(IPC_CHANNELS.bugDelete, { bug }),
   analyzeWithExternalAgent: (bug: AnalyzedBug): Promise<ExternalAgentResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.bugAnalyzeExternalAgent, { bug }),

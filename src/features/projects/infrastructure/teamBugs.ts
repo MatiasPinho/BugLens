@@ -1,11 +1,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
   AnalyzedBug,
+  BugActivityEntry,
+  BugActivityType,
   BugAnalysis,
   BugComment,
   BugStatus,
+  CommentVote,
+  CommentVoteTotals,
   GoogleDocContent,
   RawBug,
+  TeamMember,
 } from '../../../shared/contracts/bugTypes.js'
 import type {
   ExternalAgentRepository,
@@ -26,6 +31,10 @@ interface RemoteBugRow {
   analysis?: Partial<BugAnalysis>
   googleDocs?: GoogleDocContent[]
   comments?: unknown[]
+  assignees?: unknown[]
+  activity?: unknown[]
+  dueDate?: string | null
+  reportedBy?: unknown
   externalAgentHistory?: unknown[]
   status?: BugStatus
   error?: string | null
@@ -35,6 +44,7 @@ interface RemoteBugRow {
 interface RemoteCommentRow {
   id: string
   bug_id: string
+  parent_id?: string | null
   body: string
   created_at: string
   updated_at?: string | null
@@ -97,6 +107,41 @@ function toExternalAgentResult(value: unknown): ExternalAgentResult | undefined 
   }
 }
 
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function countOf(value: unknown): number {
+  // Postgres devuelve los agregados como number, pero un `count` grande puede
+  // llegar como string. No asumir el tipo.
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value, 10)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return 0
+}
+
+function toCommentVote(value: unknown): CommentVote {
+  const parsed = countOf(value)
+  if (parsed === 1) return 1
+  if (parsed === -1) return -1
+  return 0
+}
+
+export function toTeamMember(value: unknown): TeamMember | null {
+  if (!value || typeof value !== 'object') return null
+  const row = value as Record<string, unknown>
+  const id = optionalString(row['id'])
+  if (!id) return null
+  return {
+    id,
+    email: optionalString(row['email']),
+    displayName: optionalString(row['displayName']),
+    role: optionalString(row['role']),
+  }
+}
+
 function toBugComment(value: unknown): BugComment | null {
   if (!value || typeof value !== 'object') return null
   const row = value as Record<string, unknown>
@@ -106,10 +151,55 @@ function toBugComment(value: unknown): BugComment | null {
   if (!id || !body || !createdAt) return null
   return {
     id,
+    parentId: optionalString(row['parentId']) ?? null,
     body,
     createdAt,
-    updatedAt: typeof row['updatedAt'] === 'string' ? row['updatedAt'] : undefined,
-    authorEmail: typeof row['authorEmail'] === 'string' ? row['authorEmail'] : undefined,
+    updatedAt: optionalString(row['updatedAt']),
+    authorId: optionalString(row['authorId']),
+    authorEmail: optionalString(row['authorEmail']),
+    authorName: optionalString(row['authorName']),
+    upvotes: countOf(row['upvotes']),
+    downvotes: countOf(row['downvotes']),
+    myVote: toCommentVote(row['myVote']),
+  }
+}
+
+const ACTIVITY_TYPES: readonly BugActivityType[] = [
+  'created',
+  'imported',
+  'analyzed',
+  'status_changed',
+  'assigned',
+  'unassigned',
+  'deleted',
+  'commented',
+  'restored',
+  'due_date_changed',
+  'voted',
+]
+
+function toActivityEntry(value: unknown): BugActivityEntry | null {
+  if (!value || typeof value !== 'object') return null
+  const row = value as Record<string, unknown>
+  const id = optionalString(row['id'])
+  const createdAt = optionalString(row['createdAt'])
+  const type = row['type']
+  // Un tipo de evento desconocido (agregado por una migración más nueva) se
+  // descarta en vez de romper el listado entero.
+  if (!id || !createdAt || !ACTIVITY_TYPES.includes(type as BugActivityType)) return null
+  return {
+    id,
+    type: type as BugActivityType,
+    fromStatus: optionalString(row['fromStatus']) as BugStatus | undefined,
+    toStatus: optionalString(row['toStatus']) as BugStatus | undefined,
+    payload:
+      row['payload'] && typeof row['payload'] === 'object'
+        ? (row['payload'] as Record<string, unknown>)
+        : undefined,
+    createdAt,
+    actorId: optionalString(row['actorId']),
+    actorEmail: optionalString(row['actorEmail']),
+    actorName: optionalString(row['actorName']),
   }
 }
 
@@ -174,17 +264,31 @@ export function mapRemoteBugRow(row: RemoteBugRow, index: number): AnalyzedBug {
     comments: Array.isArray(row.comments)
       ? row.comments.map(toBugComment).filter((item): item is BugComment => Boolean(item))
       : [],
+    assignees: Array.isArray(row.assignees)
+      ? row.assignees.map(toTeamMember).filter((item): item is TeamMember => Boolean(item))
+      : [],
+    dueDate: typeof row.dueDate === 'string' ? row.dueDate : null,
+    reportedBy: toTeamMember(row.reportedBy),
+    activity: Array.isArray(row.activity)
+      ? row.activity.map(toActivityEntry).filter((item): item is BugActivityEntry => Boolean(item))
+      : [],
     error: row.error ?? undefined,
     processingMs: typeof row.processingMs === 'number' ? row.processingMs : 0,
   }
 }
 
+// Camino de respaldo: lee `bug_comments` directo cuando el payload del RPC no
+// trajo el hilo. Sin agregados de voto disponibles, arranca en cero.
 function mapCommentRow(row: RemoteCommentRow): BugComment {
   return {
     id: row.id,
+    parentId: row.parent_id ?? null,
     body: row.body,
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? undefined,
+    upvotes: 0,
+    downvotes: 0,
+    myVote: 0,
   }
 }
 
@@ -205,7 +309,7 @@ async function hydrateBugTimeline(
 
   const commentsResponse = await client
     .from('bug_comments')
-    .select('id, bug_id, body, created_at, updated_at')
+    .select('id, bug_id, parent_id, body, created_at, updated_at')
     .in('bug_id', bugIds)
     .order('created_at', { ascending: false })
   if (!commentsResponse.error && Array.isArray(commentsResponse.data)) {
@@ -255,30 +359,12 @@ async function hydrateBugTimeline(
   })
 }
 
-async function resolveRemoteBugId(
-  client: SupabaseClient,
-  projectId: string,
-  raw: Pick<RawBug, 'title' | 'description'>,
-): Promise<string> {
-  const { data, error } = await client
-    .from('bugs')
-    .select('id')
-    .eq('project_id', projectId)
-    .eq('content_key', bugRecordKey(raw))
-    .is('deleted_at', null)
-    .maybeSingle()
-
-  if (error) throw error
-  const id = typeof data?.id === 'string' ? data.id : ''
-  if (!id) throw new Error('No se encontró el bug remoto para guardar el comentario.')
-  return id
-}
-
 export async function addRemoteBugComment(
   client: SupabaseClient,
   config: SupabaseTeamConfig,
   raw: Pick<RawBug, 'title' | 'description'>,
   body: string,
+  parentId?: string | null,
 ): Promise<BugComment> {
   const teamStatus = await getSupabaseTeamStatus(client, config)
   if (!teamStatus.authenticated || !teamStatus.project || !teamStatus.user) {
@@ -288,26 +374,106 @@ export async function addRemoteBugComment(
   const trimmedBody = body.trim()
   if (!trimmedBody) throw new Error('El comentario no puede estar vacío.')
 
-  const bugId = await resolveRemoteBugId(client, teamStatus.project.id, raw)
-  const { data, error } = await client
-    .from('bug_comments')
-    .insert({
-      bug_id: bugId,
-      project_id: teamStatus.project.id,
-      body: trimmedBody,
-      created_by: teamStatus.user.id,
-    })
-    .select('id, body, created_at, updated_at')
-    .single()
+  // Por RPC y no por insert directo: el servidor valida que el comentario padre
+  // pertenezca a este bug antes de colgarle la respuesta.
+  const { data, error } = await client.rpc('add_bug_comment', {
+    target_project_id: teamStatus.project.id,
+    target_content_key: bugRecordKey(raw),
+    comment_body: trimmedBody,
+    parent_comment_id: parentId ?? null,
+  })
 
   if (error) throw error
-  return {
-    id: data.id,
-    body: data.body,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
-    authorEmail: teamStatus.user.email,
+  const comment = toBugComment(data)
+  if (!comment) throw new Error('La respuesta del servidor no trae el comentario guardado.')
+  return comment
+}
+
+export async function setRemoteBugAssignees(
+  client: SupabaseClient,
+  config: SupabaseTeamConfig,
+  raw: Pick<RawBug, 'title' | 'description'>,
+  userIds: string[],
+): Promise<string> {
+  const teamStatus = await getSupabaseTeamStatus(client, config)
+  if (!teamStatus.authenticated || !teamStatus.project) {
+    throw new Error('No hay sesión de equipo o proyecto compartido activo.')
   }
+
+  const { data, error } = await client.rpc('set_bug_assignees', {
+    target_project_id: teamStatus.project.id,
+    target_content_key: bugRecordKey(raw),
+    next_user_ids: userIds,
+  })
+
+  if (error) throw error
+  return data as string
+}
+
+export async function setRemoteBugDueDate(
+  client: SupabaseClient,
+  config: SupabaseTeamConfig,
+  raw: Pick<RawBug, 'title' | 'description'>,
+  dueDate: string | null,
+): Promise<string> {
+  const teamStatus = await getSupabaseTeamStatus(client, config)
+  if (!teamStatus.authenticated || !teamStatus.project) {
+    throw new Error('No hay sesión de equipo o proyecto compartido activo.')
+  }
+
+  const { data, error } = await client.rpc('set_bug_due_date', {
+    target_project_id: teamStatus.project.id,
+    target_content_key: bugRecordKey(raw),
+    next_due: dueDate,
+  })
+
+  if (error) throw error
+  return data as string
+}
+
+export async function setRemoteCommentVote(
+  client: SupabaseClient,
+  config: SupabaseTeamConfig,
+  commentId: string,
+  value: CommentVote,
+): Promise<CommentVoteTotals> {
+  const teamStatus = await getSupabaseTeamStatus(client, config)
+  if (!teamStatus.authenticated || !teamStatus.project) {
+    throw new Error('No hay sesión de equipo o proyecto compartido activo.')
+  }
+
+  const { data, error } = await client.rpc('set_comment_vote', {
+    target_comment_id: commentId,
+    next_value: value,
+  })
+
+  if (error) throw error
+  const row = (data ?? {}) as Record<string, unknown>
+  return {
+    commentId,
+    upvotes: countOf(row['upvotes']),
+    downvotes: countOf(row['downvotes']),
+    myVote: toCommentVote(row['myVote']),
+  }
+}
+
+export async function loadRemoteProjectMembers(
+  client: SupabaseClient,
+  config: SupabaseTeamConfig,
+): Promise<TeamMember[]> {
+  const teamStatus = await getSupabaseTeamStatus(client, config)
+  if (!teamStatus.authenticated || !teamStatus.project) {
+    throw new Error('No hay sesión de equipo o proyecto compartido activo.')
+  }
+
+  const { data, error } = await client.rpc('list_project_members', {
+    target_project_id: teamStatus.project.id,
+  })
+
+  if (error) throw error
+  return Array.isArray(data)
+    ? data.map(toTeamMember).filter((item): item is TeamMember => Boolean(item))
+    : []
 }
 
 export async function loadRemoteAnalyzedBugs(

@@ -36,8 +36,12 @@ import { BrowserDocsReader } from '../src/features/analyze-bugs/infrastructure/b
 import {
   addBugComment,
   deleteBug,
+  listProjectMembers,
   loadProjectBugs,
+  setBugAssignees,
+  setBugDueDate,
   setBugStatus,
+  voteBugComment,
 } from '../src/features/bug-workflow/application/manageBugWorkflow.js'
 import {
   enrichedExcelDefaultName,
@@ -90,6 +94,7 @@ import {
 import type {
   AnalyzedBug,
   BugStatus,
+  CommentVote,
   HardwareProbe,
   LLMConfig,
   RawBug,
@@ -614,11 +619,14 @@ ipcMain.handle(
 
 ipcMain.handle(
   IPC_CHANNELS.bugAddComment,
-  async (_e, { bug, body }: { bug: AnalyzedBug; body: string }) => {
+  async (
+    _e,
+    { bug, body, parentId }: { bug: AnalyzedBug; body: string; parentId?: string | null },
+  ) => {
     try {
       const client = makeSupabaseTeamClient()
       if (!client) throw new Error('Supabase no está configurado.')
-      const comment = await addBugComment(client, loadSupabaseTeamConfig(), bug, body)
+      const comment = await addBugComment(client, loadSupabaseTeamConfig(), bug, body, parentId)
       return { ok: true, comment }
     } catch (err) {
       const message = errorMessage(err)
@@ -627,6 +635,67 @@ ipcMain.handle(
     }
   },
 )
+
+ipcMain.handle(
+  IPC_CHANNELS.bugSetAssignees,
+  async (_e, { bug, userIds }: { bug: AnalyzedBug; userIds: string[] }) => {
+    try {
+      const client = makeSupabaseTeamClient()
+      if (!client) throw new Error('Supabase no está configurado.')
+      await setBugAssignees(client, loadSupabaseTeamConfig(), bug, userIds)
+      return { ok: true }
+    } catch (err) {
+      const message = errorMessage(err)
+      log('error', `Error asignando responsables: ${message}`)
+      return { ok: false, error: message }
+    }
+  },
+)
+
+ipcMain.handle(
+  IPC_CHANNELS.bugSetDueDate,
+  async (_e, { bug, dueDate }: { bug: AnalyzedBug; dueDate: string | null }) => {
+    try {
+      const client = makeSupabaseTeamClient()
+      if (!client) throw new Error('Supabase no está configurado.')
+      await setBugDueDate(client, loadSupabaseTeamConfig(), bug, dueDate)
+      return { ok: true }
+    } catch (err) {
+      const message = errorMessage(err)
+      log('error', `Error cambiando la fecha límite: ${message}`)
+      return { ok: false, error: message }
+    }
+  },
+)
+
+ipcMain.handle(
+  IPC_CHANNELS.bugVoteComment,
+  async (_e, { commentId, value }: { commentId: string; value: CommentVote }) => {
+    try {
+      const client = makeSupabaseTeamClient()
+      if (!client) throw new Error('Supabase no está configurado.')
+      const totals = await voteBugComment(client, loadSupabaseTeamConfig(), commentId, value)
+      return { ok: true, totals }
+    } catch (err) {
+      const message = errorMessage(err)
+      log('error', `Error votando el comentario: ${message}`)
+      return { ok: false, error: message }
+    }
+  },
+)
+
+ipcMain.handle(IPC_CHANNELS.projectMembers, async () => {
+  try {
+    const client = makeSupabaseTeamClient()
+    if (!client) throw new Error('Supabase no está configurado.')
+    const members = await listProjectMembers(client, loadSupabaseTeamConfig())
+    return { ok: true, members }
+  } catch (err) {
+    const message = errorMessage(err)
+    log('error', `Error cargando miembros del proyecto: ${message}`)
+    return { ok: false, error: message }
+  }
+})
 
 ipcMain.handle(IPC_CHANNELS.bugsLoadRemote, async () => {
   try {

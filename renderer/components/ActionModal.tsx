@@ -1,5 +1,6 @@
 import type React from 'react'
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { col } from '../theme'
 import { IconWarning, IconX } from './icons'
 import { LoadingInline } from './Loading'
@@ -48,12 +49,15 @@ export function ActionModal({
 
   if (!open) return null
 
-  const accent = tone === 'danger' ? col.red : col.cream
-  const shellClassName = `modal-shell animate-fade-in font-mono ${
+  const accent = tone === 'danger' ? col.critical : col.fg
+  const shellClassName = `modal-shell animate-fade-in ${
     tone === 'danger' ? 'modal-shell-danger' : ''
   }`
 
-  return (
+  // Portal a `document.body`: un modal abierto desde el topbar quedaba dentro de
+  // su contexto de apilado (`z-index: 20`) y el rail (`z-index: 30`) le pasaba por
+  // encima — el `z-50` de acá adentro no alcanza para salir del subárbol.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
         type="button"
@@ -74,23 +78,19 @@ export function ActionModal({
           <div className="min-w-0">
             <div className="modal-title-row">
               {tone === 'danger' && <IconWarning size={16} className="flex-shrink-0 self-center" />}
-              <h2
-                id={titleId}
-                className="font-semibold text-sm leading-5"
-                style={{ color: accent }}
-              >
+              <h2 id={titleId} className="modal-title" style={{ color: accent }}>
                 {title}
               </h2>
             </div>
             {description && (
-              <p id={descriptionId} className="modal-description mt-1 text-xs">
+              <p id={descriptionId} className="modal-description mt-1">
                 {description}
               </p>
             )}
           </div>
           <button
             type="button"
-            className="btn-mini flex-shrink-0"
+            className="btn-icon btn-icon-sm"
             onClick={onClose}
             aria-label="cerrar"
           >
@@ -99,7 +99,8 @@ export function ActionModal({
         </div>
         <div className="modal-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -128,7 +129,7 @@ export function ConfirmActionModal({
     <ActionModal open={open} title={title} description={description} tone={tone} onClose={onClose}>
       <div className="modal-actions">
         <button type="button" className="btn-secondary" onClick={onClose} disabled={busy}>
-          cancelar
+          Cancelar
         </button>
         <button
           type="button"

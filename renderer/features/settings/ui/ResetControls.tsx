@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { LogLine } from '../../../App'
 import { ConfirmActionModal } from '../../../components/ActionModal'
 import { IconRestore, IconTrash } from '../../../components/icons'
-import { alpha, col } from '../../../theme'
+import { col } from '../../../theme'
 
 type ResetScope = 'bug-data' | 'config'
 
@@ -21,14 +21,14 @@ interface ResetAction {
 const ACTIONS: ResetAction[] = [
   {
     scope: 'bug-data',
-    label: 'vaciar vista local',
+    label: 'Vaciar vista local',
     description: 'Reinicia la app sin borrar bugs ni estados del proyecto compartido.',
     confirmMessage: 'esto reinicia la app sin borrar datos de Supabase',
     Icon: IconTrash,
   },
   {
     scope: 'config',
-    label: 'restablecer configuración',
+    label: 'Restablecer configuración',
     description: 'Vuelve a los valores por defecto y reabre el asistente de primer arranque.',
     confirmMessage: 'esto restablece la configuración y reinicia la app',
     Icon: IconRestore,
@@ -41,7 +41,7 @@ const ACTIONS: ResetAction[] = [
  */
 export default function ResetControls({ addLog }: Props) {
   return (
-    <div className="space-y-2">
+    <div className="grid gap-3">
       {ACTIONS.map((action) => (
         <ResetRow key={action.scope} action={action} addLog={addLog} />
       ))}
@@ -66,34 +66,21 @@ function ResetRow({ action, addLog }: { action: ResetAction; addLog: Props['addL
     <div className="flex flex-wrap items-center gap-3">
       <button
         type="button"
-        className="inline-flex flex-shrink-0 items-center gap-1.5 rounded px-2.5 py-1.5 font-mono text-xs transition-colors duration-200"
+        className="btn-danger flex-shrink-0"
         onClick={() => setConfirming(true)}
-        style={{
-          color: col.red,
-          border: `1px solid ${alpha(col.red, 0.32)}`,
-          background: alpha(col.red, 0.07),
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = alpha(col.red, 0.16)
-          e.currentTarget.style.borderColor = alpha(col.red, 0.5)
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = alpha(col.red, 0.07)
-          e.currentTarget.style.borderColor = alpha(col.red, 0.32)
-        }}
       >
-        <Icon size={12} className="flex-shrink-0" />
+        <Icon size={12} className="button-icon" />
         {label}
       </button>
-      <span className="flex-1 text-xs" style={{ color: col.fgMuted }}>
+      <span className="flex-1 text-sm" style={{ color: col.fgMuted }}>
         {description}
       </span>
       <ConfirmActionModal
         open={confirming}
         title={label}
         description={confirmMessage}
-        confirmLabel="restablecer"
-        busyLabel="reiniciando"
+        confirmLabel="Restablecer"
+        busyLabel="Reiniciando"
         busy={busy}
         onClose={() => {
           if (!busy) setConfirming(false)

@@ -1,7 +1,7 @@
 import { BugUnderLensMark } from '../../../components/decor/BugMotifs'
 import { IconCheck, IconFolder } from '../../../components/icons'
 import { LoadingInline } from '../../../components/Loading'
-import { alpha, col } from '../../../theme'
+import { col } from '../../../theme'
 
 export interface TeamAuthStatus {
   configured: boolean
@@ -20,77 +20,83 @@ interface Props {
 
 export default function TeamLogin({ status, loading, onLogin }: Props) {
   const configured = status?.configured ?? true
+
   return (
-    <div className="team-login flex h-screen items-center justify-center p-6 font-mono text-om-fg">
+    <div className="team-login flex h-screen items-center justify-center p-10">
       <div className="team-login-shell">
         <div className="team-login-panel">
-          <div className="team-login-identity flex flex-col justify-between p-5">
-            <div>
-              <BugUnderLensMark
-                className="motif-sway mb-3"
-                style={{ width: 44, height: 44, color: col.cream }}
-              />
-              <div className="font-semibold text-sm" style={{ color: col.cream }}>
-                buglens equipo
+          <div className="team-login-identity">
+            <div className="grid gap-3.5">
+              <span className="app-brand-mark" style={{ width: '2.75rem', height: '2.75rem' }}>
+                <BugUnderLensMark className="motif-sway" style={{ width: 24 }} />
+              </span>
+              <div className="grid gap-1.5">
+                <span className="font-bold text-3xl" style={{ letterSpacing: '-0.02em' }}>
+                  BugLens para tu equipo
+                </span>
+                <p
+                  className="max-w-[38ch] text-md"
+                  style={{ color: col.fgMuted, textWrap: 'pretty' }}
+                >
+                  Intake compartido de reportes de QA: clasificación, reescritura, estados y notas —
+                  todo sincronizado.
+                </p>
               </div>
-              <p className="mt-2 max-w-xs text-xs" style={{ color: col.fgMuted }}>
-                Intake compartido para reportes de QA, estados y análisis.
-              </p>
             </div>
-            <div className="mt-6 flex items-center gap-2 text-xs" style={{ color: col.fgMuted }}>
-              <IconFolder size={12} />
-              <span>{status?.project?.name ?? 'proyecto compartido'}</span>
+            <div className="flex items-center gap-2 text-xs" style={{ color: col.fgMuted }}>
+              <IconFolder size={14} />
+              <span>{status?.project?.name ?? 'Proyecto compartido'}</span>
             </div>
           </div>
 
-          <div className="team-login-card p-4">
+          <div className="team-login-card grid content-start gap-3.5">
             {status?.authenticated ? (
-              <div className="space-y-3">
-                <div className="section-label mb-2">sesión activa</div>
+              <>
+                <span className="kicker">Sesión activa</span>
                 <span
-                  className="inline-flex items-center gap-1.5 text-xs"
-                  style={{ color: col.fgDim }}
+                  className="inline-flex items-center gap-1.5 text-sm"
+                  style={{ color: col.solved }}
                 >
-                  <IconCheck size={12} />
+                  <IconCheck size={14} />
                   {status.user?.email ?? 'usuario conectado'}
                 </span>
                 {status.project && (
-                  <div className="text-xs" style={{ color: col.fgMuted }}>
-                    proyecto: {status.project.name}
-                  </div>
+                  <span className="text-sm" style={{ color: col.fgMuted }}>
+                    Proyecto: {status.project.name}
+                  </span>
                 )}
-              </div>
+              </>
             ) : (
               <>
-                <div className="section-label mb-2">acceso requerido</div>
-                <p className="mb-4 text-xs" style={{ color: col.fgMuted }}>
-                  Iniciá sesión para cargar el proyecto remoto.
+                <span className="kicker">Acceso requerido</span>
+                <p className="text-sm" style={{ color: col.fgMuted, lineHeight: 1.6 }}>
+                  Iniciá sesión para cargar el proyecto remoto y sus bugs.
                 </p>
 
                 <button
                   type="button"
-                  className="btn-primary w-full"
+                  className="btn-primary btn-lg w-full"
                   onClick={onLogin}
                   disabled={loading || !configured}
                 >
-                  {loading ? <LoadingInline label="esperando login" /> : 'continuar con google'}
+                  {loading ? <LoadingInline label="esperando login" /> : 'Continuar con Google'}
                 </button>
 
-                {!configured && (
-                  <p className="mt-2 text-xs" style={{ color: col.border }}>
-                    Configurá Supabase en `.env` y reiniciá la app.
-                  </p>
-                )}
+                <p className="text-2xs" style={{ color: col.fgDim, lineHeight: 1.5 }}>
+                  {configured
+                    ? 'Se usa Supabase Auth con la publishable key. Nunca se guardan claves de servicio.'
+                    : 'Configurá Supabase en `.env` y reiniciá la app.'}
+                </p>
               </>
             )}
 
             {status?.error && (
               <div
-                className="mt-3 rounded p-2 text-xs"
+                className="rounded-md p-2.5 text-xs"
                 style={{
-                  color: col.red,
-                  border: `1px solid ${alpha(col.red, 0.24)}`,
-                  background: alpha(col.red, 0.06),
+                  color: col.critical,
+                  border: `1px solid ${col.criticalLine}`,
+                  background: col.criticalBg,
                 }}
               >
                 {status.error}

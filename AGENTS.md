@@ -20,6 +20,7 @@ reescribe el reporte en texto claro y estructurado, y lleva un **estado** por bu
 - `npm run lint:fix` — Biome check con autofix (`--write`)
 - `npm test` · `npm run test:watch` — Vitest
 - `npm run typecheck` — `tsc --noEmit`
+- `npm run check:css` — clases de `@layer components` que Tailwind purgó (correr tras `build`)
 - `npm run build` — renderer (vite) + main (tsc)
 - `npm run storybook` · `npm run build-storybook` — taller / documentación de componentes (UI)
 
@@ -59,7 +60,16 @@ capas técnicas. No volver a organizar el código por carpetas raíz como `pipel
   framework. Deben delegar en módulos de `features/`, `shared/` o `platform/`; no concentrar
   ahí reglas de negocio nuevas.
 - `renderer/features/*/ui` contiene UI de negocio por feature. `renderer/components/` queda
-  para piezas genéricas: modales, loading, iconos, empty states, decor y controles comunes.
+  para piezas genéricas: rail y topbar del shell, modales, loading, iconos, empty states,
+  bloque plegable, decor y controles comunes.
+- Dentro de `renderer/features/bug-workflow/ui/` la separación es: `bugPresentation.ts`
+  (lógica pura: labels, filtros, agrupación, KPIs), `bugActivity.ts` (lógica pura: árbol de
+  hilos, redacción de la actividad, vencimiento), `BugAtoms.tsx` (badges, pestañas, status
+  select, acciones), `BugsScreen.tsx` (contenedor de las tres columnas), `BugList`,
+  `BugDetail` (reporte del bug), `BugComments` (hilo y voto), `BugPropertiesRail`
+  (propiedades y actividad), `BugKpiGrid`, `BugRewrittenReport` (bloque compartido del
+  reporte reescrito) y `agentReport.tsx` (parseo + render de la salida del agente externo).
+  La lógica pura no importa React.
 
 ## Convenciones y constraints
 
@@ -85,47 +95,151 @@ capas técnicas. No volver a organizar el código por carpetas raíz como `pipel
 - **Persistencia compartida**: Supabase es la fuente de verdad para bugs, estados, imports
   y análisis. La identidad sigue siendo por **contenido** (`bugRecordKey` = hash de
   título+descripción), no por posición de fila. Al reabrir, `App` carga con
-  `bugs:load-remote`; realtime (`bugs:watch-remote`) dispara refresh de la tabla.
+  `bugs:load-remote`; realtime (`bugs:watch-remote`) dispara refresh del listado.
+- **Personas y colaboración** (migraciones `0010`-`0012`): un bug tiene **varios responsables**
+  (`bug_assignees`, no la columna `bugs.assigned_to` del esquema original), una **fecha límite**
+  (`bugs.due_date`, de tipo `date` — es un día, no un instante: construirla en horario local o
+  se corre un día), **comentarios con hilo** (`bug_comments.parent_id`) y **voto** por persona
+  (`bug_comment_votes`, un voto por usuario y comentario, valor `-1`/`1`).
+  `list_project_bugs` devuelve todo eso más el feed de `bug_events` (últimos 50) ya con el
+  perfil del actor resuelto. Los comentarios llegan **planos con `parentId`**: el árbol lo arma
+  `buildCommentThread` en `bugActivity.ts`, que tolera padres ausentes y ciclos.
+  `list_project_members` alimenta el selector de responsables y los avatares del equipo.
+- **Toda escritura de colaboración va por RPC**, nunca por insert directo: el servidor valida
+  permisos por rol, que el responsable sea miembro del proyecto y que el comentario padre
+  pertenezca al mismo bug. Cada RPC deja su rastro en `bug_events`.
 - **Proyectos**: un usuario puede tener varios proyectos. `settings.json` guarda
   `supabaseActiveProjectId`; si falta o no existe, se cae al proyecto default por slug y luego
   al primer proyecto disponible. Todo IPC de bugs usa siempre el proyecto activo resuelto por
   `getSupabaseTeamStatus`.
 - **Reimportar no pisa estados**: `save_analysis_result` conserva el estado remoto existente
   en conflictos por `(project_id, content_key)`. Bugs nuevos entran como `nuevo`.
-- **Activos vs históricos**: la tabla separa por **estado** (`isActiveStatus` en `BugTable`):
-  activos = `nuevo`/`en_progreso`; históricos = `solucionado`/`cerrado`/`no_replicado`.
-  Es derivado, no un campo aparte. El control de pestañas sigue el patrón ARIA tablist
-  (roving tabindex + flechas/Home/End).
+- **Activos vs históricos**: la lista separa por **estado** (`isActiveStatus` en
+  `bugPresentation.ts`): activos = `nuevo`/`en_progreso`; históricos =
+  `solucionado`/`cerrado`/`no_replicado`. Es derivado, no un campo aparte. El control de
+  pestañas sigue el patrón ARIA tablist (roving tabindex + flechas/Home/End).
+- **Pantalla de Bugs en tres columnas**: `BugList` (KPI, buscador, pestañas, filtros y
+  lista) · `BugDetail` + `BugComments` (el reporte del bug elegido) · `BugPropertiesRail`
+  (responsables, fecha límite, estado, contexto y actividad). `BugsScreen` es dueña del
+  estado compartido — filtros y bug seleccionado — y las columnas solo renderizan.
+- **`BugList` es hermana del rail, no una columna interna**: arranca en el borde superior
+  de la ventana y el topbar empieza a su derecha. Por eso `BugsScreen` recibe el topbar
+  como prop (`topbar`) y renderiza `<BugList/>` + `<div className="app-content">`, en vez
+  de vivir dentro de `.app-main` como el resto de las pantallas. **No** hay banda de
+  encabezado que cruce la pantalla: el texto más grande es el título del bug, en el centro.
+  Las acciones de trabajo (cargar manual, exportar, analizar) van en el topbar.
+  Ya **no** existen los dos layouts (`cards`/`split`), la paginación, ni el detalle como
+  pantalla dedicada: el bug elegido siempre está a la vista en la columna central. Si el
+  filtro deja afuera al bug enfocado, se muestra el primero visible.
+- **Lo destructivo y la identidad van detrás de un menú** (`MenuButton`): "Borrar" no
+  compite con "Analizar con agente", y mail/proveedor/equipo/cierre de sesión viven detrás
+  del avatar del topbar en vez de ocupar un cuarto de la barra.
+- **Un control por cosa**: el estado se **cambia** solo en el rail de propiedades; en la
+  columna central se **muestra** como badge. Dos controles para lo mismo en la misma
+  pantalla se contradicen.
+- **Pantalla afectada**: `screenPathOf` devuelve la ruta de la URL del reporte o el área
+  del análisis, y `null` si el reporte no informó ninguna — en la UI eso se muestra como
+  "Sin pantalla informada", nunca inventado. `screenOf` agrega el fallback al título y se
+  usa **solo** como clave de agrupación.
 - **Borrar bug**: hace soft-delete remoto (`deleted_at`) vía `bug:delete` y lo saca de la
-  tabla. La caché por contenido se conserva. Usa el sistema de modales de confirmación
+  lista. La caché por contenido se conserva. Usa el sistema de modales de confirmación
   compartido (sin `confirm()` nativo).
-- **Decorados** (`decor/BugMotifs`): motivos temáticos line-art mono a un trazo (`currentColor`),
-  **decorativos** (`aria-hidden`, sin alt). Animaciones sutiles vía clases en `styles.css`
+- **Decorados** (`decor/BugMotifs`): motivos temáticos lineales a un trazo (`currentColor`),
+  **decorativos** (`aria-hidden`, sin alt). `BugUnderLensMark` es además la marca de la app
+  (sobre el cuadrado de acento). Animaciones sutiles vía clases en `styles.css`
   (`.motif-sway`) que el corte global de `prefers-reduced-motion` neutraliza. No decorar la
-  tabla densa (baja legibilidad): van en el chrome y los vacíos.
+  lista densa (baja legibilidad): van en el chrome y los vacíos.
 - **TS configs (3)**: `tsconfig.json` (typecheck; incluye `vitest.setup.ts` para los matchers
   de jest-dom), `tsconfig.electron.json` (build del main; **excluye `*.test.ts`**),
   `vitest.config.ts` (tests, root en la raíz para cubrir `src/` y `renderer/`).
-- **Estética**: dark/mono (paleta omarchy), estilos inline + Tailwind.
+- **Estética**: **claro y aireado, acento azul**. Fondo `canvas` gris muy claro, contenido
+  en tarjetas blancas con borde de 1px y sombra mínima, navegación por **rail de iconos**
+  (no tabs, no sidebar ancho). Estilos inline + Tailwind. La definición completa y el mapa
+  de pantallas viven en [`docs/design-system.md`](docs/design-system.md); no crear una
+  paleta, fuente o shell alternativos.
+- **Shell**: `AppRail` (56px, solo iconos) + `AppTopbar` (proyecto, migas, estado, usuario)
+  + `app-content`. Como el rail no tiene texto, **todo botón necesita `aria-label` + `title`**
+  y los contadores se repiten dentro del label. El contexto global (proyecto activo,
+  identidad, estado del motor) va en el topbar, no en la navegación. Cada pantalla es dueña
+  de su propio índice interno — Configuración lleva el suyo (`settings-index`).
+- **Identidad de personas**: los avatares toman su tono de `avatarToneOf` (hash del id del
+  perfil) y sus iniciales de `initialsOf`, ambos en `renderer/components/avatarTone.ts`.
+  No elegir el tono en el componente: rompe que una persona tenga el mismo color en toda
+  la app. Los tonos `--c-avatar-*` son de identidad, **no** semánticos.
+- **Tipografía**: **Public Sans** para todo el producto (vendorizada en
+  `renderer/assets/fonts/public-sans/`, subsets latin + latin-ext, variable 300–800 — la app
+  es Electron offline, no se usa el CDN de Google Fonts). **Iosevka** queda reservada para
+  **código, rutas, keys y timestamps del log**: se aplica con la clase `.mono` (o
+  `font-mono`), nunca al chrome ni al cuerpo de texto.
+- **Modales por portal**: `ActionModal` monta en `document.body`. Adentro del árbol
+  quedaba atrapado en el contexto de apilado de quien lo abriera — abierto desde el
+  topbar (`z-index: 20`) el rail (`z-index: 30`) le pasaba por encima, y el `z-50`
+  interno no alcanza para salir del subárbol.
+- **Rótulos con mayúscula inicial**: títulos de pantalla, panel, sección y modal, y
+  etiquetas de botón. Las VERSALES son solo para kickers y micro-labels.
 - **Accesibilidad**: focus-visible global y `prefers-reduced-motion` (en `styles.css`) —
   respetarlos; `aria-label` en controles de solo-icono y en los selects de filtro; los badges
   comunican con **color + texto**, no solo color.
 - **Colores — origen único**: los valores viven en `renderer/styles.css :root` como
   canales RGB (`--c-*`). Se referencian con `var()` desde: `theme.ts` (`col.x` para
-  estilos inline + `alpha(col.x, op)` para tints), `tailwind.config.ts` (clases `om-*`),
+  estilos inline + `alpha(col.x, op)` para tints), `tailwind.config.ts` (clases `bl-*`),
   y las reglas de `styles.css`. **No hardcodear hex/rgba** en componentes — usar `col`/`alpha`.
   **Color nuevo**: definir el valor en `:root`, y exponerlo en `theme.ts` y/o `tailwind.config.ts`
   solo donde se vaya a usar.
+  Los tokens están agrupados por rol: superficies (`canvas`/`chrome`/`surface`/`subtle`/`sunken`/`chip`
+  — el **blanco es del contenido** y el gris `chrome` de la navegación),
+  acento azul (`accent*`), texto de más fuerte a más tenue
+  (`fg` → `fg-strong` → `fg-body` → `fg-muted` → `fg-dim` → `fg-faint` → `fg-disabled`),
+  bordes (`border-strong` → `border` → `border-card` → `border-soft` → `border-faint`) y las
+  familias semánticas (`critical`/`high`/`medium`/`warn`/`status-new`/`progress`/`solved`/`not-repro`),
+  cada una con su terna `fg` + `-bg` + `-line`. Las familias semánticas se consumen **por clase**
+  (`.badge-severity-*`, `.badge-status-*`, `.kpi-*`), no armando el badge a mano.
+  Aparte quedan `code*` (literales técnicos en prosa, clase `.code-chip`), `avatar-1…6`
+  (identidad) y `vote-up`/`vote-down`.
+- **Clases de `@layer components` SIEMPRE literales**: Tailwind purga del CSS de producción
+  toda clase que no encuentre **escrita completa** en `renderer/**`. Una clase armada por
+  interpolación (`badge-status-${status}`) es invisible para el escaneo y **desaparece del
+  build** — así se perdieron los colores de todos los badges de estado y severidad. Usar un
+  mapa estático (`SEVERITY_BADGE_CLASS`/`STATUS_BADGE_CLASS` en `bugPresentation.ts`). Si la
+  interpolación es realmente más clara, sumar la familia al `safelist` de `tailwind.config.ts`.
+  Ya pasó dos veces: los badges de estado/severidad y el `right: 0` del panel de menú.
+  **Verificar con `npm run build && npm run check:css`**, que compara las clases definidas
+  contra las que sobrevivieron al build. No lo detectan ni el typecheck ni el lint ni los
+  tests.
 - **Tamaños — origen único** (igual que el color): la escala vive en `styles.css :root`:
-  tipografía `--text-2xs|xs|sm` (11/12/14px), radios `--radius-sm|md` (4/6px), altura de
-  controles `--ctl-h-sm|md` (28/32px). Se consume vía **clases** (`text-2xs`, `rounded`/`rounded-md`,
-  `.btn-mini` para micro-controles, `.input`/`.btn-*` que ya traen `min-height`) o vía `sz`/`radius`
-  de `theme.ts` para `style` inline. **No hardcodear px/rem de tamaño** en componentes. El spacing
-  usa la escala default de Tailwind (base 4px) — no inventar paddings fuera de grilla.
+  tipografía `--text-3xs…--text-5xl` (10/11/12/13/14/15/16/18/20/22/24px), radios
+  `--radius-xs|sm|md|lg|xl|2xl|3xl` (5/6/8/10/12/14/16px) más `--radius-pill`, altura de
+  controles `--ctl-h-xs|sm|md|lg` (24/30/34/38px) y sombras
+  `--shadow-card|pop|modal|accent|float`.
+  Se consume vía **clases** (`text-2xs`, `rounded-md`, `.btn-mini`, `.btn-lg`, `.input`/`.btn-*`
+  que ya traen `min-height`) o vía `sz`/`radius`/`shadow` de `theme.ts` para `style` inline.
+  **No hardcodear px/rem de tamaño** en componentes. El spacing usa la escala default de
+  Tailwind (base 4px) — no inventar paddings fuera de grilla.
 - **Tamaño de íconos**: los SVG van sobre una escala de 4px → **8 / 12 / 16 / 20 / 24 / 28**px
   (8 = carets/disclosure, 12 = acciones chicas, 16 = estándar, 20/24/28 = medios/marcas). No usar
   valores fuera de esa escala. (Los atributos `width`/`height` del SVG no aceptan CSS vars; los
   motivos decorativos de `decor/` se dimensionan aparte, por contexto.)
+- **Prompt del agente externo**: el contrato de salida obliga a declarar **"Alcance revisado"**.
+  Midiendo 12 informes reales, 7 afirmaban exhaustividad ("el único", "la única") y uno era
+  falso: el agente trata los ejemplos del reporte como el alcance completo. La regla de
+  mantenerse dentro del bug se conserva a propósito —sin ella cada análisis se vuelve una
+  auditoría general— pero el informe tiene que decir hasta dónde miró.
+  Los rótulos de **entrada** no deben repetir el nombre de una sección de **salida**: con
+  ambos llamados "Información faltante", el agente devolvía la entrada como conclusión propia.
+- **Shell del agente por plataforma**: `resolveShell()` usa `ComSpec` en Windows y `SHELL`
+  en POSIX. **No** leer `SHELL` en Windows: esa variable la define el shell desde el que se
+  arrancó el proceso, así que la app corría los comandos con `cmd.exe` al abrirse normal y
+  con bash al arrancarla desde Git Bash — mismo comando, dos intérpretes, según algo que el
+  usuario no ve. Los tests que lanzan procesos usan el helper `cmd` de
+  `externalAgent.test.ts` para hablar el idioma del intérprete que toque.
+- **Agente externo, procesos**: se lanza a través de un shell, así que el agente es
+  **nieto** del proceso que BugLens conoce. Para matarlo hace falta bajar el árbol entero:
+  en Windows `taskkill /T` (ni `child.kill()` ni los grupos de procesos con PID negativo
+  funcionan ahí), en POSIX el grupo con `detached`. Con `child.kill()` a secas quedaban
+  huérfanos de ~500 MB acumulándose. Además hay un **corte por silencio**
+  (`EXTERNAL_AGENT_SILENCE_TIMEOUT_MS`, 4 min): si no llega ninguna salida se corta, sin
+  depender de que el texto matchee el patrón de "progreso operativo" — si no, un proceso
+  muerto por fuera deja la UI en "Analizando…" hasta el timeout general.
 - **Electron Linux**: `app.disableHardwareAcceleration()` evita un crash de GPU (SIGTRAP).
   No correr onnxruntime/embeddings en el proceso main (era la causa del crash del índice removido).
 
@@ -159,11 +273,11 @@ capas técnicas. No volver a organizar el código por carpetas raíz como `pipel
     `x`) salvo índices triviales de loop. Constantes de módulo en `UPPER_SNAKE`
     (`PROMPT_VERSION`, `STATUS_OPTIONS`, `GOOGLE_DOC_REGEX`).
   - **Casing**: componentes y tipos en `PascalCase`; funciones/variables en `camelCase`.
-    Nombre de archivo = lo que exporta (componente → `BugTable.tsx`; módulo de lógica →
-    `excelReader.ts`, `bugStatusKey.ts`).
+    Nombre de archivo = lo que exporta (componente → `BugsScreen.tsx`; módulo de lógica →
+    `excelReader.ts`, `bugPresentation.ts`).
   - **Sin abreviaturas crípticas** — preferí el nombre completo. Los términos ya consolidados
     del dominio (`bug`, `QA`, `LLM`, `doc`, `raw`) sí se usan tal cual.
-- **No hardcodear colores** — usar `col` / `alpha` / clases `om-*` / `var(--c-*)`.
+- **No hardcodear colores** — usar `col` / `alpha` / clases `bl-*` / `var(--c-*)`.
 - **Exportar** funciones/componentes internos solo cuando haga falta testearlos o storyarlos.
 - **Dependencias**: preguntar antes de agregar una nueva.
 - **Tests obligatorios para lógica nueva**: toda función / lógica pura no trivial que se
@@ -174,10 +288,16 @@ capas técnicas. No volver a organizar el código por carpetas raíz como `pipel
 ## Tests
 
 Vitest + React Testing Library (jsdom). Cubre **lógica pura** (excelReader, `buildManualBug`,
-mapper Supabase, parseo del LLM, caché, identidad por contenido, dedup del enricher) + las interacciones de
-`BugTable` (estados + pestañas activos/históricos + teclado + borrado) y `ManualBugForm`. La **integración** (LLM
-real, IPC de Electron, doc readers con red/auth, auth/realtime de Supabase) **no** se testea
-por unit — se verifica corriendo. CI corre `lint → typecheck → test → build` en cada push.
+mapper Supabase, parseo del LLM, caché, identidad por contenido, dedup del enricher,
+`bugPresentation`, `bugActivity` (hilos, actividad, vencimiento), `avatarTone`,
+`slugifyProjectName`, `normalizeBugsViewMode`) + las interacciones de
+`BugsScreen` (estados + pestañas activos/históricos + filtros + selección del bug),
+`BugDetail` (borrado, agente externo), `BugList` (selección, filtros, anuncios),
+`BugPropertiesRail` (responsables, fecha límite, vencimiento, actividad), `BugComments`
+(hilos, voto, composer), `MenuButton` (Esc, click afuera, foco), `AppRail`/`AppTopbar`
+(labels accesibles, migas, menú de cuenta) y `ManualBugForm`. La **integración** (LLM real, IPC de Electron, doc readers con red/auth,
+auth/realtime de Supabase, y **los RPC de Supabase contra la base real**) **no** se testea por
+unit — se verifica corriendo. CI corre `lint → typecheck → test → build` en cada push.
 
 ## Git
 

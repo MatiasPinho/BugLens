@@ -1,9 +1,14 @@
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { AnalyzedBug } from '../../../shared/contracts/bugTypes'
-import { buildExternalAgentPrompt, runExternalAgent, stripAnsi } from './externalAgent'
+import {
+  buildExternalAgentPrompt,
+  resolveSilenceTimeoutMs,
+  runExternalAgent,
+  stripAnsi,
+} from './externalAgent'
 
 function shellQuotePath(value: string): string {
   if (process.platform === 'win32') return `"${value.replace(/"/g, '\\"')}"`
@@ -65,13 +70,47 @@ function makeBug(): AnalyzedBug {
   }
 }
 
+const EN_WINDOWS = process.platform === 'win32'
+
+/**
+ * Comandos equivalentes en `cmd.exe` y en un shell POSIX. `runExternalAgent`
+ * elige el intérprete por plataforma (`resolveShell`), así que los comandos de
+ * prueba tienen que hablar el idioma del que le toque: `printf` no existe en
+ * cmd, y un `.cmd` no se ejecuta desde sh.
+ */
+const cmd = {
+  /** Escribe líneas en stdout. */
+  emitir(lineas: string[]): string {
+    if (EN_WINDOWS) return lineas.map((l) => `echo ${l}`).join(' & ')
+    return `printf ${JSON.stringify(`${lineas.join('\n')}\n`)}`
+  },
+  /** Escribe en stderr y termina con código 1. */
+  fallarCon(texto: string): string {
+    if (EN_WINDOWS) return `echo ${texto} 1>&2 & exit /b 1`
+    return `printf ${JSON.stringify(texto)} >&2; exit 1`
+  },
+  /** Espera aproximadamente esos segundos sin emitir nada. */
+  dormir(segundos: number): string {
+    return EN_WINDOWS ? `ping -n ${segundos + 1} 127.0.0.1 > nul` : `sleep ${segundos}`
+  },
+  /** Encadena comandos en secuencia. */
+  luego(...partes: string[]): string {
+    return partes.join(EN_WINDOWS ? ' & ' : '; ')
+  },
+}
+
 describe('externalAgent', () => {
   it('arma un prompt con el bug original, la reescritura y documentos', () => {
     const prompt = buildExternalAgentPrompt(makeBug())
 
     expect(prompt).toContain('Título: Login roto')
     expect(prompt).toContain('Qué pasa: al enviar credenciales queda cargando')
-    expect(prompt).toContain('Información faltante: usuario de prueba')
+    // Rótulo distinto al de la sección de salida: si se llaman igual, el agente
+    // devuelve esta entrada como si fuera su propia conclusión.
+    expect(prompt).toContain(
+      'Datos que BugLens marcó como faltantes en el reporte de QA: usuario de prueba',
+    )
+    expect(prompt).toContain('Alcance revisado:')
     expect(prompt).toContain('captura con error 500')
     expect(prompt).toContain('No modifiques archivos')
     expect(prompt).toContain('No uses subagentes')
@@ -280,7 +319,10 @@ describe('externalAgent', () => {
     process.env['EXTERNAL_AGENT_STALLED_PROGRESS_TIMEOUT_MS'] = '50'
     try {
       const result = await runExternalAgent(
-        'printf "TODOS\\n[ ] Explorar frontend\\n[ ] Sintetizar evidencia"; sleep 5',
+        cmd.luego(
+          cmd.emitir(['TODOS', '[ ] Explorar frontend', '[ ] Sintetizar evidencia']),
+          cmd.dormir(5),
+        ),
         makeBug(),
         30_000,
       )
@@ -300,7 +342,9 @@ describe('externalAgent', () => {
 
   it('traduce errores de API key faltante del agente local', async () => {
     const result = await runExternalAgent(
-      'printf "\\033[91mError: Google Generative AI API key is missing. Pass it using the GOOGLE_GENERATIVE_AI_API_KEY environment variable.\\033[0m" >&2; exit 1',
+      cmd.fallarCon(
+        'Error: Google Generative AI API key is missing. Pass it using the GOOGLE_GENERATIVE_AI_API_KEY environment variable.',
+      ),
       makeBug(),
     )
 
@@ -312,7 +356,7 @@ describe('externalAgent', () => {
 
   it('explica cómo configurar comandos interactivos sin tty', async () => {
     const result = await runExternalAgent(
-      'printf "Error: stdin is not a terminal" >&2; exit 1',
+      cmd.fallarCon('Error: stdin is not a terminal'),
       makeBug(),
     )
 
@@ -326,5 +370,40 @@ describe('externalAgent', () => {
 
     expect(result.ok).toBe(false)
     expect(result.error).toMatch(/Configurá/)
+  })
+})
+
+describe('resolveSilenceTimeoutMs', () => {
+  const previo = process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS']
+  afterEach(() => {
+    if (previo === undefined) delete process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS']
+    else process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS'] = previo
+  })
+
+  it('usa el default cuando no hay env var', () => {
+    delete process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS']
+    expect(resolveSilenceTimeoutMs(20 * 60 * 1000)).toBe(4 * 60 * 1000)
+  })
+
+  it('nunca supera el timeout general: cortar después de que ya venció no sirve', () => {
+    delete process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS']
+    expect(resolveSilenceTimeoutMs(30_000)).toBe(30_000)
+  })
+
+  it('respeta la env var', () => {
+    process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS'] = '15000'
+    expect(resolveSilenceTimeoutMs(20 * 60 * 1000)).toBe(15_000)
+  })
+
+  it('la env var tampoco puede pasarse del timeout general', () => {
+    process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS'] = '999999'
+    expect(resolveSilenceTimeoutMs(60_000)).toBe(60_000)
+  })
+
+  it('ignora valores inválidos y cae al default', () => {
+    process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS'] = 'ni idea'
+    expect(resolveSilenceTimeoutMs(20 * 60 * 1000)).toBe(4 * 60 * 1000)
+    process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS'] = '-5'
+    expect(resolveSilenceTimeoutMs(20 * 60 * 1000)).toBe(4 * 60 * 1000)
   })
 })

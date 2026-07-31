@@ -21,9 +21,9 @@ export const DangerConfirm: Story = {
         </button>
         <ConfirmActionModal
           open={open}
-          title="borrar bug"
+          title="Borrar bug"
           description='Se ocultará "informacion laboral" del proyecto compartido.'
-          confirmLabel="borrar bug"
+          confirmLabel="Borrar bug"
           onClose={() => setOpen(false)}
           onConfirm={() => setOpen(false)}
         />
@@ -42,7 +42,7 @@ export const ProjectForm: Story = {
         </button>
         <ActionModal
           open={open}
-          title="nuevo proyecto"
+          title="Nuevo proyecto"
           description="Creá un espacio separado para bugs, estados y análisis."
           onClose={() => setOpen(false)}
         >

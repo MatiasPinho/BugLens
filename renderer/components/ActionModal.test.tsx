@@ -9,16 +9,16 @@ describe('ConfirmActionModal', () => {
     render(
       <ConfirmActionModal
         open
-        title="borrar bug"
+        title="Borrar bug"
         description="Se ocultará del proyecto compartido."
-        confirmLabel="borrar bug"
+        confirmLabel="Borrar bug"
         onClose={vi.fn()}
         onConfirm={onConfirm}
       />,
     )
 
-    const dialog = screen.getByRole('dialog', { name: 'borrar bug' })
-    await userEvent.click(within(dialog).getByRole('button', { name: 'borrar bug' }))
+    const dialog = screen.getByRole('dialog', { name: 'Borrar bug' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Borrar bug' }))
 
     expect(onConfirm).toHaveBeenCalledTimes(1)
   })
@@ -28,15 +28,15 @@ describe('ConfirmActionModal', () => {
     render(
       <ConfirmActionModal
         open
-        title="restablecer configuración"
-        confirmLabel="restablecer"
+        title="Restablecer configuración"
+        confirmLabel="Restablecer"
         onClose={onClose}
         onConfirm={vi.fn()}
       />,
     )
 
-    const dialog = screen.getByRole('dialog', { name: 'restablecer configuración' })
-    await userEvent.click(within(dialog).getByRole('button', { name: 'cancelar' }))
+    const dialog = screen.getByRole('dialog', { name: 'Restablecer configuración' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
 
     expect(onClose).toHaveBeenCalledTimes(1)
   })
@@ -46,8 +46,8 @@ describe('ConfirmActionModal', () => {
     render(
       <ConfirmActionModal
         open
-        title="borrar bug"
-        confirmLabel="borrar bug"
+        title="Borrar bug"
+        confirmLabel="Borrar bug"
         onClose={onClose}
         onConfirm={vi.fn()}
       />,
@@ -63,8 +63,8 @@ describe('ConfirmActionModal', () => {
     render(
       <ConfirmActionModal
         open
-        title="borrar bug"
-        confirmLabel="borrar bug"
+        title="Borrar bug"
+        confirmLabel="Borrar bug"
         onClose={onClose}
         onConfirm={vi.fn()}
       />,

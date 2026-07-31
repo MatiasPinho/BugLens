@@ -6,9 +6,13 @@ import {
   createRemoteBugImport,
   deleteRemoteBug,
   loadRemoteAnalyzedBugs,
+  loadRemoteProjectMembers,
   mapRemoteBugRow,
   saveRemoteAnalysisResult,
+  setRemoteBugAssignees,
+  setRemoteBugDueDate,
   setRemoteBugStatus,
+  setRemoteCommentVote,
 } from './teamBugs'
 import * as teamClient from './teamClient'
 
@@ -84,52 +88,151 @@ describe('teamBugs', () => {
     })
   })
 
-  it('agrega un comentario remoto al bug resuelto por content_key', async () => {
+  it('agrega un comentario por RPC, recortado y con el padre del hilo', async () => {
     mockTeamStatus()
     const raw = { title: 'Login roto', description: 'No entra al sistema.' }
-    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: 'bug-1' }, error: null })
-    const bugsQuery = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      is: vi.fn().mockReturnThis(),
-      maybeSingle,
-    }
-    const single = vi.fn().mockResolvedValue({
+    const rpc = vi.fn().mockResolvedValue({
       data: {
-        id: 'comment-1',
+        id: 'comment-2',
+        parentId: 'comment-1',
         body: '10 de marzo: se reabre.',
-        created_at: '2026-03-10T12:00:00.000Z',
-        updated_at: '2026-03-10T12:00:00.000Z',
+        createdAt: '2026-03-10T12:00:00.000Z',
+        authorEmail: 'qa@example.com',
+        upvotes: 0,
+        downvotes: 0,
+        myVote: 0,
       },
       error: null,
     })
-    const commentsQuery = {
-      insert: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single,
-    }
-    const from = vi
-      .fn()
-      .mockImplementation((table: string) => (table === 'bugs' ? bugsQuery : commentsQuery))
 
     const comment = await addRemoteBugComment(
-      { from } as never,
+      { rpc } as never,
       config(),
       raw,
       '  10 de marzo: se reabre.  ',
+      'comment-1',
     )
 
     expect(comment).toMatchObject({
-      id: 'comment-1',
+      id: 'comment-2',
+      parentId: 'comment-1',
       body: '10 de marzo: se reabre.',
       authorEmail: 'qa@example.com',
+      upvotes: 0,
+      myVote: 0,
     })
-    expect(bugsQuery.eq).toHaveBeenCalledWith('content_key', bugRecordKey(raw))
-    expect(commentsQuery.insert).toHaveBeenCalledWith({
-      bug_id: 'bug-1',
-      project_id: 'project-1',
-      body: '10 de marzo: se reabre.',
-      created_by: 'user-1',
+    // El servidor valida que el padre sea del mismo bug: por eso va por RPC.
+    expect(rpc).toHaveBeenCalledWith('add_bug_comment', {
+      target_project_id: 'project-1',
+      target_content_key: bugRecordKey(raw),
+      comment_body: '10 de marzo: se reabre.',
+      parent_comment_id: 'comment-1',
+    })
+  })
+
+  it('manda null como padre cuando el comentario es raíz', async () => {
+    mockTeamStatus()
+    const rpc = vi.fn().mockResolvedValue({
+      data: { id: 'c1', body: 'nota', createdAt: '2026-03-10T12:00:00.000Z' },
+      error: null,
+    })
+
+    await addRemoteBugComment({ rpc } as never, config(), { title: 't', description: 'd' }, 'nota')
+
+    expect(rpc.mock.calls[0][1]).toMatchObject({ parent_comment_id: null })
+  })
+
+  it('rechaza un comentario vacío sin llamar al servidor', async () => {
+    mockTeamStatus()
+    const rpc = vi.fn()
+
+    await expect(
+      addRemoteBugComment({ rpc } as never, config(), { title: 't', description: 'd' }, '   '),
+    ).rejects.toThrow(/vacío/)
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('reemplaza el conjunto completo de responsables', async () => {
+    mockTeamStatus()
+    const raw = { title: 'Login roto', description: 'No entra.' }
+    const rpc = vi.fn().mockResolvedValue({ data: 'bug-1', error: null })
+
+    await setRemoteBugAssignees({ rpc } as never, config(), raw, ['user-1', 'user-2'])
+
+    expect(rpc).toHaveBeenCalledWith('set_bug_assignees', {
+      target_project_id: 'project-1',
+      target_content_key: bugRecordKey(raw),
+      next_user_ids: ['user-1', 'user-2'],
+    })
+  })
+
+  it('deja sin responsables mandando una lista vacía', async () => {
+    mockTeamStatus()
+    const rpc = vi.fn().mockResolvedValue({ data: 'bug-1', error: null })
+
+    await setRemoteBugAssignees({ rpc } as never, config(), { title: 't', description: 'd' }, [])
+
+    expect(rpc.mock.calls[0][1]).toMatchObject({ next_user_ids: [] })
+  })
+
+  it('limpia la fecha límite mandando null', async () => {
+    mockTeamStatus()
+    const rpc = vi.fn().mockResolvedValue({ data: 'bug-1', error: null })
+
+    await setRemoteBugDueDate({ rpc } as never, config(), { title: 't', description: 'd' }, null)
+
+    expect(rpc.mock.calls[0][1]).toMatchObject({ next_due: null })
+  })
+
+  it('devuelve los totales de voto que calculó el servidor', async () => {
+    mockTeamStatus()
+    const rpc = vi.fn().mockResolvedValue({
+      data: { commentId: 'c1', upvotes: 3, downvotes: 1, myVote: 1 },
+      error: null,
+    })
+
+    const totals = await setRemoteCommentVote({ rpc } as never, config(), 'c1', 1)
+
+    expect(totals).toEqual({ commentId: 'c1', upvotes: 3, downvotes: 1, myVote: 1 })
+    expect(rpc).toHaveBeenCalledWith('set_comment_vote', {
+      target_comment_id: 'c1',
+      next_value: 1,
+    })
+  })
+
+  it('tolera que los agregados de voto lleguen como string', async () => {
+    mockTeamStatus()
+    // Un count grande de Postgres puede serializarse como string.
+    const rpc = vi.fn().mockResolvedValue({
+      data: { upvotes: '12', downvotes: '0', myVote: '-1' },
+      error: null,
+    })
+
+    const totals = await setRemoteCommentVote({ rpc } as never, config(), 'c1', -1)
+
+    expect(totals).toMatchObject({ upvotes: 12, downvotes: 0, myVote: -1 })
+  })
+
+  it('carga los miembros del proyecto', async () => {
+    mockTeamStatus()
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        { id: 'user-1', email: 'qa@example.com', displayName: 'QA', role: 'editor' },
+        { id: 'user-2', email: 'dev@example.com' },
+        { email: 'sin-id@example.com' },
+      ],
+      error: null,
+    })
+
+    const members = await loadRemoteProjectMembers({ rpc } as never, config())
+
+    // La fila sin id se descarta: sin identidad no se puede asignar ni pintar avatar.
+    expect(members).toHaveLength(2)
+    expect(members[0]).toEqual({
+      id: 'user-1',
+      email: 'qa@example.com',
+      displayName: 'QA',
+      role: 'editor',
     })
   })
 
@@ -402,5 +505,78 @@ describe('teamBugs', () => {
     expect(result.status).toBe('nuevo')
     expect(result.analysis.category).toBe('otro')
     expect(result.analysis.rewritten.expected).toBe('No informado')
+    // Lo que agrega el rediseño también tiene default seguro.
+    expect(result.assignees).toEqual([])
+    expect(result.activity).toEqual([])
+    expect(result.dueDate).toBeNull()
+    expect(result.reportedBy).toBeNull()
+  })
+
+  it('mapea responsables, fecha límite, autor y actividad', () => {
+    const result = mapRemoteBugRow(
+      {
+        rawBug: { title: 'Login roto' },
+        dueDate: '2026-06-12',
+        reportedBy: { id: 'user-1', email: 'qa@example.com', displayName: 'QA' },
+        assignees: [{ id: 'user-2', email: 'dev@example.com' }, { email: 'sin-id@example.com' }],
+        activity: [
+          {
+            id: 'evento-1',
+            type: 'status_changed',
+            fromStatus: 'nuevo',
+            toStatus: 'en_progreso',
+            createdAt: '2026-03-10T12:00:00.000Z',
+            actorEmail: 'qa@example.com',
+          },
+          { id: 'evento-2', type: 'inventado_por_una_migracion_futura', createdAt: '2026-03-11' },
+        ],
+      },
+      0,
+    )
+
+    expect(result.dueDate).toBe('2026-06-12')
+    expect(result.reportedBy?.displayName).toBe('QA')
+    // Sin id no hay identidad: se descarta.
+    expect(result.assignees).toHaveLength(1)
+    expect(result.assignees?.[0].id).toBe('user-2')
+    // Un tipo de evento desconocido se descarta en vez de romper el listado.
+    expect(result.activity).toHaveLength(1)
+    expect(result.activity?.[0].type).toBe('status_changed')
+  })
+
+  it('mapea comentarios con hilo y voto', () => {
+    const result = mapRemoteBugRow(
+      {
+        rawBug: { title: 'Login roto' },
+        comments: [
+          {
+            id: 'c1',
+            body: 'raíz',
+            createdAt: '2026-03-10T12:00:00.000Z',
+            upvotes: 5,
+            downvotes: 1,
+            myVote: 1,
+          },
+          {
+            id: 'c2',
+            parentId: 'c1',
+            body: 'respuesta',
+            createdAt: '2026-03-10T13:00:00.000Z',
+          },
+          { id: 'sin-cuerpo', createdAt: '2026-03-10T14:00:00.000Z' },
+        ],
+      },
+      0,
+    )
+
+    expect(result.comments).toHaveLength(2)
+    expect(result.comments?.[0]).toMatchObject({
+      id: 'c1',
+      parentId: null,
+      upvotes: 5,
+      downvotes: 1,
+      myVote: 1,
+    })
+    expect(result.comments?.[1]).toMatchObject({ id: 'c2', parentId: 'c1', upvotes: 0, myVote: 0 })
   })
 })

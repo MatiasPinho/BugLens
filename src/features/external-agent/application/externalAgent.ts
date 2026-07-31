@@ -11,6 +11,13 @@ import type {
 
 const DEFAULT_TIMEOUT_MS = 20 * 60 * 1000
 const DEFAULT_STALLED_PROGRESS_TIMEOUT_MS = 90 * 1000
+/**
+ * Corte por silencio total. El detector de "progreso operativo" solo se arma si
+ * la salida matchea su patrón; si el agente muere en silencio o escupe algo que
+ * no encaja, no había nada que cortara y la UI quedaba en "Analizando…" hasta el
+ * timeout general. Esto vigila el silencio a secas.
+ */
+const DEFAULT_SILENCE_TIMEOUT_MS = 4 * 60 * 1000
 const PROCESS_TERMINATION_GRACE_MS = 2 * 1000
 const MAX_BUFFER_BYTES = 1024 * 1024 * 8
 const TERMINAL_PATHS = [
@@ -146,7 +153,16 @@ function externalAgentErrorMessage(
   output: string,
   timeoutMs: number,
   stalledProgressMs?: number,
+  silenceMs?: number,
 ): string {
+  if (silenceMs) {
+    return [
+      `El agente externo no emitió ninguna salida durante ${Math.round(silenceMs / 1000)}s y BugLens lo cortó.`,
+      'Puede que el proceso haya muerto por fuera, que esté esperando una confirmación que nunca llega,',
+      'o que el comando configurado no exista en este entorno.',
+    ].join('\n')
+  }
+
   if (stalledProgressMs) {
     return [
       `El agente externo quedó en progreso interno sin entregar un informe durante ${Math.round(stalledProgressMs / 1000)}s.`,
@@ -187,6 +203,27 @@ function externalAgentErrorMessage(
   return error.message
 }
 
+/**
+ * Shell con el que se lanza el agente.
+ *
+ * Se resuelve por PLATAFORMA y no por `SHELL`: esa variable la define el shell
+ * desde el que se arrancó el proceso, así que la app corría los comandos con
+ * `cmd.exe` al abrirse normal y con bash al arrancarla desde Git Bash. Mismo
+ * comando, dos intérpretes, según algo que el usuario no ve — y con la suite de
+ * tests imposible de pasar entera, porque unos casos necesitan `.cmd` y otros
+ * `printf`.
+ */
+export function resolveShell(): string | undefined {
+  if (process.platform === 'win32') return process.env['ComSpec'] || 'cmd.exe'
+  return process.env['SHELL'] || '/bin/sh'
+}
+
+export function resolveSilenceTimeoutMs(timeoutMs: number): number {
+  const configured = Number(process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS'])
+  if (Number.isFinite(configured) && configured > 0) return Math.min(configured, timeoutMs)
+  return Math.min(DEFAULT_SILENCE_TIMEOUT_MS, timeoutMs)
+}
+
 function resolveStalledProgressTimeoutMs(timeoutMs: number): number {
   const configured = Number(process.env['EXTERNAL_AGENT_STALLED_PROGRESS_TIMEOUT_MS'])
   if (Number.isFinite(configured) && configured > 0) return configured
@@ -213,8 +250,33 @@ function isOperationalProgressOnly(output: string): boolean {
   return hasTodoList || hasPermissionPrompt
 }
 
+/**
+ * Mata el ÁRBOL del proceso, no solo al hijo directo.
+ *
+ * El agente se lanza a través de un shell (`cmd.exe` en Windows, `sh` en el
+ * resto), así que el hijo directo es el shell y el agente es su nieto. Matar solo
+ * al hijo deja al nieto huérfano consumiendo memoria para siempre: en Windows se
+ * llegaron a acumular ocho procesos de ~500 MB, algunos cuatro veces más viejos
+ * que el timeout configurado.
+ *
+ * En POSIX el grupo de procesos (`-pid`, con `detached: true`) resuelve esto. En
+ * Windows no existen los grupos de procesos y `SIGTERM` no es una señal real
+ * — Node lo traduce a `TerminateProcess` sobre el hijo directo — así que hace
+ * falta `taskkill /T`, que sí recorre el árbol.
+ */
 function terminateExternalProcess(child: cp.ChildProcess, detached: boolean): void {
-  if (detached && child.pid) {
+  if (!child.pid) return
+
+  if (process.platform === 'win32') {
+    // `/T` mata también a los descendientes; `/F` no espera un cierre ordenado,
+    // que en un agente a mitad de análisis no va a llegar.
+    cp.execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], () => {
+      /* si ya había terminado, taskkill devuelve error y no hay nada que hacer */
+    })
+    return
+  }
+
+  if (detached) {
     const processGroupId = -child.pid
     try {
       process.kill(processGroupId, 'SIGTERM')
@@ -320,6 +382,7 @@ export function buildExternalAgentPrompt(
     '- No expongas secretos, tokens, variables sensibles ni datos personales innecesarios.',
     '- No devuelvas JSON salvo que el comando o el usuario lo pida explícitamente.',
     '- No te limites a narrar acciones realizadas: cerrá con una conclusión accionable.',
+    '- Declará SIEMPRE el alcance de tu búsqueda en "Alcance revisado". Si afirmás que algo es el único caso, esa afirmación vale solo dentro de ese alcance: decilo con esas palabras en vez de dar a entender que revisaste todo el proyecto.',
     repositoryContext,
     '',
     'Bug original',
@@ -344,9 +407,13 @@ export function buildExternalAgentPrompt(
       ? `Pasos reescritos:\n${rewritten.steps.map((step, index) => `${index + 1}. ${step}`).join('\n')}`
       : 'Pasos reescritos: No informado',
     `Ambiente reescrito: ${rewritten.environment}`,
+    // Rótulo distinto al de la sección "## Información faltante" del contrato:
+    // esto es lo que BugLens detectó en el reporte de QA, no la conclusión del
+    // agente. Con el mismo nombre, el agente devolvía la entrada como si fuera
+    // su propio hallazgo.
     analysis.missingInformation.length > 0
-      ? `Información faltante: ${analysis.missingInformation.join('; ')}`
-      : 'Información faltante: ninguna',
+      ? `Datos que BugLens marcó como faltantes en el reporte de QA: ${analysis.missingInformation.join('; ')}`
+      : 'Datos que BugLens marcó como faltantes en el reporte de QA: ninguno',
     '',
     docs ? `Documentos adjuntos\n${docs}` : 'Documentos adjuntos: ninguno',
     '',
@@ -387,6 +454,7 @@ export function buildExternalAgentPrompt(
     '## Estado probable del bug',
     'Estado probable: resuelto | parcialmente_resuelto | no_resuelto | no_determinable',
     'Coincide con el bug reportado: sí | parcial | no',
+    'Alcance revisado: <qué archivos, pantallas o módulos miraste, y qué quedó sin mirar>',
     'Motivo: <evidencia breve basada solo en los pasos reportados. Usá no_resuelto solo si al menos un paso reportado no tiene validación/bloqueo o hay evidencia directa de que sigue fallando. Usá no_determinable si solo faltan pruebas de ejecución.>',
     '',
     '## Próximos pasos',
@@ -456,6 +524,7 @@ export function runExternalAgent(
     let settled = false
     let timedOut = false
     let stalledProgress = false
+    let silenced = false
     let progressOnlyStartedAt: number | null = null
     let bufferExceeded = false
     let lastOutputAt = startedAt
@@ -468,13 +537,21 @@ export function runExternalAgent(
         ...prepared.env,
         PATH: [process.env['PATH'] ?? '', ...TERMINAL_PATHS].filter(Boolean).join(path.delimiter),
       },
-      shell: process.env['SHELL'] || process.env['ComSpec'],
+      shell: resolveShell(),
       detached,
       windowsHide: true,
     })
 
     const stalledProgressTimeoutMs = resolveStalledProgressTimeoutMs(timeoutMs)
+    const silenceTimeoutMs = resolveSilenceTimeoutMs(timeoutMs)
     const stalledProgressInterval = setInterval(() => {
+      // Silencio total: no depende de que la salida matchee ningún patrón, así
+      // que cubre también el caso de un proceso que murió por fuera.
+      if (Date.now() - lastOutputAt >= silenceTimeoutMs) {
+        silenced = true
+        terminateExternalProcess(child, detached)
+        return
+      }
       if (!progressOnlyStartedAt) return
       if (Date.now() - progressOnlyStartedAt < stalledProgressTimeoutMs) return
       stalledProgress = true
@@ -566,6 +643,7 @@ export function runExternalAgent(
               output,
               timeoutMs,
               stalledProgress ? stalledProgressTimeoutMs : undefined,
+              silenced ? silenceTimeoutMs : undefined,
             )
         finish({
           ok: false,
