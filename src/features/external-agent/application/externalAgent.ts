@@ -676,3 +676,20 @@ export function runExternalAgent(
     }
   })
 }
+
+/**
+ * Recorrido de producto del análisis profundo. Electron y las evaluaciones lo
+ * comparten para devolver exactamente el mismo ExternalAgentResult, incluido
+ * el timestamp que se persiste y se muestra en la app.
+ */
+export async function analyzeBugWithExternalAgent(
+  command: string,
+  bug: AnalyzedBug,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  onProgress?: (progress: ExternalAgentProgress) => void,
+  repositories?: ExternalAgentRepository[] | string,
+  now: () => Date = () => new Date(),
+): Promise<ExternalAgentResult> {
+  const result = await runExternalAgent(command, bug, timeoutMs, onProgress, repositories)
+  return { ...result, createdAt: now().toISOString() }
+}

@@ -1,0 +1,418 @@
+[
+  {
+    "id": "closed-bug-still-active",
+    "title": "Un bug cerrado sigue apareciendo como activo",
+    "input": {
+      "title": "Bug cerrado aparece en activos",
+      "description": "Después de cambiar un bug a cerrado, sigue listado en la pestaña Activos.",
+      "stepsToReproduce": "Abrir Bugs; elegir un bug nuevo; cambiar el estado a cerrado; volver a la pestaña Activos.",
+      "expectedResult": "El bug debe salir de Activos y aparecer en Históricos.",
+      "actualResult": "El bug permanece en Activos.",
+      "environment": "Windows 11, aplicación de escritorio"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["frontend"],
+        "problemCount": 1,
+        "requiredText": ["cerrado", "Activos", "Históricos"],
+        "missingInformation": { "max": 2 }
+      },
+      "deep": { "requiredText": ["bugPresentation"] }
+    }
+  },
+  {
+    "id": "due-date-shifts-day",
+    "title": "La fecha límite se desplaza un día",
+    "input": {
+      "title": "Fecha límite muestra el día anterior",
+      "description": "QA selecciona 15/08/2026 pero al volver a abrir el proyecto se muestra 14/08/2026.",
+      "stepsToReproduce": "Asignar fecha límite 15/08/2026; cerrar la app; abrir nuevamente el proyecto.",
+      "expectedResult": "Debe seguir mostrando 15/08/2026.",
+      "actualResult": "Muestra 14/08/2026.",
+      "environment": "UTC-3"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["frontend", "backend", "database"],
+        "problemCount": 1,
+        "requiredText": ["15/08/2026", "14/08/2026", "UTC-3"],
+        "missingInformation": { "max": 2 }
+      },
+      "deep": { "requiredText": ["due_date"] }
+    }
+  },
+  {
+    "id": "nested-comments-disappear",
+    "title": "Las respuestas de comentarios desaparecen",
+    "input": {
+      "title": "No se ven respuestas del hilo al reabrir",
+      "description": "Una respuesta enviada dentro de un comentario se ve en el momento, pero después de reabrir el proyecto solo aparece el comentario raíz.",
+      "stepsToReproduce": "Responder un comentario; cerrar el proyecto; abrirlo de nuevo; revisar el hilo.",
+      "expectedResult": "El comentario raíz y todas sus respuestas deben restaurarse.",
+      "actualResult": "Solo se restaura el comentario raíz.",
+      "environment": "Proyecto compartido con Supabase"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["backend", "database", "frontend"],
+        "problemCount": 1,
+        "requiredText": ["respuesta", "comentario raíz"],
+        "missingInformation": { "max": 3 }
+      },
+      "deep": { "requiredText": ["parentId"] }
+    }
+  },
+  {
+    "id": "reimport-overwrites-status",
+    "title": "Reimportar pisa el estado del bug",
+    "input": {
+      "title": "Reimportación devuelve bugs a nuevo",
+      "description": "Un bug que estaba en progreso vuelve a estado nuevo cuando se importa otra vez el mismo Excel.",
+      "stepsToReproduce": "Importar Excel; pasar un bug a en progreso; importar nuevamente el mismo archivo.",
+      "expectedResult": "Debe conservarse el estado en progreso existente.",
+      "actualResult": "El estado vuelve a nuevo.",
+      "environment": "Proyecto Supabase"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["database", "backend", "data"],
+        "problemCount": 1,
+        "requiredText": ["en progreso", "nuevo", "reimport"],
+        "missingInformation": { "max": 2 }
+      },
+      "deep": { "requiredText": ["save_analysis_result"] }
+    }
+  },
+  {
+    "id": "missing-screen-invents-title",
+    "title": "Una pantalla no informada se reemplaza por el título",
+    "input": {
+      "title": "Error al guardar preferencias",
+      "description": "Al guardar las preferencias aparece un mensaje de error. El reporte no incluye URL ni nombre de pantalla.",
+      "stepsToReproduce": "Cambiar una preferencia; presionar Guardar.",
+      "expectedResult": "Guardar los cambios y mostrar la pantalla como no informada en BugLens.",
+      "actualResult": "BugLens usa el título del bug como si fuera la pantalla afectada."
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["frontend", "data"],
+        "problemCount": 1,
+        "requiredText": ["pantalla", "no informada"],
+        "missingInformation": { "min": 0, "max": 3 }
+      },
+      "deep": { "requiredText": ["screenPathOf"] }
+    }
+  },
+  {
+    "id": "manual-bug-replaces-list",
+    "title": "La carga manual reemplaza la lista existente",
+    "input": {
+      "title": "Cargar bug manual borra los importados de la vista",
+      "description": "Había 12 bugs importados. Después de cargar uno manual, la lista muestra únicamente el nuevo.",
+      "stepsToReproduce": "Importar un Excel con 12 bugs; cargar un bug manual; regresar a Bugs.",
+      "expectedResult": "Deben mostrarse los 13 bugs.",
+      "actualResult": "Solo se muestra el bug manual.",
+      "environment": "Aplicación de escritorio"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["frontend", "data"],
+        "problemCount": 1,
+        "requiredText": ["12", "13", "manual"],
+        "missingInformation": { "max": 2 }
+      }
+    }
+  },
+  {
+    "id": "delete-clears-analysis-cache",
+    "title": "Borrar un bug elimina también su caché",
+    "input": {
+      "title": "El bug borrado se vuelve a analizar desde cero",
+      "description": "Después de borrar un bug y volver a importar el mismo contenido, Ollama repite el análisis aunque la caché no fue restablecida.",
+      "stepsToReproduce": "Importar; esperar análisis; borrar el bug; importar el mismo reporte.",
+      "expectedResult": "El borrado debe ser lógico y la caché por contenido debe conservarse.",
+      "actualResult": "Se ejecuta nuevamente el modelo.",
+      "environment": "Ollama local"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["backend", "data"],
+        "problemCount": 1,
+        "requiredText": ["caché", "contenido"],
+        "missingInformation": { "max": 2 }
+      },
+      "deep": { "requiredText": ["deleted_at", "analysisCache"] }
+    }
+  },
+  {
+    "id": "duplicate-status-controls",
+    "title": "Hay dos controles distintos para cambiar el estado",
+    "input": {
+      "title": "Estado inconsistente entre detalle y propiedades",
+      "description": "La columna central permite elegir solucionado pero el panel de propiedades sigue mostrando en progreso.",
+      "stepsToReproduce": "Abrir un bug; cambiar estado desde el detalle; mirar el panel derecho.",
+      "expectedResult": "Debe existir un único control de estado en propiedades y el detalle debe mostrar un badge.",
+      "actualResult": "Hay dos controles que muestran valores distintos.",
+      "environment": "Renderer"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["frontend"],
+        "problemCount": 1,
+        "requiredText": ["estado", "panel"],
+        "missingInformation": { "max": 2 }
+      },
+      "deep": { "requiredText": ["BugPropertiesRail", "BugDetail"] }
+    }
+  },
+  {
+    "id": "wrong-active-project",
+    "title": "Se cargan bugs del proyecto equivocado",
+    "input": {
+      "title": "Al reiniciar abre otro proyecto",
+      "description": "Seleccioné Proyecto Ventas, cerré la aplicación y al abrirla quedaron visibles los bugs del proyecto default.",
+      "stepsToReproduce": "Seleccionar Proyecto Ventas; cerrar; volver a abrir.",
+      "expectedResult": "Debe restaurarse Proyecto Ventas como proyecto activo.",
+      "actualResult": "Se carga el proyecto default.",
+      "environment": "Usuario con tres proyectos"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["backend", "data", "frontend"],
+        "problemCount": 1,
+        "requiredText": ["Proyecto Ventas", "default"],
+        "missingInformation": { "max": 3 }
+      },
+      "deep": { "requiredText": ["supabaseActiveProjectId"] }
+    }
+  },
+  {
+    "id": "onboarding-reopens",
+    "title": "El onboarding vuelve a abrirse",
+    "input": {
+      "title": "Wizard aparece en cada inicio",
+      "description": "Completé el asistente inicial y configuré Ollama. Al reiniciar vuelve a mostrarse desde el primer paso.",
+      "stepsToReproduce": "Completar onboarding; cerrar la app; abrirla.",
+      "expectedResult": "Debe abrir la aplicación normalmente y conservar la configuración.",
+      "actualResult": "Vuelve a mostrarse el onboarding.",
+      "environment": "Primera instalación en Windows"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["config", "data", "frontend"],
+        "problemCount": 1,
+        "requiredText": ["onboarding", "reiniciar"],
+        "missingInformation": { "max": 2 }
+      },
+      "deep": { "requiredText": ["onboarded"] }
+    }
+  },
+  {
+    "id": "cpu-mode-uses-gpu-concurrency",
+    "title": "El modo CPU usa demasiado paralelismo",
+    "input": {
+      "title": "CPU queda al 100% y todos los análisis vencen",
+      "description": "Con performanceMode cpu, BugLens lanza tres análisis simultáneos y cada uno termina por timeout.",
+      "stepsToReproduce": "Elegir modo CPU; importar diez bugs; observar el progreso.",
+      "expectedResult": "En CPU debe procesar un bug a la vez y usar el timeout extendido.",
+      "actualResult": "Procesa tres en paralelo y usa 90 segundos.",
+      "environment": "Equipo sin GPU"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["config", "backend"],
+        "problemCount": 1,
+        "requiredText": ["CPU", "tres", "90 segundos"],
+        "missingInformation": { "max": 2 }
+      },
+      "deep": { "requiredText": ["resolveConcurrency", "resolveOllamaTimeoutMs"] }
+    }
+  },
+  {
+    "id": "prompt-change-keeps-cache",
+    "title": "Un prompt nuevo devuelve resultados viejos",
+    "input": {
+      "title": "Cambió el prompt pero la salida sigue igual",
+      "description": "Se modificaron las reglas de reescritura. Al analizar otra vez el mismo reporte, la respuesta sale desde caché con el formato anterior.",
+      "stepsToReproduce": "Analizar un bug; cambiar el prompt; compilar; analizar el mismo contenido.",
+      "expectedResult": "El cambio de prompt debe invalidar la caché anterior.",
+      "actualResult": "Se reutiliza la respuesta vieja.",
+      "environment": "Desarrollo local"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["backend", "config"],
+        "problemCount": 1,
+        "requiredText": ["prompt", "caché"],
+        "missingInformation": { "max": 2 }
+      },
+      "deep": { "requiredText": ["PROMPT_VERSION"] }
+    }
+  },
+  {
+    "id": "json-fence-breaks-analysis",
+    "title": "Una respuesta JSON con fences falla",
+    "input": {
+      "title": "El modelo respondió con bloque json y el bug quedó con error",
+      "description": "Ollama devolvió el objeto entre ```json y ``` con una frase antes. BugLens mostró Error durante el análisis.",
+      "stepsToReproduce": "Usar una respuesta con texto previo y fenced JSON; ejecutar el parser.",
+      "expectedResult": "Debe extraer y parsear el objeto JSON.",
+      "actualResult": "El parser rechaza toda la respuesta.",
+      "environment": "qwen2.5:7b"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["backend", "data"],
+        "problemCount": 1,
+        "requiredText": ["JSON", "parser"],
+        "missingInformation": { "max": 2 }
+      },
+      "deep": { "requiredText": ["parseAnalysis", "extractJSON"] }
+    }
+  },
+  {
+    "id": "steps-counted-as-problems",
+    "title": "Los pasos se cuentan como bugs diferentes",
+    "input": {
+      "title": "No se puede guardar el perfil",
+      "description": "Es un solo error: el botón Guardar no persiste los cambios.",
+      "stepsToReproduce": "1. Abrir Perfil. 2. Cambiar el nombre a Matías. 3. Presionar Guardar. 4. Recargar.",
+      "expectedResult": "El nombre Matías debe mantenerse después de recargar.",
+      "actualResult": "Vuelve a mostrarse el nombre anterior.",
+      "environment": "QA"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["frontend", "backend", "data"],
+        "problemCount": 1,
+        "requiredText": ["Matías", "Guardar"],
+        "missingInformation": { "max": 3 }
+      }
+    }
+  },
+  {
+    "id": "external-agent-orphan-process",
+    "title": "El agente externo deja procesos huérfanos",
+    "input": {
+      "title": "Cancelar análisis no detiene OpenCode",
+      "description": "Después de que BugLens corta el análisis profundo por timeout, el proceso de OpenCode sigue usando aproximadamente 500 MB.",
+      "stepsToReproduce": "Iniciar análisis profundo; esperar el timeout; revisar procesos del sistema.",
+      "expectedResult": "Debe terminarse todo el árbol de procesos.",
+      "actualResult": "El proceso nieto continúa ejecutándose.",
+      "environment": "Windows 11"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["backend"],
+        "problemCount": 1,
+        "requiredText": ["OpenCode", "500 MB", "árbol de procesos"],
+        "missingInformation": { "max": 2 }
+      },
+      "deep": { "requiredText": ["taskkill", "/T"] }
+    }
+  },
+  {
+    "id": "external-agent-silent-forever",
+    "title": "El análisis profundo queda indefinidamente en progreso",
+    "input": {
+      "title": "Analizando no termina cuando el agente queda silencioso",
+      "description": "El proceso deja de emitir salida, pero la interfaz continúa en Analizando hasta el timeout general de 20 minutos.",
+      "stepsToReproduce": "Ejecutar un comando que emite una línea y queda bloqueado; esperar sin nueva salida.",
+      "expectedResult": "Debe cortarse después del límite de silencio y explicar el motivo.",
+      "actualResult": "Permanece en progreso durante 20 minutos.",
+      "environment": "Agente externo"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["backend", "frontend"],
+        "problemCount": 1,
+        "requiredText": ["silencio", "20 minutos"],
+        "missingInformation": { "max": 2 }
+      },
+      "deep": { "requiredText": ["EXTERNAL_AGENT_SILENCE_TIMEOUT_MS"] }
+    }
+  },
+  {
+    "id": "external-agent-false-exhaustiveness",
+    "title": "El agente afirma exhaustividad sin revisar todo",
+    "input": {
+      "title": "Informe dice que es el único caso",
+      "description": "El análisis profundo revisó dos componentes mencionados en el reporte y concluyó que era la única validación faltante del proyecto.",
+      "stepsToReproduce": "Ejecutar análisis profundo sobre un reporte con dos archivos de ejemplo; leer la conclusión.",
+      "expectedResult": "Debe declarar el alcance revisado y limitar cualquier afirmación a ese alcance.",
+      "actualResult": "Afirma haber descartado casos fuera de los archivos inspeccionados.",
+      "environment": "Repositorio grande"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["backend"],
+        "problemCount": 1,
+        "requiredText": ["alcance", "archivos"],
+        "missingInformation": { "max": 3 }
+      },
+      "deep": { "requiredText": ["Alcance revisado"] }
+    }
+  },
+  {
+    "id": "production-badges-without-color",
+    "title": "Los badges pierden color en producción",
+    "input": {
+      "title": "Severidad y estado quedan grises después del build",
+      "description": "En desarrollo los badges tienen color. En la versión empaquetada todas las severidades y estados aparecen sin sus colores semánticos.",
+      "stepsToReproduce": "Ejecutar build; abrir la aplicación empaquetada; observar los badges.",
+      "expectedResult": "Los colores deben coincidir con desarrollo.",
+      "actualResult": "Las clases de color no están en el CSS final.",
+      "environment": "Build de producción"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["frontend", "config"],
+        "problemCount": 1,
+        "requiredText": ["CSS", "producción", "badges"],
+        "missingInformation": { "max": 2 }
+      },
+      "deep": { "requiredText": ["STATUS_BADGE_CLASS", "check:css"] }
+    }
+  },
+  {
+    "id": "duplicate-google-doc-download",
+    "title": "El mismo documento se descarga por cada bug",
+    "input": {
+      "title": "Importar 20 bugs abre 20 veces el mismo Google Doc",
+      "description": "Todas las filas referencian la misma evidencia. Durante el enriquecimiento se descarga el documento una vez por fila y el lote tarda demasiado.",
+      "stepsToReproduce": "Crear 20 reportes con el mismo enlace de Google Docs; importar; observar las lecturas.",
+      "expectedResult": "El documento debe descargarse una vez por corrida y reutilizarse.",
+      "actualResult": "Se realizan 20 descargas.",
+      "environment": "Lector de documentos con sesión de navegador"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["backend"],
+        "problemCount": 1,
+        "requiredText": ["20", "Google Doc", "una vez"],
+        "missingInformation": { "max": 2 }
+      },
+      "deep": { "requiredText": ["docCache"] }
+    }
+  },
+  {
+    "id": "two-independent-problems",
+    "title": "Dos defectos independientes se mezclan como uno",
+    "input": {
+      "title": "Configuración no guarda y el selector se corta",
+      "description": "Al guardar configuración aparece error 500. Además, en una ventana angosta el selector de modelo queda fuera de pantalla.",
+      "stepsToReproduce": "Abrir Configuración; cambiar el modelo; guardar; reducir la ventana a 900px.",
+      "expectedResult": "La configuración debe guardarse y el selector debe permanecer visible.",
+      "actualResult": "Guardar devuelve error 500 y el selector se corta.",
+      "environment": "Windows 11, ancho 900px"
+    },
+    "expectations": {
+      "normal": {
+        "categories": ["frontend", "backend", "config"],
+        "problemCount": 2,
+        "requiredText": ["error 500", "900px", "selector"],
+        "missingInformation": { "max": 3 }
+      }
+    }
+  }
+]

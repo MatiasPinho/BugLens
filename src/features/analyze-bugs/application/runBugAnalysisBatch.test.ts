@@ -121,4 +121,32 @@ describe('runBugAnalysisBatch', () => {
     expect(result.results[0].analysis.summary).toBe('Error durante el analisis')
     expect(savedErrors).toEqual(['LLM caido'])
   })
+
+  it('permite omitir la cache para evaluaciones reales del modelo', async () => {
+    const analyzeBug = vi.fn(async () => ({
+      analysis: makeAnalysis(),
+      fromCache: false,
+    }))
+
+    await runBugAnalysisBatch(
+      {
+        bugs: [makeBug('1')],
+        enricher: {
+          enrich: async (bug) => ({ raw: bug, googleDocs: [] }),
+        },
+        llmConfig,
+        performanceMode: 'gpu',
+        saveResult: async () => undefined,
+        onBugResult: vi.fn(),
+        onProgress: vi.fn(),
+        onLog: vi.fn(),
+      },
+      {
+        resolveConcurrency: () => 1,
+        analyzeBug,
+      },
+    )
+
+    expect(analyzeBug).toHaveBeenCalledWith(expect.any(Object), llmConfig, undefined)
+  })
 })

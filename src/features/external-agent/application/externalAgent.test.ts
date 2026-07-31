@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AnalyzedBug } from '../../../shared/contracts/bugTypes'
 import {
+  analyzeBugWithExternalAgent,
   buildExternalAgentPrompt,
   resolveSilenceTimeoutMs,
   runExternalAgent,
@@ -370,6 +371,19 @@ describe('externalAgent', () => {
 
     expect(result.ok).toBe(false)
     expect(result.error).toMatch(/Configurá/)
+  })
+
+  it('comparte con Electron y las evaluaciones el resultado final con timestamp', async () => {
+    const result = await analyzeBugWithExternalAgent(
+      '   ',
+      makeBug(),
+      undefined,
+      undefined,
+      undefined,
+      () => new Date('2026-07-31T12:00:00.000Z'),
+    )
+
+    expect(result.createdAt).toBe('2026-07-31T12:00:00.000Z')
   })
 })
 

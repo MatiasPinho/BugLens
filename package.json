@@ -18,6 +18,8 @@
     "format": "biome format --write .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "build:evals": "tsc -p tsconfig.evals.json",
+    "eval:agents": "npm run build:evals && node .eval-dist/scripts/evals/runAgentEvaluations.js",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },

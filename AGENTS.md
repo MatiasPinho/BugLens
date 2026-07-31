@@ -22,6 +22,8 @@ reescribe el reporte en texto claro y estructurado, y lleva un **estado** por bu
 - `npm run typecheck` — `tsc --noEmit`
 - `npm run check:css` — clases de `@layer components` que Tailwind purgó (correr tras `build`)
 - `npm run build` — renderer (vite) + main (tsc)
+- `npm run eval:agents -- --suite 5 --agents both` — evals reales, sin mocks ni Supabase;
+  reutiliza los recorridos de producción y guarda el reporte en `eval-results/`.
 - `npm run storybook` · `npm run build-storybook` — taller / documentación de componentes (UI)
 
 ## Flujo / arquitectura
@@ -52,6 +54,9 @@ capas técnicas. No volver a organizar el código por carpetas raíz como `pipel
   configuración LLM.
 - `src/features/external-agent/` — comando externo/OpenCode por bug. Mantenerlo claramente
   secundario: BugLens no analiza código fuente por sí mismo.
+- `src/features/evaluate-agents/` — scoring y reportes del banco de evaluaciones. El runner
+  vive en `scripts/evals/`, los casos en `evals/` y llama siempre a los servicios reales de
+  análisis; no duplica prompts, parsers ni contratos de salida.
 - `src/shared/` — contratos compartidos, canales IPC, helpers puros transversales y UI
   realmente genérica.
 - `src/platform/` — adaptadores técnicos: filesystem, Ollama, Supabase client y otros
