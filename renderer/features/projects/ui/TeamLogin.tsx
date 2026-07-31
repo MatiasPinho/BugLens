@@ -22,7 +22,7 @@ export default function TeamLogin({ status, loading, onLogin }: Props) {
   const configured = status?.configured ?? true
 
   return (
-    <div className="team-login flex h-screen items-center justify-center p-10">
+    <div className="team-login window-drag-surface flex h-screen items-center justify-center p-10">
       <div className="team-login-shell">
         <div className="team-login-panel">
           <div className="team-login-identity">
