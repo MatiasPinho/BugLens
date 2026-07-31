@@ -418,10 +418,27 @@ function ExternalAgentPanel({
           <CloudAgentReport>{agentOutput}</CloudAgentReport>
         ) : null}
 
-        {!ok && result?.output && result.error && (
+        {/* La salida cruda es lo único que explica POR QUÉ falló el agente, así
+            que se muestra siempre que falle — antes hacía falta que además
+            existiera `error`, y se escondía justo cuando más servía. */}
+        {!running && !ok && result && !accessIssue && (
           <div>
-            <div className="kicker mb-2">salida técnica</div>
-            <CloudAgentReport>{result.output}</CloudAgentReport>
+            <div className="kicker mb-2">Salida del agente</div>
+            {result.output ? (
+              <CloudAgentReport>{result.output}</CloudAgentReport>
+            ) : (
+              <p className="text-sm" style={{ color: col.fgMuted }}>
+                El agente terminó sin escribir nada en su salida. BugLens solo puede mostrar lo
+                que el comando escribe en stdout o stderr: si el agente registra sus errores en
+                un log propio, la causa está ahí.
+              </p>
+            )}
+            {result.command && (
+              <div className="mt-2 grid gap-1">
+                <span className="kicker-xs">Comando ejecutado</span>
+                <code className="code-inline">{result.command}</code>
+              </div>
+            )}
           </div>
         )}
       </div>

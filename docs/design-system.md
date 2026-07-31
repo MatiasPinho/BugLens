@@ -173,6 +173,16 @@ acciones: "Borrar" compitiendo con "Analizar con agente" le daba el mismo peso a
 se usa una vez cada tanto y a la acción de trabajo. Lo mismo con la identidad: mail,
 proveedor, equipo y cierre de sesión viven detrás del avatar del topbar.
 
+### Cuando el agente externo falla
+
+El panel muestra siempre tres cosas: el motivo que da BugLens, **la salida cruda del agente**
+y el comando ejecutado. La salida es lo único que explica *por qué* falló, así que no se
+condiciona a que además exista un mensaje de error.
+
+Si el agente terminó sin escribir nada, se dice explícitamente y se aclara que BugLens solo
+puede mostrar lo que el comando manda a stdout o stderr — un agente que registra sus errores
+en un log propio deja la causa fuera del alcance de la app.
+
 ### Bloques largos
 
 `CollapsibleBlock` recorta el contenido y ofrece "Ver más". Se usa en el reporte reescrito

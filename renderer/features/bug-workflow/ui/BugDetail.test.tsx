@@ -474,7 +474,7 @@ describe('BugDetail — agente externo', () => {
     expect(screen.getByText('error')).toBeInTheDocument()
   })
 
-  it('muestra la salida técnica cuando el agente externo falla', async () => {
+  it('muestra la salida del agente cuando falla', async () => {
     const onAnalyzeExternalAgent = vi.fn().mockResolvedValue({
       ok: false,
       output: 'stack interno del agente',
@@ -497,8 +497,81 @@ describe('BugDetail — agente externo', () => {
         'El agente externo está instalado, pero su provider no está configurado.',
       ),
     ).toBeInTheDocument()
-    expect(screen.getByText('salida técnica')).toBeInTheDocument()
+    expect(screen.getByText('Salida del agente')).toBeInTheDocument()
     expect(screen.getByText('stack interno del agente')).toBeInTheDocument()
-    expect(screen.getByText('salida técnica').closest('details')).toBeNull()
+    expect(screen.getByText('Salida del agente').closest('details')).toBeNull()
+  })
+})
+
+describe('BugDetail — el agente falla', () => {
+  async function correr(result: Partial<import('../../../../src/shared/contracts').ExternalAgentResult>) {
+    const onAnalyzeExternalAgent = vi.fn().mockResolvedValue({
+      ok: false,
+      output: '',
+      command: 'opencode run --model opencode/big-pickle',
+      durationMs: 4000,
+      ...result,
+    })
+    render(
+      <BugDetail
+        bug={makeBug({ id: 'a', title: 'X' })}
+        onAnalyzeExternalAgent={onAnalyzeExternalAgent}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Analizar con agente' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Iniciar análisis' }))
+  }
+
+  it('muestra el motivo que reporta BugLens', async () => {
+    await correr({ error: 'El agente externo no emitió ninguna salida durante 240s.' })
+
+    expect(await screen.findByText(/no emitió ninguna salida durante 240s/)).toBeInTheDocument()
+    expect(screen.getByText('error')).toBeInTheDocument()
+  })
+
+  it('muestra la salida cruda del agente, que es lo que explica el porqué', async () => {
+    await correr({
+      error: 'Command failed: exited with code 1',
+      output: 'ECONNREFUSED 127.9.9.9:443',
+    })
+
+    // Antes esto se escondía si faltaba alguno de los dos campos.
+    expect(await screen.findByText(/ECONNREFUSED 127\.9\.9\.9:443/)).toBeInTheDocument()
+  })
+
+  it('sin salida, explica dónde está la causa en vez de dejar el hueco', async () => {
+    await correr({ error: 'Command failed', output: '' })
+
+    expect(
+      await screen.findByText(/solo puede mostrar lo que el comando escribe en stdout o stderr/),
+    ).toBeInTheDocument()
+  })
+
+  it('muestra el comando ejecutado para poder reproducirlo a mano', async () => {
+    await correr({ error: 'Command failed', output: 'algo' })
+
+    expect(
+      await screen.findByText('opencode run --model opencode/big-pickle'),
+    ).toBeInTheDocument()
+  })
+
+  it('no muestra el bloque de error cuando el agente terminó bien', async () => {
+    const onAnalyzeExternalAgent = vi.fn().mockResolvedValue({
+      ok: true,
+      output: '## Resumen\nTodo bien',
+      command: 'codex exec',
+      durationMs: 1000,
+    })
+    render(
+      <BugDetail
+        bug={makeBug({ id: 'a', title: 'X' })}
+        onAnalyzeExternalAgent={onAnalyzeExternalAgent}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Analizar con agente' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Iniciar análisis' }))
+
+    expect(await screen.findByText('completado')).toBeInTheDocument()
+    expect(screen.queryByText('Salida del agente')).not.toBeInTheDocument()
   })
 })
