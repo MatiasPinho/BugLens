@@ -226,6 +226,12 @@ capas técnicas. No volver a organizar el código por carpetas raíz como `pipel
   auditoría general— pero el informe tiene que decir hasta dónde miró.
   Los rótulos de **entrada** no deben repetir el nombre de una sección de **salida**: con
   ambos llamados "Información faltante", el agente devolvía la entrada como conclusión propia.
+- **Shell del agente por plataforma**: `resolveShell()` usa `ComSpec` en Windows y `SHELL`
+  en POSIX. **No** leer `SHELL` en Windows: esa variable la define el shell desde el que se
+  arrancó el proceso, así que la app corría los comandos con `cmd.exe` al abrirse normal y
+  con bash al arrancarla desde Git Bash — mismo comando, dos intérpretes, según algo que el
+  usuario no ve. Los tests que lanzan procesos usan el helper `cmd` de
+  `externalAgent.test.ts` para hablar el idioma del intérprete que toque.
 - **Agente externo, procesos**: se lanza a través de un shell, así que el agente es
   **nieto** del proceso que BugLens conoce. Para matarlo hace falta bajar el árbol entero:
   en Windows `taskkill /T` (ni `child.kill()` ni los grupos de procesos con PID negativo

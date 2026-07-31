@@ -70,6 +70,35 @@ function makeBug(): AnalyzedBug {
   }
 }
 
+const EN_WINDOWS = process.platform === 'win32'
+
+/**
+ * Comandos equivalentes en `cmd.exe` y en un shell POSIX. `runExternalAgent`
+ * elige el intérprete por plataforma (`resolveShell`), así que los comandos de
+ * prueba tienen que hablar el idioma del que le toque: `printf` no existe en
+ * cmd, y un `.cmd` no se ejecuta desde sh.
+ */
+const cmd = {
+  /** Escribe líneas en stdout. */
+  emitir(lineas: string[]): string {
+    if (EN_WINDOWS) return lineas.map((l) => `echo ${l}`).join(' & ')
+    return `printf ${JSON.stringify(`${lineas.join('\n')}\n`)}`
+  },
+  /** Escribe en stderr y termina con código 1. */
+  fallarCon(texto: string): string {
+    if (EN_WINDOWS) return `echo ${texto} 1>&2 & exit /b 1`
+    return `printf ${JSON.stringify(texto)} >&2; exit 1`
+  },
+  /** Espera aproximadamente esos segundos sin emitir nada. */
+  dormir(segundos: number): string {
+    return EN_WINDOWS ? `ping -n ${segundos + 1} 127.0.0.1 > nul` : `sleep ${segundos}`
+  },
+  /** Encadena comandos en secuencia. */
+  luego(...partes: string[]): string {
+    return partes.join(EN_WINDOWS ? ' & ' : '; ')
+  },
+}
+
 describe('externalAgent', () => {
   it('arma un prompt con el bug original, la reescritura y documentos', () => {
     const prompt = buildExternalAgentPrompt(makeBug())
@@ -290,7 +319,10 @@ describe('externalAgent', () => {
     process.env['EXTERNAL_AGENT_STALLED_PROGRESS_TIMEOUT_MS'] = '50'
     try {
       const result = await runExternalAgent(
-        'printf "TODOS\\n[ ] Explorar frontend\\n[ ] Sintetizar evidencia"; sleep 5',
+        cmd.luego(
+          cmd.emitir(['TODOS', '[ ] Explorar frontend', '[ ] Sintetizar evidencia']),
+          cmd.dormir(5),
+        ),
         makeBug(),
         30_000,
       )
@@ -310,7 +342,9 @@ describe('externalAgent', () => {
 
   it('traduce errores de API key faltante del agente local', async () => {
     const result = await runExternalAgent(
-      'printf "\\033[91mError: Google Generative AI API key is missing. Pass it using the GOOGLE_GENERATIVE_AI_API_KEY environment variable.\\033[0m" >&2; exit 1',
+      cmd.fallarCon(
+        'Error: Google Generative AI API key is missing. Pass it using the GOOGLE_GENERATIVE_AI_API_KEY environment variable.',
+      ),
       makeBug(),
     )
 
@@ -322,7 +356,7 @@ describe('externalAgent', () => {
 
   it('explica cómo configurar comandos interactivos sin tty', async () => {
     const result = await runExternalAgent(
-      'printf "Error: stdin is not a terminal" >&2; exit 1',
+      cmd.fallarCon('Error: stdin is not a terminal'),
       makeBug(),
     )
 

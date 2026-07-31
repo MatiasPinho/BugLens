@@ -203,6 +203,21 @@ function externalAgentErrorMessage(
   return error.message
 }
 
+/**
+ * Shell con el que se lanza el agente.
+ *
+ * Se resuelve por PLATAFORMA y no por `SHELL`: esa variable la define el shell
+ * desde el que se arrancó el proceso, así que la app corría los comandos con
+ * `cmd.exe` al abrirse normal y con bash al arrancarla desde Git Bash. Mismo
+ * comando, dos intérpretes, según algo que el usuario no ve — y con la suite de
+ * tests imposible de pasar entera, porque unos casos necesitan `.cmd` y otros
+ * `printf`.
+ */
+export function resolveShell(): string | undefined {
+  if (process.platform === 'win32') return process.env['ComSpec'] || 'cmd.exe'
+  return process.env['SHELL'] || '/bin/sh'
+}
+
 export function resolveSilenceTimeoutMs(timeoutMs: number): number {
   const configured = Number(process.env['EXTERNAL_AGENT_SILENCE_TIMEOUT_MS'])
   if (Number.isFinite(configured) && configured > 0) return Math.min(configured, timeoutMs)
@@ -522,7 +537,7 @@ export function runExternalAgent(
         ...prepared.env,
         PATH: [process.env['PATH'] ?? '', ...TERMINAL_PATHS].filter(Boolean).join(path.delimiter),
       },
-      shell: process.env['SHELL'] || process.env['ComSpec'],
+      shell: resolveShell(),
       detached,
       windowsHide: true,
     })
