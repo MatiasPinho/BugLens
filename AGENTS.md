@@ -20,6 +20,7 @@ reescribe el reporte en texto claro y estructurado, y lleva un **estado** por bu
 - `npm run lint:fix` — Biome check con autofix (`--write`)
 - `npm test` · `npm run test:watch` — Vitest
 - `npm run typecheck` — `tsc --noEmit`
+- `npm run check:css` — clases de `@layer components` que Tailwind purgó (correr tras `build`)
 - `npm run build` — renderer (vite) + main (tsc)
 - `npm run storybook` · `npm run build-storybook` — taller / documentación de componentes (UI)
 
@@ -130,6 +131,9 @@ capas técnicas. No volver a organizar el código por carpetas raíz como `pipel
   Ya **no** existen los dos layouts (`cards`/`split`), la paginación, ni el detalle como
   pantalla dedicada: el bug elegido siempre está a la vista en la columna central. Si el
   filtro deja afuera al bug enfocado, se muestra el primero visible.
+- **Lo destructivo y la identidad van detrás de un menú** (`MenuButton`): "Borrar" no
+  compite con "Analizar con agente", y mail/proveedor/equipo/cierre de sesión viven detrás
+  del avatar del topbar en vez de ocupar un cuarto de la barra.
 - **Un control por cosa**: el estado se **cambia** solo en el rail de propiedades; en la
   columna central se **muestra** como badge. Dos controles para lo mismo en la misma
   pantalla se contradicen.
@@ -176,7 +180,8 @@ capas técnicas. No volver a organizar el código por carpetas raíz como `pipel
   y las reglas de `styles.css`. **No hardcodear hex/rgba** en componentes — usar `col`/`alpha`.
   **Color nuevo**: definir el valor en `:root`, y exponerlo en `theme.ts` y/o `tailwind.config.ts`
   solo donde se vaya a usar.
-  Los tokens están agrupados por rol: superficies (`canvas`/`surface`/`subtle`/`sunken`/`chip`),
+  Los tokens están agrupados por rol: superficies (`canvas`/`chrome`/`surface`/`subtle`/`sunken`/`chip`
+  — el **blanco es del contenido** y el gris `chrome` de la navegación),
   acento azul (`accent*`), texto de más fuerte a más tenue
   (`fg` → `fg-strong` → `fg-body` → `fg-muted` → `fg-dim` → `fg-faint` → `fg-disabled`),
   bordes (`border-strong` → `border` → `border-card` → `border-soft` → `border-faint`) y las
@@ -191,8 +196,10 @@ capas técnicas. No volver a organizar el código por carpetas raíz como `pipel
   build** — así se perdieron los colores de todos los badges de estado y severidad. Usar un
   mapa estático (`SEVERITY_BADGE_CLASS`/`STATUS_BADGE_CLASS` en `bugPresentation.ts`). Si la
   interpolación es realmente más clara, sumar la familia al `safelist` de `tailwind.config.ts`.
-  Al agregar una familia dinámica, verificar con
-  `grep -c "\.mi-clase" dist/renderer/assets/index-*.css` después de `npm run build`.
+  Ya pasó dos veces: los badges de estado/severidad y el `right: 0` del panel de menú.
+  **Verificar con `npm run build && npm run check:css`**, que compara las clases definidas
+  contra las que sobrevivieron al build. No lo detectan ni el typecheck ni el lint ni los
+  tests.
 - **Tamaños — origen único** (igual que el color): la escala vive en `styles.css :root`:
   tipografía `--text-3xs…--text-5xl` (10/11/12/13/14/15/16/18/20/22/24px), radios
   `--radius-xs|sm|md|lg|xl|2xl|3xl` (5/6/8/10/12/14/16px) más `--radius-pill`, altura de

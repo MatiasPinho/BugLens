@@ -54,11 +54,16 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 :root {
   /* ── Superficies ───────────────────────────────────────────────────────── */
-  --c-canvas: 246 247 251; /* fondo de la app, detrás de las tarjetas */
-  --c-surface: 255 255 255; /* tarjetas, sidebar, topbar */
-  --c-subtle: 251 251 253; /* inputs en reposo, footers, zonas punteadas */
-  --c-sunken: 241 242 247; /* item de nav activo, hover de fila */
-  --c-chip: 244 244 247; /* números de paso, avatares apagados */
+  /* Tres niveles de profundidad, no uno: el canvas es el fondo, el chrome es la
+     navegación y el blanco queda reservado para el contenido. Antes todo vivía
+     entre 241 y 255 y los paneles no se despegaban del fondo. */
+  --c-canvas: 234 236 242; /* fondo detrás de los paneles de contenido */
+  --c-chrome: 243 245 249; /* navegación: rail, topbar y columna de lista */
+  --c-surface: 255 255 255; /* contenido: el reporte y sus paneles */
+  --c-subtle: 249 250 252; /* bloques anidados dentro del blanco */
+  --c-sunken: 236 238 244; /* hover de fila */
+  --c-selected: 228 233 242; /* fila seleccionada: gris azulado, no tint de acento */
+  --c-chip: 240 241 245; /* números de paso, avatares apagados */
 
   /* ── Acento (azul) ─────────────────────────────────────────────────────── */
   --c-accent: 37 99 235;
@@ -72,20 +77,21 @@
   --c-fg: 16 24 40;
   --c-fg-strong: 52 64 84;
   --c-fg-body: 71 84 103;
-  --c-fg-muted: 102 112 133;
-  /* fg-dim es el gris MAS CLARO permitido para texto: 4.5:1 sobre `subtle`
-     (WCAG AA). Los tiers de abajo son solo para decoracion y estados disabled
-     — nunca para texto informativo. */
-  --c-fg-dim: 106 116 137;
-  --c-fg-faint: 182 188 201;
-  --c-fg-disabled: 203 208 220;
+  --c-fg-muted: 84 94 114;
+  /* fg-dim es el gris MÁS CLARO permitido para texto: mantiene 4.5:1 (WCAG AA)
+     sobre `chrome`, que es la superficie más oscura donde hay texto. Los tiers
+     de abajo son solo para decoración y estados disabled — nunca para texto
+     informativo. */
+  --c-fg-dim: 101 111 132;
+  --c-fg-faint: 150 158 176;
+  --c-fg-disabled: 172 179 195;
 
   /* ── Bordes (de más marcado a más tenue) ───────────────────────────────── */
-  --c-border-strong: 205 210 224; /* punteados, radios sin marcar */
-  --c-border: 228 231 236; /* controles: inputs, botones, selects */
-  --c-border-card: 233 234 240; /* tarjetas de contenido */
-  --c-border-soft: 236 238 244; /* divisores del chrome (sidebar, topbar) */
-  --c-border-faint: 242 243 247; /* divisores internos de tarjeta */
+  --c-border-strong: 198 203 215; /* punteados, radios sin marcar */
+  --c-border: 216 220 229; /* controles: inputs, botones, selects */
+  --c-border-card: 224 228 237; /* tarjetas de contenido */
+  --c-border-soft: 229 233 241; /* divisores del chrome (rail, topbar) */
+  --c-border-faint: 236 239 245; /* divisores internos de tarjeta */
 
   /* ── Neutro (severidad baja, estado cerrado, categorías) ───────────────── */
   --c-neutral-bg: 249 250 251;
@@ -163,6 +169,7 @@
   --text-3xl: 1.25rem; /* 20px — títulos de pantallas centradas */
   --text-4xl: 1.375rem; /* 22px — h2 de pantalla compacta y KPIs */
   --text-5xl: 1.5rem; /* 24px — h2 de pantalla principal */
+  --text-6xl: 1.75rem; /* 28px — título del bug abierto */
 
   /* ── Radios ────────────────────────────────────────────────────────────── */
   --radius-xs: 5px; /* kbd, micro-badges */
@@ -311,7 +318,7 @@
     gap: 0.75rem;
     padding: 0.875rem 0;
     border-right: 1px solid rgb(var(--c-border-soft));
-    background: rgb(var(--c-surface));
+    background: rgb(var(--c-chrome));
   }
 
   /* Marca de la app sobre el cuadrado de acento. La usan el rail, el login y el
@@ -444,7 +451,7 @@
     gap: 1rem;
     padding: 0.75rem 1.75rem;
     border-bottom: 1px solid rgb(var(--c-border-soft));
-    background: rgb(var(--c-surface));
+    background: rgb(var(--c-chrome));
   }
 
   .app-content {
@@ -508,46 +515,30 @@
     margin-left: auto;
   }
 
-  .app-topbar-team {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding-left: 0.5rem;
-    border-left: 1px solid rgb(var(--c-border-soft));
+  .app-topbar-avatar {
+    display: inline-flex;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    cursor: pointer;
   }
 
-  /* Normal y no kicker en mayúscula: al lado de los avatares, un micro-label
-     con letter-spacing compite con las iniciales en vez de acompañarlas. */
-  .app-topbar-team-label {
-    color: rgb(var(--c-fg-dim));
-    font-size: var(--text-2xs);
-    white-space: nowrap;
-  }
-
-  .app-topbar-user {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    gap: 0.5rem;
-    padding-left: 0.5rem;
-    border-left: 1px solid rgb(var(--c-border-soft));
-  }
-
-  .app-topbar-user-copy {
+  .menu-member-list {
     display: grid;
-    min-width: 0;
-    gap: 0.0625rem;
-    line-height: 1.2;
+    gap: 0.25rem;
+    margin: 0.25rem 0 0;
+    padding: 0;
+    list-style: none;
   }
 
-  .app-topbar-user-name {
-    overflow: hidden;
-    max-width: 12rem;
-    color: rgb(var(--c-fg-strong));
+  .menu-member {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.4375rem;
+    color: rgb(var(--c-fg-body));
     font-size: var(--text-xs);
-    font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   /* ═══ Cabeceras y ritmo de pantalla ═════════════════════════════════════ */
@@ -788,16 +779,6 @@
     background:
       radial-gradient(circle, rgb(var(--c-accent-soft)), rgb(var(--c-surface)) 68%);
     box-shadow: var(--shadow-panel);
-  }
-
-  /* ═══ Etiquetas de sección ══════════════════════════════════════════════ */
-  .section-label {
-    margin-bottom: 0.75rem;
-    color: rgb(var(--c-fg-dim));
-    font-size: var(--text-2xs);
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
   }
 
   /* Igual que .section-label pero sin margen: para headers en flex */
@@ -1136,10 +1117,6 @@
     color: rgb(var(--c-fg-dim));
   }
 
-  .search-box-sm {
-    height: var(--ctl-h-md);
-  }
-
   /* Selects con clase .input: caret propio en vez de la flecha nativa del SO */
   select.input {
     appearance: none;
@@ -1288,21 +1265,6 @@
     position: relative;
     z-index: 1;
     box-shadow: 0 0 0 0.25rem rgb(var(--c-surface));
-  }
-
-  /* Placeholder punteado de captura */
-  .image-placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px dashed rgb(var(--c-border-strong));
-    border-radius: var(--radius-md);
-    background-image: repeating-linear-gradient(
-      45deg,
-      rgb(var(--c-canvas)) 0 8px,
-      rgb(var(--c-surface)) 8px 16px
-    );
-    color: rgb(var(--c-fg-dim));
   }
 
   /* ═══ Badges ════════════════════════════════════════════════════════════ */
@@ -1627,12 +1589,12 @@
     display: grid;
     min-width: 0;
     flex: 1;
-    gap: 0.5rem;
+    gap: 0.75rem;
   }
 
   .bug-detail-title {
     color: rgb(var(--c-fg));
-    font-size: var(--text-5xl);
+    font-size: var(--text-6xl);
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.25;
@@ -1655,8 +1617,11 @@
     gap: 0.5rem;
   }
 
+  /* `margin-bottom`: los chips de contexto respiran aparte del título. Pegados,
+     el título perdía presencia contra una fila de badges de colores. */
   .bug-detail-meta {
     display: flex;
+    margin-bottom: 0.25rem;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
@@ -1780,86 +1745,10 @@
     color: rgb(var(--c-warn-solid));
   }
 
-  /* Línea de tiempo de actividad del rail */
-  .activity-item {
-    display: grid;
-    grid-template-columns: 0.4375rem minmax(0, 1fr);
-    gap: 0.625rem;
-    align-items: start;
-  }
-
-  .activity-dot {
-    width: 0.4375rem;
-    height: 0.4375rem;
-    margin-top: 0.3125rem;
-    border-radius: 999px;
-    background: rgb(var(--c-fg-disabled));
-  }
-
-  .activity-dot-accent {
-    background: rgb(var(--c-accent-bright));
-  }
-
-  .activity-dot-solved {
-    background: rgb(var(--c-solved-solid));
-  }
-
-  .activity-text {
-    color: rgb(var(--c-fg-strong));
-    font-size: var(--text-sm);
-    line-height: 1.45;
-  }
-
-  .activity-time {
-    color: rgb(var(--c-fg-dim));
-    font-size: var(--text-2xs);
-  }
-
-  /* ═══ Notas de seguimiento ══════════════════════════════════════════════ */
-  .bug-comments-list {
-    display: grid;
-    gap: 0.75rem;
-  }
-
   .bug-comment {
     display: grid;
     grid-template-columns: 1.875rem minmax(0, 1fr);
     gap: 0.75rem;
-  }
-
-  .bug-comment-bubble {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 0.25rem;
-    padding: 0.75rem;
-    border: 1px solid rgb(var(--c-border-faint));
-    border-radius: var(--radius-lg);
-    background: linear-gradient(145deg, rgb(var(--c-subtle)), rgb(var(--c-surface)));
-  }
-
-  .bug-comment-meta {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    color: rgb(var(--c-fg));
-    font-size: var(--text-sm);
-    font-weight: 600;
-  }
-
-  .bug-comment-time {
-    margin-left: auto;
-    color: rgb(var(--c-fg-dim));
-    font-size: var(--text-2xs);
-    font-weight: 400;
-  }
-
-  .bug-comment-body {
-    color: rgb(var(--c-fg-body));
-    font-size: var(--text-sm);
-    line-height: 1.6;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
   }
 
   /* ═══ Agente externo ════════════════════════════════════════════════════ */
@@ -2548,22 +2437,6 @@
     color: rgb(var(--c-accent) / 0.7);
   }
 
-  .project-count {
-    padding: 0.0625rem 0.375rem;
-    border: 1px solid rgb(var(--c-neutral-line));
-    border-radius: var(--radius-sm);
-    background: rgb(var(--c-neutral-bg));
-    color: rgb(var(--c-fg-muted));
-    font-size: var(--text-2xs);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .project-sync-line {
-    height: 1.25rem;
-    color: rgb(var(--c-fg-dim));
-    font-size: var(--text-2xs);
-  }
-
   /* ═══ Configuración ══════════════════════════════════════════════════════ */
   .settings-header {
     position: sticky;
@@ -2916,22 +2789,6 @@
     overflow-wrap: anywhere;
   }
 
-  .code-block {
-    overflow: hidden;
-    border: 1px solid rgb(var(--c-border-card));
-    border-radius: var(--radius-lg);
-    background: rgb(var(--c-neutral-bg));
-  }
-
-  .code-block-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.375rem 0.75rem;
-    border-bottom: 1px solid rgb(var(--c-border-faint));
-    background: rgb(var(--c-subtle));
-  }
-
   /* ═══ Overlay de carga ══════════════════════════════════════════════════ */
   .loading-overlay {
     background: rgb(var(--c-fg) / 0.35);
@@ -3007,13 +2864,6 @@
 
   .animate-fade-in {
     animation: fadeInUp 0.18s ease-out forwards;
-  }
-
-  /* Reveal escalonado: `both` mantiene el estado inicial durante el delay (sin
-     flash). El delay se pasa inline. El corte global de prefers-reduced-motion
-     lo neutraliza. Usado en la pantalla inicial. */
-  .reveal-up {
-    animation: fadeInUp 0.32s ease-out both;
   }
 
   /* Balanceo idle muy sutil para los motivos decorativos (bichos): que parezcan
@@ -3097,7 +2947,7 @@
     overflow-x: hidden;
     overflow-y: auto;
     border-right: 1px solid rgb(var(--c-border-soft));
-    background: rgb(var(--c-surface));
+    background: rgb(var(--c-chrome));
   }
 
   /* Reporte · propiedades. El centro toma lo que sobra: es lo que se lee. */
@@ -3130,8 +2980,8 @@
     min-width: 0;
     gap: 0.5rem;
     padding: 0.75rem;
-    border-bottom: 1px solid rgb(var(--c-border-faint));
-    background: rgb(var(--c-surface));
+    border-bottom: 1px solid rgb(var(--c-border-soft));
+    background: rgb(var(--c-chrome));
   }
 
   .bug-list-filters {
@@ -3198,9 +3048,23 @@
     background: rgb(var(--c-sunken));
   }
 
+  /* El azul del fondo competía con el propio contenido. Queda un gris azulado
+     muy suave y la barra izquierda pasa a ser el indicador principal. */
   .bug-list-item-active,
   .bug-list-item-active:hover {
-    background: rgb(var(--c-accent-soft));
+    position: relative;
+    background: rgb(var(--c-selected));
+  }
+
+  .bug-list-item-active::before {
+    position: absolute;
+    top: 0.375rem;
+    bottom: 0.375rem;
+    left: 0;
+    width: 0.1875rem;
+    content: "";
+    border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+    background: rgb(var(--c-accent));
   }
 
   .bug-list-item-title {
@@ -3215,13 +3079,14 @@
   }
 
   .bug-list-item-active .bug-list-item-title {
-    color: rgb(var(--c-accent));
+    color: rgb(var(--c-fg));
+    font-weight: 700;
   }
 
   /* Los bugs cerrados se atenúan, pero el badge de estado sigue diciéndolo con
      texto: la opacidad sola no comunica nada. */
   .bug-list-item-quiet .bug-list-item-title {
-    color: rgb(var(--c-fg-muted));
+    color: rgb(var(--c-fg-body));
     font-weight: 500;
   }
 
@@ -3233,7 +3098,7 @@
 
   .bug-list-item-meta {
     overflow: hidden;
-    color: rgb(var(--c-fg-dim));
+    color: rgb(var(--c-fg-muted));
     font-size: var(--text-2xs);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -3443,6 +3308,83 @@
   .bug-activity-time {
     color: rgb(var(--c-fg-dim));
     font-size: var(--text-3xs);
+  }
+
+  /* ═══ Menú desplegable ══════════════════════════════════════════════════ */
+  .menu-button {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .menu-panel {
+    position: absolute;
+    z-index: 40;
+    top: calc(100% + 0.375rem);
+    display: grid;
+    min-width: 12rem;
+    gap: 0.125rem;
+    padding: 0.3125rem;
+    border: 1px solid rgb(var(--c-border-card));
+    border-radius: var(--radius-lg);
+    background: rgb(var(--c-surface));
+    box-shadow: var(--shadow-pop);
+  }
+
+  .menu-panel-end {
+    right: 0;
+  }
+
+  .menu-panel-start {
+    left: 0;
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4375rem 0.5rem;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: rgb(var(--c-fg-body));
+    font-family: inherit;
+    font-size: var(--text-sm);
+    text-align: left;
+    cursor: pointer;
+    transition:
+      background 0.12s,
+      color 0.12s;
+  }
+
+  .menu-item:hover {
+    background: rgb(var(--c-sunken));
+    color: rgb(var(--c-fg));
+  }
+
+  .menu-item-danger {
+    color: rgb(var(--c-critical));
+  }
+
+  .menu-item-danger:hover {
+    background: rgb(var(--c-critical-bg));
+    color: rgb(var(--c-critical));
+  }
+
+  /* Bloque de datos dentro del menú (identidad, sesión): no es accionable. */
+  .menu-meta {
+    display: grid;
+    gap: 0.125rem;
+    padding: 0.4375rem 0.5rem 0.5rem;
+    border-bottom: 1px solid rgb(var(--c-border-faint));
+    margin-bottom: 0.125rem;
+  }
+
+  .menu-meta-name {
+    overflow: hidden;
+    color: rgb(var(--c-fg));
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-overflow: ellipsis;
   }
 
   /* ═══ Bloque plegable ═══════════════════════════════════════════════════ */
@@ -3659,19 +3601,6 @@
   }
 
   @media (max-width: 980px) {
-    /* El rail ya es de ancho fijo mínimo; lo que se comprime es el topbar: la
-       identidad queda solo como avatar. Se oculta a la vista pero NO al lector de
-       pantalla (`display: none` la sacaría también del árbol de accesibilidad). */
-    .app-topbar-user-copy {
-      position: absolute;
-      overflow: hidden;
-      width: 1px;
-      height: 1px;
-      clip: rect(0 0 0 0);
-      clip-path: inset(50%);
-      white-space: nowrap;
-    }
-
     .project-select {
       max-width: 10rem;
     }

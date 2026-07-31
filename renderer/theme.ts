@@ -10,12 +10,14 @@ const v = (name: string) => `rgb(var(--c-${name}))`
 export const col = {
   // ── Superficies ──────────────────────────────────────────────────────────
   canvas: v('canvas'),
+  chrome: v('chrome'),
   surface: v('surface'),
   subtle: v('subtle'),
   sunken: v('sunken'),
+  selected: v('selected'),
   chip: v('chip'),
 
-  // ── Acento (índigo) ──────────────────────────────────────────────────────
+  // ── Acento (azul) ────────────────────────────────────────────────────────
   accent: v('accent'),
   accentHover: v('accent-hover'),
   accentBright: v('accent-bright'),
@@ -113,6 +115,7 @@ export const sz = {
   text3xl: 'var(--text-3xl)',
   text4xl: 'var(--text-4xl)',
   text5xl: 'var(--text-5xl)',
+  text6xl: 'var(--text-6xl)',
   ctlXs: 'var(--ctl-h-xs)',
   ctlSm: 'var(--ctl-h-sm)',
   ctlMd: 'var(--ctl-h-md)',

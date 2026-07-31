@@ -67,7 +67,8 @@ describe('BugDetail — borrar bug', () => {
 
   it('borra el bug solo después de confirmar', async () => {
     const onDelete = renderWithDelete()
-    await userEvent.click(screen.getByRole('button', { name: /Borrar/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'más acciones del bug' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /Borrar bug/ }))
     expect(onDelete).not.toHaveBeenCalled() // hasta confirmar, no borra
     const dialog = screen.getByRole('dialog', { name: 'borrar bug' })
     await userEvent.click(within(dialog).getByRole('button', { name: 'borrar bug' }))
@@ -77,29 +78,32 @@ describe('BugDetail — borrar bug', () => {
 
   it('cancelar no borra y cierra el modal', async () => {
     const onDelete = renderWithDelete()
-    await userEvent.click(screen.getByRole('button', { name: /Borrar/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'más acciones del bug' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /Borrar bug/ }))
     const dialog = screen.getByRole('dialog', { name: 'borrar bug' })
     await userEvent.click(within(dialog).getByRole('button', { name: 'cancelar' }))
 
     expect(onDelete).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog', { name: 'borrar bug' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Borrar/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'más acciones del bug' })).toBeInTheDocument()
   })
 
   it('al pedir confirmación, el foco pasa al modal', async () => {
     renderWithDelete()
-    await userEvent.click(screen.getByRole('button', { name: /Borrar/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'más acciones del bug' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /Borrar bug/ }))
     expect(screen.getByRole('dialog', { name: 'borrar bug' })).toHaveFocus()
   })
 
   it('Escape cancela la confirmación y cierra el modal', async () => {
     const onDelete = renderWithDelete()
-    await userEvent.click(screen.getByRole('button', { name: /Borrar/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'más acciones del bug' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /Borrar bug/ }))
     await userEvent.keyboard('{Escape}')
 
     expect(onDelete).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog', { name: 'borrar bug' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Borrar/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'más acciones del bug' })).toBeInTheDocument()
   })
 })
 

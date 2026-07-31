@@ -67,6 +67,7 @@ export default {
         '3xl': ['var(--text-3xl)', { lineHeight: '1.75rem' }],
         '4xl': ['var(--text-4xl)', { lineHeight: '1.875rem' }],
         '5xl': ['var(--text-5xl)', { lineHeight: '2rem' }],
+        '6xl': ['var(--text-6xl)', { lineHeight: '2.25rem' }],
       },
       borderRadius: {
         DEFAULT: 'var(--radius-sm)',
@@ -87,6 +88,7 @@ export default {
       colors: {
         bl: {
           canvas: tw('canvas'),
+          chrome: tw('chrome'),
           surface: tw('surface'),
           subtle: tw('subtle'),
           sunken: tw('sunken'),

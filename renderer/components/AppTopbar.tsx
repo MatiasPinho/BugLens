@@ -13,6 +13,7 @@ import type { TeamMember } from '../../src/shared/contracts'
 import { col } from '../theme'
 import { avatarToneClass, initialsOf } from './avatarTone'
 import { IconChevronRight, IconLogout } from './icons'
+import MenuButton, { MenuItem } from './MenuButton'
 
 export interface TopbarUser {
   id?: string
@@ -34,9 +35,6 @@ interface Props {
   onSignOut?: () => void
 }
 
-/** Más allá de esto la fila no entra en el topbar y se resume con un contador. */
-const MAX_VISIBLE_MEMBERS = 4
-
 export default function AppTopbar({
   breadcrumb,
   projectSlot,
@@ -46,8 +44,6 @@ export default function AppTopbar({
   user,
   onSignOut,
 }: Props) {
-  const visibleMembers = members.slice(0, MAX_VISIBLE_MEMBERS)
-  const hiddenCount = members.length - visibleMembers.length
   return (
     <header className="app-topbar">
       {projectSlot}
@@ -77,63 +73,65 @@ export default function AppTopbar({
         {statusSlot}
         {actions}
 
-        {members.length > 0 && (
-          <div className="app-topbar-team">
-            <span className="app-topbar-team-label">Equipo</span>
-            <span
-              className="avatar-row"
-              // Los avatares son decorativos; la lista real de nombres va en el
-              // título para no obligar a pasar por cada uno.
-              title={members.map((member) => member.displayName ?? member.email).join(', ')}
-            >
-              {visibleMembers.map((member) => (
-                <span
-                  key={member.id}
-                  className={`avatar avatar-sm ${avatarToneClass(member.id)}`}
-                  aria-hidden="true"
-                >
-                  {initialsOf(member.displayName ?? member.email ?? '')}
-                </span>
-              ))}
-              {hiddenCount > 0 && (
-                <span className="avatar avatar-sm avatar-muted" aria-hidden="true">
-                  +{hiddenCount}
-                </span>
-              )}
-            </span>
-            <span className="sr-only">
-              {members.length} {members.length === 1 ? 'miembro' : 'miembros'} en el proyecto
-            </span>
-          </div>
-        )}
-
+        {/* Identidad y equipo detrás del avatar: en el topbar competían con las
+            acciones de trabajo y ocupaban un cuarto del ancho. */}
         {user && (
-          <div className="app-topbar-user">
-            <span
-              className={`avatar avatar-md ${avatarToneClass(user.id ?? user.email)}`}
-              aria-hidden="true"
-            >
-              {initialsOf(user.email ?? '')}
-            </span>
-            <span className="app-topbar-user-copy">
-              <span className="app-topbar-user-name">{user.email ?? 'sesión activa'}</span>
-              <span className="text-2xs" style={{ color: col.fgDim }}>
-                {user.provider ?? 'Google Auth'}
+          <MenuButton
+            label="cuenta y equipo"
+            triggerClassName="app-topbar-avatar"
+            trigger={
+              <span
+                className={`avatar avatar-md ${avatarToneClass(user.id ?? user.email)}`}
+                aria-hidden="true"
+              >
+                {initialsOf(user.email ?? '')}
               </span>
-            </span>
-          </div>
-        )}
-
-        {onSignOut && (
-          <button
-            type="button"
-            className="btn-icon"
-            onClick={onSignOut}
-            title="Cerrar sesión"
-            aria-label="Cerrar sesión"
+            }
           >
-            <IconLogout size={16} />
-          </button>
+            {(close) => (
+              <>
+                <div className="menu-meta">
+                  <span className="menu-meta-name">{user.email ?? 'sesión activa'}</span>
+                  <span className="text-2xs" style={{ color: col.fgDim }}>
+                    {user.provider ?? 'Google Auth'}
+                  </span>
+                </div>
+
+                {members.length > 0 && (
+                  <div className="menu-meta">
+                    <span className="kicker-xs">Equipo</span>
+                    <ul className="menu-member-list">
+                      {members.map((member) => (
+                        <li key={member.id} className="menu-member">
+                          <span
+                            className={`avatar avatar-sm ${avatarToneClass(member.id)}`}
+                            aria-hidden="true"
+                          >
+                            {initialsOf(member.displayName ?? member.email ?? '')}
+                          </span>
+                          <span className="truncate">
+                            {member.displayName ?? member.email}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {onSignOut && (
+                  <MenuItem
+                    onClick={() => {
+                      close()
+                      onSignOut()
+                    }}
+                  >
+                    <IconLogout size={14} />
+                    Cerrar sesión
+                  </MenuItem>
+                )}
+              </>
+            )}
+          </MenuButton>
         )}
       </div>
     </header>

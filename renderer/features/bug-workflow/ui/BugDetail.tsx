@@ -13,9 +13,10 @@ import type {
   ExternalAgentProgress,
   ExternalAgentResult,
 } from '../../../../src/shared/contracts'
-import { ActionModal } from '../../../components/ActionModal'
+import { ActionModal, ConfirmActionModal } from '../../../components/ActionModal'
 import CollapsibleBlock from '../../../components/CollapsibleBlock'
-import { IconChevronLeft } from '../../../components/icons'
+import MenuButton, { MenuItem } from '../../../components/MenuButton'
+import { IconChevronLeft, IconMore, IconTrash } from '../../../components/icons'
 import { col } from '../../../theme'
 import {
   AgentAccessIssueCard,
@@ -28,7 +29,6 @@ import {
 import {
   CategoryBadge,
   CopyButton,
-  DeleteControl,
   DocImageGallery,
   MissingInfoBadge,
   ProblemCountBadge,
@@ -84,6 +84,7 @@ export default function BugDetail({
   const [externalAgentLastOutputAt, setExternalAgentLastOutputAt] = useState<number | null>(null)
   const [externalAgentConfirmOpen, setExternalAgentConfirmOpen] = useState(false)
   const [resolvedSuggestionDismissed, setResolvedSuggestionDismissed] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const previousBugIdRef = React.useRef(raw.id)
   const externalAgentHistory = analysis.externalAgentHistory ?? []
 
@@ -206,9 +207,41 @@ export default function BugDetail({
           >
             {externalAgentRunning ? 'Analizando…' : 'Analizar con agente'}
           </button>
-          {onDelete && <DeleteControl onConfirm={onDelete} title={raw.title} />}
+          {/* Borrar sale de la fila principal: es destructivo y de uso raro, no
+              tiene por qué competir con la acción de trabajo. */}
+          {onDelete && (
+            <MenuButton trigger={<IconMore size={16} />} label="más acciones del bug">
+              {(close) => (
+                <MenuItem
+                  danger
+                  onClick={() => {
+                    close()
+                    setDeleteOpen(true)
+                  }}
+                >
+                  <IconTrash size={12} />
+                  Borrar bug
+                </MenuItem>
+              )}
+            </MenuButton>
+          )}
         </div>
       </header>
+
+      {onDelete && (
+        <ConfirmActionModal
+          open={deleteOpen}
+          title="borrar bug"
+          description={`Se ocultará "${raw.title}" del proyecto compartido.`}
+          confirmLabel="borrar bug"
+          busyLabel="borrando"
+          onClose={() => setDeleteOpen(false)}
+          onConfirm={() => {
+            setDeleteOpen(false)
+            onDelete()
+          }}
+        />
+      )}
 
       <ExternalAgentConfirmModal
         open={externalAgentConfirmOpen}

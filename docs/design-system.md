@@ -35,7 +35,7 @@ deben hardcodear colores: usan `col`, `alpha`, clases semánticas o `var(--c-*)`
 
 | Familia | Tokens principales | Uso |
 |---|---|---|
-| Superficies | `canvas`, `surface`, `subtle`, `sunken`, `chip` | App, tarjetas, inputs, selección y chips |
+| Superficies | `canvas`, `chrome`, `surface`, `subtle`, `sunken`, `chip` | Fondo, navegación, contenido, bloques anidados, hover y chips |
 | Acento | `accent`, `accent-hover`, `accent-bright`, `accent-pale`, `accent-soft`, `accent-line` | CTA, foco, progreso y selección |
 | Texto | `fg`, `fg-strong`, `fg-body`, `fg-muted`, `fg-dim` | Jerarquía de títulos, cuerpo y metadata |
 | Bordes | `border-strong`, `border`, `border-card`, `border-soft`, `border-faint` | Controles, tarjetas y divisores |
@@ -48,11 +48,18 @@ deben hardcodear colores: usan `col`, `alpha`, clases semánticas o `var(--c-*)`
 
 Valores de referencia:
 
-- Canvas `#f6f7fb`, superficie `#ffffff`, superficie hundida `#f1f2f7`.
+- Canvas `#eaecf2`, chrome `#f3f5f9`, superficie `#ffffff`, anidado `#f9fafc`.
 - Acento `#2563eb`, hover `#1d4ed8`, tint `#eff6ff`.
-- Texto principal `#101828`, cuerpo `#475467`, secundario `#667085`.
-- El token `fg-dim` es el gris más claro permitido para texto informativo. Los
-  tokens `fg-faint` y `fg-disabled` se reservan para decoración o estados inactivos.
+- Texto principal `#101828`, cuerpo `#475467`, secundario `#545e72`.
+
+**Tres niveles de profundidad, y el blanco es del contenido.** El canvas es el fondo; el
+chrome (gris) es la navegación — rail, topbar y columna de lista; el blanco queda reservado
+para el reporte y sus paneles. Así lo que se está leyendo es lo único blanco de la pantalla.
+Antes las cinco superficies vivían entre 241 y 255 y nada se despegaba de nada.
+
+`fg-dim` es el gris más claro permitido para texto: mantiene 4.5:1 (WCAG AA) sobre `chrome`,
+que es la superficie más oscura donde hay texto — no usarlo sobre `canvas`. `fg-faint` y
+`fg-disabled` quedan para decoración y estados inactivos, nunca para texto informativo.
 
 Los badges semánticos conservan estas asociaciones:
 
@@ -148,6 +155,19 @@ El shell de escritorio se compone de:
 
 `ProjectsScreen.tsx`, `ProjectSwitcher.tsx` y `NewProjectModal.tsx` extienden el
 mismo lenguaje para la gestión de proyectos.
+
+### Selección en listas
+
+La fila seleccionada usa un **gris azulado** (`--c-selected`) más una **barra de acento a la
+izquierda**, que es el indicador principal. Un fondo con tint de acento competía con el
+contenido de la propia fila y el título tenía que teñirse de azul para sobrevivir.
+
+### Acciones secundarias y destructivas
+
+Lo destructivo y lo de consulta ocasional van detrás de `MenuButton`, no en la fila de
+acciones: "Borrar" compitiendo con "Analizar con agente" le daba el mismo peso a algo que
+se usa una vez cada tanto y a la acción de trabajo. Lo mismo con la identidad: mail,
+proveedor, equipo y cierre de sesión viven detrás del avatar del topbar.
 
 ### Bloques largos
 
