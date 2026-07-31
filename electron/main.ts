@@ -1,6 +1,6 @@
 import * as path from 'node:path'
 import * as dotenv from 'dotenv'
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 
 // Load .env from project root (dev) or app resources (prod)
 const envPath = app.isPackaged
@@ -136,11 +136,52 @@ function makeSupabaseTeamClient() {
 
 let mainWindow: BrowserWindow | null = null
 
+interface RendererWindowChrome {
+  color: string
+  symbolColor: string
+  height: number
+}
+
 // En Linux, algunos drivers/Mesa hacen que el proceso GPU de Chromium sea
 // inusable ("GPU process isn't usable. Goodbye." → SIGTRAP). Para una UI simple
 // como ésta, el render por software es más que suficiente y evita el crash.
 if (process.platform === 'linux') {
   app.disableHardwareAcceleration()
+}
+
+async function showWindowWithRendererChrome(window: BrowserWindow): Promise<void> {
+  try {
+    if (process.platform !== 'darwin') {
+      // El renderer sigue siendo la única fuente de colores y tamaños. Esperamos
+      // a que cargue su CSS antes de pintar el overlay nativo de la ventana.
+      const chrome = (await window.webContents.executeJavaScript(`
+        (() => {
+          const styles = getComputedStyle(document.documentElement)
+          const colorFromChannels = (variable) => {
+            const channels = styles.getPropertyValue(variable).trim().replace(/\\s+/g, ', ')
+            return 'rgb(' + channels + ')'
+          }
+          const heightProbe = document.createElement('span')
+          heightProbe.style.cssText =
+            'position:absolute;visibility:hidden;height:var(--window-titlebar-h)'
+          document.body.appendChild(heightProbe)
+          const height = Math.round(heightProbe.getBoundingClientRect().height)
+          heightProbe.remove()
+          return {
+            color: colorFromChannels('--c-chrome'),
+            symbolColor: colorFromChannels('--c-fg-strong'),
+            height,
+          }
+        })()
+      `)) as RendererWindowChrome
+
+      window.setTitleBarOverlay(chrome)
+    }
+  } catch (error) {
+    console.warn('No se pudo sincronizar el chrome de la ventana:', error)
+  } finally {
+    if (!window.isDestroyed()) window.show()
+  }
 }
 
 function createWindow(): void {
@@ -149,12 +190,21 @@ function createWindow(): void {
     height: 800,
     minWidth: 900,
     minHeight: 600,
+    show: false,
+    autoHideMenuBar: true,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
-    title: 'Bug Analyzer',
+    title: 'BugLens',
+  })
+
+  const windowToShow = mainWindow
+  windowToShow.once('ready-to-show', () => {
+    void showWindowWithRendererChrome(windowToShow)
   })
 
   // app.isPackaged === false during dev (electron .), true in packaged builds
@@ -171,6 +221,8 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // El shell de BugLens reemplaza la barra "File / Edit / View" del sistema.
+  Menu.setApplicationMenu(null)
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

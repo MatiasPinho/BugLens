@@ -141,7 +141,9 @@ El shell de escritorio se compone de:
   Es navegación, no contenido, y por eso el topbar **no la cruza**.
 - **Topbar** con las migas de pan, el selector de proyecto, el estado del motor, las
   acciones de trabajo, el equipo y la identidad del usuario. Empieza a la derecha de la
-  lista. Todo el contexto global vive acá, no en la navegación.
+  lista. Todo el contexto global vive acá, no en la navegación. En Electron también hace
+  de barra de título: el área libre arrastra la ventana y reserva a la derecha los controles
+  nativos. No se muestra un segundo título gris ni el menú “File / Edit / View”.
 - **Área de contenido** sobre el canvas plano. No hay banda de encabezado de pantalla:
   el texto más grande es el título del bug que se está leyendo, en la columna central.
 

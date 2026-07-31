@@ -78,7 +78,7 @@ export default function Onboarding({ onDone }: Props) {
   const isLast = step === STEPS.length - 1
 
   return (
-    <div className="onboarding-page flex h-full items-center justify-center p-10">
+    <div className="onboarding-page window-drag-surface flex h-full items-center justify-center p-10">
       <div className="onboarding-shell grid w-full max-w-[38.75rem] gap-5">
         <div className="onboarding-intro flex flex-col items-center gap-2 text-center">
           <span className="app-brand-mark" style={{ width: '2.5rem', height: '2.5rem' }}>

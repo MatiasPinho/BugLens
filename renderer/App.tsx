@@ -609,10 +609,17 @@ function ElectronApp() {
   }, [route, results, focusedBugId, detailBugId, showHelp, handleSetStatus])
 
   // Primer arranque: mientras carga no parpadeamos nada; si falta onboarding, wizard.
-  if (onboarded === null) return <div className="h-screen" style={{ background: col.canvas }} />
+  if (onboarded === null) {
+    return (
+      <div
+        className="window-drag-surface relative h-screen"
+        style={{ background: col.canvas }}
+      />
+    )
+  }
   if (!onboarded) {
     return (
-      <div className="h-screen" style={{ background: col.canvas }}>
+      <div className="relative h-screen" style={{ background: col.canvas }}>
         <Onboarding
           onDone={() => {
             setOnboarded(true)
