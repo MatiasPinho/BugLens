@@ -616,7 +616,9 @@ function CloudAgentReferences({ items }: { items: AgentFileReference[] }) {
         <div key={`${item.file}-${item.line}-${index}`} className="cloud-agent-reference">
           <div className="cloud-agent-reference-main">
             <span className="cloud-agent-reference-file mono">{item.file}</span>
-            {item.line && <span className="cloud-agent-reference-line mono">línea {item.line}</span>}
+            {item.line && (
+              <span className="cloud-agent-reference-line mono">línea {item.line}</span>
+            )}
           </div>
           {item.relevance && <p className="cloud-agent-reference-note">{item.relevance}</p>}
         </div>

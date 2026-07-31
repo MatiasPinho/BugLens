@@ -443,12 +443,8 @@ export default function Settings({ addLog, onTeamStatusChange, onNewProject }: P
             <span className="page-eyebrow-dot" aria-hidden="true" />
             Preferencias del producto
           </span>
-          <h2 className="page-title">
-            Configuración
-          </h2>
-          <p className="page-description">
-            Equipo, modelo, rendimiento y herramientas externas.
-          </p>
+          <h2 className="page-title">Configuración</h2>
+          <p className="page-description">Equipo, modelo, rendimiento y herramientas externas.</p>
         </div>
         <div className="page-actions">
           {saved && (
@@ -581,7 +577,11 @@ export default function Settings({ addLog, onTeamStatusChange, onNewProject }: P
             </span>
           }
         >
-          <div className="grid gap-3 md:grid-cols-2" role="radiogroup" aria-label="modo de análisis">
+          <div
+            className="grid gap-3 md:grid-cols-2"
+            role="radiogroup"
+            aria-label="modo de análisis"
+          >
             <label className={`choice-card ${!analyzeImages ? 'choice-card-selected' : ''}`}>
               <span className="choice-radio" aria-hidden="true" />
               <input
@@ -633,7 +633,9 @@ export default function Settings({ addLog, onTeamStatusChange, onNewProject }: P
               </button>
             )}
             {ollamaStatus !== null && (
-              <span className={`badge ${ollamaStatus.available ? 'badge-solved' : 'badge-severity-critical'}`}>
+              <span
+                className={`badge ${ollamaStatus.available ? 'badge-solved' : 'badge-severity-critical'}`}
+              >
                 {ollamaStatus.available ? <IconCheck size={11} /> : <IconX size={11} />}
                 {ollamaStatus.available ? 'Disponible' : 'No disponible'}
               </span>
@@ -1066,15 +1068,7 @@ function SettingsSection({
   )
 }
 
-function Field({
-  id,
-  label,
-  children,
-}: {
-  id: string
-  label: string
-  children: React.ReactNode
-}) {
+function Field({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
   return (
     <div>
       <label className="label" htmlFor={id}>

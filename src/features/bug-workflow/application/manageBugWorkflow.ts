@@ -1,9 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type {
-  AnalyzedBug,
-  BugStatus,
-  CommentVote,
-} from '../../../shared/contracts/bugTypes.js'
+import type { AnalyzedBug, BugStatus, CommentVote } from '../../../shared/contracts/bugTypes.js'
 import {
   addRemoteBugComment,
   deleteRemoteBug,

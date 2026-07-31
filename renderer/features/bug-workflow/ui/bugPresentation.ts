@@ -4,7 +4,12 @@
 // severidad, clase de badge y derivados (activo/histórico, pantalla afectada).
 // Todo puro: no toca React ni el DOM.
 
-import type { AnalyzedBug, BugCategory, BugStatus, Severity } from '../../../../src/shared/contracts'
+import type {
+  AnalyzedBug,
+  BugCategory,
+  BugStatus,
+  Severity,
+} from '../../../../src/shared/contracts'
 
 export const severityOrder: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 }
 

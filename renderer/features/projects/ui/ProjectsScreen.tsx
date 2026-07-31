@@ -4,9 +4,9 @@
 // Un usuario puede tener varios proyectos; el activo es el que usan todos los IPC
 // de bugs.
 
+import { initialsOf } from '../../../components/avatarTone'
 import { IconCheck, IconPlus } from '../../../components/icons'
 import { col } from '../../../theme'
-import { initialsOf } from '../../../components/avatarTone'
 import type { ProjectOption } from './ProjectSwitcher'
 
 interface Props {
@@ -34,9 +34,7 @@ export default function ProjectsScreen({
             <span className="page-eyebrow-dot" aria-hidden="true" />
             Espacios de trabajo
           </span>
-          <h2 className="page-title">
-            Proyectos
-          </h2>
+          <h2 className="page-title">Proyectos</h2>
           <p className="page-description">
             Cada proyecto es un espacio separado de bugs, estados y notas. El activo es el que ves
             en la pantalla de Bugs.
@@ -48,7 +46,10 @@ export default function ProjectsScreen({
         </button>
       </div>
 
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(18rem, 1fr))' }}>
+      <div
+        className="grid gap-3"
+        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(18rem, 1fr))' }}
+      >
         {projects.map((project) => {
           const isActive = project.id === activeProjectId
           return (

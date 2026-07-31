@@ -10,21 +10,26 @@
  */
 
 import type React from 'react'
-import type { AnalyzedBug, BugStatus, BugCategory, Severity } from '../../../../src/shared/contracts'
+import type {
+  AnalyzedBug,
+  BugCategory,
+  BugStatus,
+  Severity,
+} from '../../../../src/shared/contracts'
 import { IconSearch } from '../../../components/icons'
+import { LifecycleTabs, SeverityBadge, StatusBadge } from './BugAtoms'
 import { BugKpiGrid } from './BugKpiGrid'
 import {
   type BugFilters,
   type BugKpis,
-  type LifecycleTab,
   hasActiveFilters,
   isQuietStatus,
+  type LifecycleTab,
   screenPathOf,
   severityLabel,
   statusLabel,
   statusOptionsForTab,
 } from './bugPresentation'
-import { LifecycleTabs, SeverityBadge, StatusBadge } from './BugAtoms'
 
 interface Props {
   bugs: AnalyzedBug[]
@@ -165,9 +170,7 @@ export default function BugList({
                   <SeverityBadge severity={bug.analysis.severity} />
                   <StatusBadge status={bug.status} />
                 </span>
-                <span className="bug-list-item-meta">
-                  {screen ?? 'Sin pantalla informada'}
-                </span>
+                <span className="bug-list-item-meta">{screen ?? 'Sin pantalla informada'}</span>
               </button>
             </li>
           )

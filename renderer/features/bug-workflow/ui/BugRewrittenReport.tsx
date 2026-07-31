@@ -6,24 +6,13 @@
 
 import type { AnalyzedBug } from '../../../../src/shared/contracts'
 
-export function BugRewrittenReport({
-  bug,
-  dense = false,
-}: {
-  bug: AnalyzedBug
-  dense?: boolean
-}) {
+export function BugRewrittenReport({ bug, dense = false }: { bug: AnalyzedBug; dense?: boolean }) {
   const rewritten = bug.analysis.rewritten
 
   return (
     <div className="grid gap-3.5">
       <div className="bug-rewrite-grid">
-        <RewritePanel
-          tone="actual"
-          title="Qué pasa"
-          text={rewritten.observed}
-          dense={dense}
-        />
+        <RewritePanel tone="actual" title="Qué pasa" text={rewritten.observed} dense={dense} />
         <RewritePanel
           tone="expected"
           title="Qué debería pasar"

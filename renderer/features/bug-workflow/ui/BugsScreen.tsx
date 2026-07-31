@@ -92,8 +92,7 @@ export default function BugsScreen({
 
   // El bug abierto sale de lo filtrado: si el filtro lo deja afuera, se abre el
   // primero de la lista en vez de mostrar un reporte que ya no está a la vista.
-  const selected =
-    filtered.find((bug) => bug.enriched.raw.id === focusedId) ?? filtered[0] ?? null
+  const selected = filtered.find((bug) => bug.enriched.raw.id === focusedId) ?? filtered[0] ?? null
 
   const changeLifecycle = (tab: LifecycleTab) => {
     setLifecycle(tab)
@@ -134,58 +133,58 @@ export default function BugsScreen({
         {topbar}
 
         <div className="bugs-work">
-        {selected ? (
-          <>
-            <div className="bugs-center">
-              {/* key por bug: cambiar de bug reinicia el estado interno del
+          {selected ? (
+            <>
+              <div className="bugs-center">
+                {/* key por bug: cambiar de bug reinicia el estado interno del
                   detalle (agente externo, borradores) en vez de arrastrarlo. */}
-              <BugDetail
-                key={selected.enriched.raw.id}
-                bug={selected}
-                project={project}
-                onSetStatus={onSetStatus ? (next) => onSetStatus(selected, next) : undefined}
-                onDelete={onDelete ? () => onDelete(selected) : undefined}
-                onAnalyzeExternalAgent={onAnalyzeExternalAgent}
-              />
+                <BugDetail
+                  key={selected.enriched.raw.id}
+                  bug={selected}
+                  project={project}
+                  onSetStatus={onSetStatus ? (next) => onSetStatus(selected, next) : undefined}
+                  onDelete={onDelete ? () => onDelete(selected) : undefined}
+                  onAnalyzeExternalAgent={onAnalyzeExternalAgent}
+                />
 
-              <BugComments
-                key={`comments-${selected.enriched.raw.id}`}
+                <BugComments
+                  key={`comments-${selected.enriched.raw.id}`}
+                  bug={selected}
+                  comments={selected.comments ?? []}
+                  onAddComment={
+                    onAddComment
+                      ? async (body, parentId) => {
+                          await onAddComment(selected, body, parentId)
+                        }
+                      : undefined
+                  }
+                  onVote={onVoteComment}
+                />
+              </div>
+
+              <BugPropertiesRail
                 bug={selected}
-                comments={selected.comments ?? []}
-                onAddComment={
-                  onAddComment
-                    ? async (body, parentId) => {
-                        await onAddComment(selected, body, parentId)
-                      }
-                    : undefined
+                agent={agent}
+                members={members}
+                onSetStatus={onSetStatus ? (next) => onSetStatus(selected, next) : undefined}
+                onSetAssignees={
+                  onSetAssignees ? (userIds) => onSetAssignees(selected, userIds) : undefined
                 }
-                onVote={onVoteComment}
+                onSetDueDate={onSetDueDate ? (due) => onSetDueDate(selected, due) : undefined}
+              />
+            </>
+          ) : (
+            <div className="bugs-center">
+              <BugsEmptyState
+                total={results.length}
+                lifecycle={lifecycle}
+                onReset={() => {
+                  clearFilters()
+                  setLifecycle('todos')
+                }}
               />
             </div>
-
-            <BugPropertiesRail
-              bug={selected}
-              agent={agent}
-              members={members}
-              onSetStatus={onSetStatus ? (next) => onSetStatus(selected, next) : undefined}
-              onSetAssignees={
-                onSetAssignees ? (userIds) => onSetAssignees(selected, userIds) : undefined
-              }
-              onSetDueDate={onSetDueDate ? (due) => onSetDueDate(selected, due) : undefined}
-            />
-          </>
-        ) : (
-          <div className="bugs-center">
-            <BugsEmptyState
-              total={results.length}
-              lifecycle={lifecycle}
-              onReset={() => {
-                clearFilters()
-                setLifecycle('todos')
-              }}
-            />
-          </div>
-        )}
+          )}
         </div>
       </div>
     </>

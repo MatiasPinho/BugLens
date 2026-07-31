@@ -56,7 +56,6 @@ describe('BugDetail — cabecera', () => {
 
     expect(onBack).toHaveBeenCalledTimes(1)
   })
-
 })
 
 describe('BugDetail — borrar bug', () => {
@@ -300,7 +299,9 @@ describe('BugDetail — agente externo', () => {
     expect(screen.queryByText(/Ahora tengo suficiente/)).not.toBeInTheDocument()
     expect(screen.getByText('HTTP 200 con datos inválidos')).toBeInTheDocument()
     expect(screen.getByText('El backend acepta datos incorrectos.')).toBeInTheDocument()
-    expect(screen.getByText('Validación frontend correcta pero backend ausente')).toBeInTheDocument()
+    expect(
+      screen.getByText('Validación frontend correcta pero backend ausente'),
+    ).toBeInTheDocument()
     expect(screen.getByText('el servidor no valida el payload.')).toBeInTheDocument()
     expect(screen.getByText('Reproducir localmente el flujo.')).toBeInTheDocument()
     expect(screen.getByText('Verificar DevTools Network.')).toBeInTheDocument()
@@ -504,7 +505,9 @@ describe('BugDetail — agente externo', () => {
 })
 
 describe('BugDetail — el agente falla', () => {
-  async function correr(result: Partial<import('../../../../src/shared/contracts').ExternalAgentResult>) {
+  async function correr(
+    result: Partial<import('../../../../src/shared/contracts').ExternalAgentResult>,
+  ) {
     const onAnalyzeExternalAgent = vi.fn().mockResolvedValue({
       ok: false,
       output: '',
@@ -550,9 +553,7 @@ describe('BugDetail — el agente falla', () => {
   it('muestra el comando ejecutado para poder reproducirlo a mano', async () => {
     await correr({ error: 'Command failed', output: 'algo' })
 
-    expect(
-      await screen.findByText('opencode run --model opencode/big-pickle'),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('opencode run --model opencode/big-pickle')).toBeInTheDocument()
   })
 
   it('no muestra el bloque de error cuando el agente terminó bien', async () => {

@@ -137,12 +137,7 @@ describe('teamBugs', () => {
       error: null,
     })
 
-    await addRemoteBugComment(
-      { rpc } as never,
-      config(),
-      { title: 't', description: 'd' },
-      'nota',
-    )
+    await addRemoteBugComment({ rpc } as never, config(), { title: 't', description: 'd' }, 'nota')
 
     expect(rpc.mock.calls[0][1]).toMatchObject({ parent_comment_id: null })
   })
@@ -523,10 +518,7 @@ describe('teamBugs', () => {
         rawBug: { title: 'Login roto' },
         dueDate: '2026-06-12',
         reportedBy: { id: 'user-1', email: 'qa@example.com', displayName: 'QA' },
-        assignees: [
-          { id: 'user-2', email: 'dev@example.com' },
-          { email: 'sin-id@example.com' },
-        ],
+        assignees: [{ id: 'user-2', email: 'dev@example.com' }, { email: 'sin-id@example.com' }],
         activity: [
           {
             id: 'evento-1',

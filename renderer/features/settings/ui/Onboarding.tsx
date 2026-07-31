@@ -147,7 +147,9 @@ export default function Onboarding({ onDone }: Props) {
                   />
                   <span className="grid gap-1">
                     <span className="choice-title">Solo texto</span>
-                    <span className="choice-text">Ignora las capturas al analizar. Más rápido.</span>
+                    <span className="choice-text">
+                      Ignora las capturas al analizar. Más rápido.
+                    </span>
                     <span className="mono text-2xs" style={{ color: col.fgDim }}>
                       {DEFAULT_OLLAMA_TEXT_MODEL}
                     </span>

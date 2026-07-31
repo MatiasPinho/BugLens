@@ -80,11 +80,7 @@ export default function PerformanceModePicker({ value, onChange }: Props) {
 
       {probe && !probing && <ProbeNotice accelerator={probe.accelerator} detail={probe.detail} />}
 
-      <div
-        className="grid gap-3 md:grid-cols-2"
-        role="radiogroup"
-        aria-label="modo de rendimiento"
-      >
+      <div className="grid gap-3 md:grid-cols-2" role="radiogroup" aria-label="modo de rendimiento">
         {MODE_OPTIONS.map((option) => {
           const isSelected = value === option.id
           return (

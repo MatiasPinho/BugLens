@@ -64,7 +64,11 @@ function ResetRow({ action, addLog }: { action: ResetAction; addLog: Props['addL
   // Acento destructivo en reposo (rojo tenue) + ícono distintivo; el hover intensifica.
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <button type="button" className="btn-danger flex-shrink-0" onClick={() => setConfirming(true)}>
+      <button
+        type="button"
+        className="btn-danger flex-shrink-0"
+        onClick={() => setConfirming(true)}
+      >
         <Icon size={12} className="button-icon" />
         {label}
       </button>

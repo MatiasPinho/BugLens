@@ -72,7 +72,9 @@ describe('BugPropertiesRail', () => {
 
   it('permite quitar la fecha límite', async () => {
     const onSetDueDate = vi.fn()
-    render(<BugPropertiesRail bug={conBug({ dueDate: '2026-06-12' })} onSetDueDate={onSetDueDate} />)
+    render(
+      <BugPropertiesRail bug={conBug({ dueDate: '2026-06-12' })} onSetDueDate={onSetDueDate} />,
+    )
 
     await userEvent.click(screen.getByRole('button', { name: 'quitar la fecha límite' }))
 

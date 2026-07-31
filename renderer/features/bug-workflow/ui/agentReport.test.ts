@@ -9,9 +9,7 @@ describe('parseAgentReport — referencias a archivos', () => {
 
   it('reconoce el archivo con número de línea pegado con dos puntos', () => {
     expect(
-      referencesOf(
-        '## Archivos o áreas a revisar\nsrc/auth/session.ts:42 — creación de la cookie',
-      ),
+      referencesOf('## Archivos o áreas a revisar\nsrc/auth/session.ts:42 — creación de la cookie'),
     ).toEqual([{ file: 'src/auth/session.ts', line: '42', relevance: 'creación de la cookie' }])
   })
 

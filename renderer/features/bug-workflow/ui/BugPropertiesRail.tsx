@@ -8,17 +8,12 @@
  */
 
 import { useState } from 'react'
-import type {
-  AnalyzedBug,
-  BugStatus,
-  Severity,
-  TeamMember,
-} from '../../../../src/shared/contracts'
+import type { AnalyzedBug, BugStatus, Severity, TeamMember } from '../../../../src/shared/contracts'
 import { avatarToneClass, initialsOf } from '../../../components/avatarTone'
 import { IconCheck, IconPlus, IconWarning, IconX } from '../../../components/icons'
 import { col } from '../../../theme'
-import { actorNameOf, describeActivity, formatDueDate, showsOverdueWarning } from './bugActivity'
 import { CategoryBadge, ConfidenceBar, SeverityBadge, StatusSelect } from './BugAtoms'
+import { actorNameOf, describeActivity, formatDueDate, showsOverdueWarning } from './bugActivity'
 import { formatTimelineDate, screenPathOf, severityLabel } from './bugPresentation'
 
 interface Props {
@@ -63,11 +58,7 @@ export default function BugPropertiesRail({
       </div>
 
       <div className="bug-properties-body">
-        <AssigneeField
-          assignees={assignees}
-          members={members}
-          onChange={onSetAssignees}
-        />
+        <AssigneeField assignees={assignees} members={members} onChange={onSetAssignees} />
 
         <DueDateField dueDate={bug.dueDate ?? null} overdue={overdue} onChange={onSetDueDate} />
 

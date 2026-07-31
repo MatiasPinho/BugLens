@@ -93,11 +93,7 @@ describe('ciclo de vida', () => {
 
   it('ofrece solo los estados que tienen sentido en cada pestaña', () => {
     expect(statusOptionsForTab('activos')).toEqual(['nuevo', 'en_progreso'])
-    expect(statusOptionsForTab('historicos')).toEqual([
-      'solucionado',
-      'cerrado',
-      'no_replicado',
-    ])
+    expect(statusOptionsForTab('historicos')).toEqual(['solucionado', 'cerrado', 'no_replicado'])
     expect(statusOptionsForTab('todos')).toHaveLength(5)
   })
 })

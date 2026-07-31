@@ -44,12 +44,7 @@ function renderScreen(
   results: AnalyzedBug[],
   props: Partial<React.ComponentProps<typeof BugsScreen>> = {},
 ) {
-  return render(
-    <BugsScreen
-      results={results}
-      {...props}
-    />,
-  )
+  return render(<BugsScreen results={results} {...props} />)
 }
 
 describe('BugsScreen — estados', () => {
@@ -64,7 +59,9 @@ describe('BugsScreen — estados', () => {
     })
     // 'solucionado' es histórico → no se ve en la pestaña por defecto.
     await userEvent.click(screen.getByRole('tab', { name: /Todos/ }))
-    const select = within(screen.getByRole('complementary', { name: 'propiedades del bug' })).getByLabelText('estado del bug') as HTMLSelectElement
+    const select = within(
+      screen.getByRole('complementary', { name: 'propiedades del bug' }),
+    ).getByLabelText('estado del bug') as HTMLSelectElement
     expect(select.value).toBe('solucionado')
   })
 
@@ -72,7 +69,12 @@ describe('BugsScreen — estados', () => {
     const onSetStatus = vi.fn()
     renderScreen([makeBug({ id: 'bug-1', title: 'X' })], { onSetStatus })
 
-    await userEvent.selectOptions(within(screen.getByRole('complementary', { name: 'propiedades del bug' })).getByLabelText('estado del bug'), 'solucionado')
+    await userEvent.selectOptions(
+      within(screen.getByRole('complementary', { name: 'propiedades del bug' })).getByLabelText(
+        'estado del bug',
+      ),
+      'solucionado',
+    )
 
     expect(onSetStatus).toHaveBeenCalledTimes(1)
     const [bugArg, statusArg] = onSetStatus.mock.calls[0]
@@ -198,7 +200,10 @@ describe('BugsScreen — tres columnas', () => {
   it('elegir otro bug de la lista avisa al padre', async () => {
     const onFocus = vi.fn()
     renderScreen(
-      [makeBug({ id: 'bug-1', title: 'Login roto' }), makeBug({ id: 'bug-2', title: 'Export vacío' })],
+      [
+        makeBug({ id: 'bug-1', title: 'Login roto' }),
+        makeBug({ id: 'bug-2', title: 'Export vacío' }),
+      ],
       { onFocus },
     )
 
@@ -209,7 +214,10 @@ describe('BugsScreen — tres columnas', () => {
 
   it('el bug enfocado es el que se muestra', () => {
     renderScreen(
-      [makeBug({ id: 'bug-1', title: 'Login roto' }), makeBug({ id: 'bug-2', title: 'Export vacío' })],
+      [
+        makeBug({ id: 'bug-1', title: 'Login roto' }),
+        makeBug({ id: 'bug-2', title: 'Export vacío' }),
+      ],
       { focusedId: 'bug-2' },
     )
 
