@@ -8,7 +8,7 @@
 // renderizan.
 
 import type React from 'react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { bugRecordKey } from '../../../../src/features/bug-workflow/domain/bugStatusKey'
 import type {
   AnalyzedBug,
@@ -21,6 +21,7 @@ import type {
   TeamMember,
 } from '../../../../src/shared/contracts'
 import EmptyState from '../../../components/EmptyState'
+import { IconSettings } from '../../../components/icons'
 import BugComments from './BugComments'
 import BugDetail, { type BugDetailAgentInfo, type BugDetailProject } from './BugDetail'
 import BugList from './BugList'
@@ -74,6 +75,8 @@ export default function BugsScreen({
   const [severity, setSeverity] = useState<Severity | 'all'>('all')
   const [status, setStatus] = useState<BugStatus | 'all'>('all')
   const [search, setSearch] = useState('')
+  const [propertiesOpen, setPropertiesOpen] = useState(false)
+  const commentsRef = useRef<HTMLElement | null>(null)
 
   const filters: BugFilters = useMemo(
     () => ({ lifecycle, category, severity, status, search }),
@@ -97,16 +100,33 @@ export default function BugsScreen({
     filtered.find((bug) => bugRecordKey(bug.enriched.raw) === focusedKey) ?? filtered[0] ?? null
   const selectedKey = selected ? bugRecordKey(selected.enriched.raw) : null
 
+  useEffect(() => {
+    if (!propertiesOpen) return undefined
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPropertiesOpen(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [propertiesOpen])
+
   const changeLifecycle = (tab: LifecycleTab) => {
+    setPropertiesOpen(false)
     setLifecycle(tab)
     setStatus('all')
   }
 
   const clearFilters = () => {
+    setPropertiesOpen(false)
     setSearch('')
     setCategory('all')
     setSeverity('all')
     setStatus('all')
+  }
+
+  const showComments = () => {
+    setPropertiesOpen(false)
+    commentsRef.current?.scrollIntoView({ block: 'start' })
+    commentsRef.current?.focus({ preventScroll: true })
   }
 
   return (
@@ -122,12 +142,27 @@ export default function BugsScreen({
         categories={categories}
         severities={severities}
         selectedKey={selectedKey}
-        onSelect={(key) => onFocus?.(key)}
+        onSelect={(key) => {
+          setPropertiesOpen(false)
+          onFocus?.(key)
+        }}
         onLifecycleChange={changeLifecycle}
-        onSearchChange={setSearch}
-        onSeverityChange={setSeverity}
-        onCategoryChange={setCategory}
-        onStatusChange={setStatus}
+        onSearchChange={(value) => {
+          setPropertiesOpen(false)
+          setSearch(value)
+        }}
+        onSeverityChange={(value) => {
+          setPropertiesOpen(false)
+          setSeverity(value)
+        }}
+        onCategoryChange={(value) => {
+          setPropertiesOpen(false)
+          setCategory(value)
+        }}
+        onStatusChange={(value) => {
+          setPropertiesOpen(false)
+          setStatus(value)
+        }}
         onClearFilters={clearFilters}
         searchInputRef={searchInputRef}
       />
@@ -139,6 +174,19 @@ export default function BugsScreen({
           {selected ? (
             <>
               <div className="bugs-center">
+                <div className="bugs-compact-toolbar">
+                  <span className="truncate text-xs">Gestioná estado, responsables y fecha</span>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-mini"
+                    aria-controls="bug-properties-panel"
+                    aria-expanded={propertiesOpen}
+                    onClick={() => setPropertiesOpen(true)}
+                  >
+                    <IconSettings size={12} />
+                    Propiedades
+                  </button>
+                </div>
                 {/* key por bug: cambiar de bug reinicia el estado interno del
                   detalle (agente externo, borradores) en vez de arrastrarlo. */}
                 <BugDetail
@@ -148,9 +196,12 @@ export default function BugsScreen({
                   onSetStatus={onSetStatus ? (next) => onSetStatus(selected, next) : undefined}
                   onDelete={onDelete ? () => onDelete(selected) : undefined}
                   onAnalyzeExternalAgent={onAnalyzeExternalAgent}
+                  commentCount={selected.comments?.length ?? 0}
+                  onShowComments={showComments}
                 />
 
                 <BugComments
+                  ref={commentsRef}
                   key={`comments-${selectedKey}`}
                   bug={selected}
                   comments={selected.comments ?? []}
@@ -169,6 +220,8 @@ export default function BugsScreen({
                 bug={selected}
                 agent={agent}
                 members={members}
+                overlayOpen={propertiesOpen}
+                onClose={propertiesOpen ? () => setPropertiesOpen(false) : undefined}
                 onSetStatus={onSetStatus ? (next) => onSetStatus(selected, next) : undefined}
                 onSetAssignees={
                   onSetAssignees ? (userIds) => onSetAssignees(selected, userIds) : undefined

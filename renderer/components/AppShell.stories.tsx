@@ -4,7 +4,7 @@ import ProjectSwitcher from '../features/projects/ui/ProjectSwitcher'
 import { makeBug } from './_storyFixtures'
 import AppRail, { type AppRailItem } from './AppRail'
 import AppTopbar from './AppTopbar'
-import { IconBug, IconFolder, IconSettings, IconUpload } from './icons'
+import { IconBug, IconFolder, IconPlus, IconSettings, IconUpload } from './icons'
 
 type PreviewRoute = 'bugs' | 'upload' | 'projects' | 'settings'
 
@@ -65,35 +65,69 @@ const previewProjects = [
 ]
 
 function AppShellPreview() {
+  const topbar = (
+    <AppTopbar
+      breadcrumb={['Bugs', previewBugs[0].enriched.raw.title]}
+      projectSlot={
+        <ProjectSwitcher
+          activeProject={previewProjects[0]}
+          projects={previewProjects}
+          onSelect={() => {}}
+          onCreate={() => {}}
+        />
+      }
+      statusSlot={
+        <span
+          className="badge badge-accent engine-status-badge"
+          role="status"
+          aria-label="Ollama local"
+        >
+          <span className="dot" aria-hidden="true" />
+          <span className="engine-status-label">Ollama local</span>
+        </span>
+      }
+      actions={
+        <>
+          <button
+            type="button"
+            className="btn-secondary btn-lg topbar-work-action"
+            aria-label="Cargar bug manual"
+            title="Cargar bug manual"
+          >
+            <IconPlus size={14} />
+            <span className="topbar-action-label">Cargar bug manual</span>
+          </button>
+          <button
+            type="button"
+            className="btn-secondary btn-lg topbar-work-action"
+            aria-label="Exportar Excel"
+            title="Exportar Excel"
+          >
+            <IconUpload size={14} />
+            <span className="topbar-action-label">Exportar Excel</span>
+          </button>
+        </>
+      }
+      asideActions={
+        <button
+          type="button"
+          className="btn-primary btn-lg topbar-work-action"
+          aria-label="Analizar bugs"
+          title="Analizar bugs"
+        >
+          <IconBug size={14} />
+          <span className="topbar-action-label">Analizar bugs</span>
+        </button>
+      }
+      user={{ id: 'perfil-matias', email: 'matias@estudio.com', provider: 'Google Auth' }}
+      onSignOut={() => {}}
+    />
+  )
+
   return (
     <div className="app-shell">
       <AppRail items={navItems} footerItems={railFooterItems} active="bugs" onSelect={() => {}} />
-
-      <div className="app-content">
-        <AppTopbar
-          breadcrumb={['Bugs']}
-          projectSlot={
-            <ProjectSwitcher
-              activeProject={previewProjects[0]}
-              projects={previewProjects}
-              onSelect={() => {}}
-              onCreate={() => {}}
-            />
-          }
-          statusSlot={
-            <span className="badge badge-accent" role="status">
-              <span className="dot" aria-hidden="true" />
-              Ollama local
-            </span>
-          }
-          user={{ id: 'perfil-matias', email: 'matias@estudio.com', provider: 'Google Auth' }}
-          onSignOut={() => {}}
-        />
-
-        <main className="app-main min-h-0 flex-1 overflow-hidden">
-          <BugsScreen results={previewBugs} onSetStatus={() => {}} />
-        </main>
-      </div>
+      <BugsScreen results={previewBugs} topbar={topbar} onSetStatus={() => {}} />
     </div>
   )
 }

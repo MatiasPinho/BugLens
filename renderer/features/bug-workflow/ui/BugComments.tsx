@@ -7,9 +7,10 @@
  * que devuelve el servidor. Acá solo se renderiza y se disparan los callbacks.
  */
 
-import { useMemo, useState } from 'react'
+import { forwardRef, useMemo, useState } from 'react'
 import type { AnalyzedBug, BugComment, CommentVote } from '../../../../src/shared/contracts'
 import { avatarToneClass, initialsOf } from '../../../components/avatarTone'
+import { IconComment } from '../../../components/icons'
 import { col } from '../../../theme'
 import { buildCommentThread, type CommentNode, countThread } from './bugActivity'
 import { formatTimelineDate } from './bugPresentation'
@@ -24,18 +25,23 @@ interface Props {
   onVote?: (commentId: string, value: CommentVote) => void
 }
 
-export default function BugComments({ bug, comments, onAddComment, onVote }: Props) {
+const BugComments = forwardRef<HTMLElement, Props>(function BugComments(
+  { bug, comments, onAddComment, onVote },
+  ref,
+) {
   const thread = useMemo(() => buildCommentThread(comments), [comments])
   const total = countThread(thread)
   const [replyTo, setReplyTo] = useState<string | null>(null)
 
   return (
-    <section className="bug-comments" aria-label="comentarios">
+    <section ref={ref} className="bug-comments" aria-label="comentarios" tabIndex={-1}>
       <header className="bug-comments-head">
         <h3 className="section-card-title">
+          <IconComment size={16} />
           Comentarios
           {total > 0 && <span className="count-chip">{total}</span>}
         </h3>
+        <span className="bug-comments-context">Conversación del equipo</span>
       </header>
 
       {onAddComment && replyTo === null && (
@@ -47,9 +53,19 @@ export default function BugComments({ bug, comments, onAddComment, onVote }: Pro
       )}
 
       {thread.length === 0 ? (
-        <p className="text-sm" style={{ color: col.fgDim }}>
-          Nadie comentó todavía.
-        </p>
+        <div className="comment-empty">
+          <span className="comment-empty-mark" aria-hidden="true">
+            <IconComment size={20} />
+          </span>
+          <div className="grid gap-0.5">
+            <p className="font-semibold text-sm">Nadie comentó todavía.</p>
+            <p className="text-xs" style={{ color: col.fgDim }}>
+              {onAddComment
+                ? 'Dejá contexto de reproducción, decisiones o avances para el equipo.'
+                : 'La conversación aparecerá acá cuando el equipo agregue contexto.'}
+            </p>
+          </div>
+        </div>
       ) : (
         <ol className="comment-thread">
           {thread.map((node) => (
@@ -67,7 +83,9 @@ export default function BugComments({ bug, comments, onAddComment, onVote }: Pro
       )}
     </section>
   )
-}
+})
+
+export default BugComments
 
 function CommentBranch({
   node,

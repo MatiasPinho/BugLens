@@ -129,7 +129,29 @@ export function screenPathOf(bug: AnalyzedBug): string | null {
       /* URL inválida — seguir */
     }
   }
-  return bug.analysis.affectedArea?.trim() || null
+  const affectedArea = bug.analysis.affectedArea?.trim() ?? ''
+  if (!affectedArea || isMissingScreenValue(affectedArea)) return null
+  return affectedArea
+}
+
+/**
+ * Los modelos a veces devuelven el ejemplo del contrato como valor literal.
+ * Eso no es contexto del reporte y no debe ocupar la lista ni el rail como si
+ * el QA hubiera informado una pantalla real.
+ */
+function isMissingScreenValue(value: string): boolean {
+  const normalized = value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/["'`]/g, '')
+    .trim()
+    .toLowerCase()
+
+  return (
+    /^(no|sin) informad[oa]$/.test(normalized) ||
+    /^(n\/?a|ningun[oa])$/.test(normalized) ||
+    normalized.includes('pantalla / modulo / ruta afectada')
+  )
 }
 
 // Clave de agrupación: siempre devuelve algo estable. Sin pantalla informada cae

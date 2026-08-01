@@ -70,6 +70,11 @@ export default function BugList({
   onClearFilters,
   searchInputRef,
 }: Props) {
+  const resultLabel =
+    bugs.length === totalCount
+      ? `${totalCount} bug${totalCount === 1 ? '' : 's'}`
+      : `${bugs.length} de ${totalCount} bugs coinciden`
+
   return (
     <div className="bug-list-column">
       <div className="bug-list-head">
@@ -141,9 +146,14 @@ export default function BugList({
         <BugKpiGrid {...kpis} />
       </div>
 
-      <span className="kicker-xs bug-list-kicker">
-        {filters.lifecycle === 'historicos' ? 'Histórico' : 'Bugs'}
-      </span>
+      <div className="bug-list-section-head">
+        <span className="kicker-xs">
+          {filters.lifecycle === 'historicos' ? 'Histórico' : 'Bugs'}
+        </span>
+        <span className="bug-list-result-count" role="status" aria-live="polite">
+          {resultLabel}
+        </span>
+      </div>
 
       {/* `listbox` y no una lista de botones: elegir acá selecciona un elemento
           de un conjunto, y así las flechas del lector de pantalla lo anuncian
@@ -162,6 +172,7 @@ export default function BugList({
                 className={`bug-list-item ${selected ? 'bug-list-item-active' : ''} ${
                   isQuietStatus(bug.status) ? 'bug-list-item-quiet' : ''
                 }`}
+                title={bug.enriched.raw.title}
               >
                 <span className="bug-list-item-title">{bug.enriched.raw.title}</span>
                 {/* Severidad y estado van como badges con texto, no como un punto
@@ -178,11 +189,17 @@ export default function BugList({
         })}
       </ul>
 
-      <span className="sr-only" aria-live="polite" aria-atomic="true">
-        {bugs.length === totalCount
-          ? `${totalCount} bug${totalCount === 1 ? '' : 's'}`
-          : `${bugs.length} de ${totalCount} bugs coinciden`}
-      </span>
+      {bugs.length === 0 && (
+        <div className="bug-list-empty">
+          <span className="font-semibold text-sm">Sin resultados</span>
+          <span className="text-xs">Probá con menos filtros o con otro texto.</span>
+          {hasActiveFilters(filters) && (
+            <button type="button" onClick={onClearFilters} className="btn-secondary btn-mini">
+              Limpiar filtros
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

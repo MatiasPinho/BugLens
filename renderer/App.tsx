@@ -105,8 +105,7 @@ function ElectronApp() {
   const searchInputRef = React.useRef<HTMLInputElement | null>(null)
   const remoteReloadTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const activeProjectId = teamStatus?.project?.id ?? null
-  const detailBug =
-    results.find((bug) => bugRecordKey(bug.enriched.raw) === detailBugKey) ?? null
+  const detailBug = results.find((bug) => bugRecordKey(bug.enriched.raw) === detailBugKey) ?? null
 
   const addLog = useCallback((level: LogLine['level'], message: string, timestamp?: string) => {
     setLogs((prev) => [
@@ -391,9 +390,7 @@ function ElectronApp() {
     async (bug: AnalyzedBug, status: BugStatus) => {
       const key = bugRecordKey(bug.enriched.raw)
       setResults((prev) =>
-        prev.map((item) =>
-          bugRecordKey(item.enriched.raw) === key ? { ...item, status } : item,
-        ),
+        prev.map((item) => (bugRecordKey(item.enriched.raw) === key ? { ...item, status } : item)),
       )
       const result = await window.electronAPI.setBugStatus(bug, status)
       if (!result.ok) {
@@ -572,9 +569,7 @@ function ElectronApp() {
         case 'j': {
           if (results.length === 0) return
           e.preventDefault()
-          const index = results.findIndex(
-            (bug) => bugRecordKey(bug.enriched.raw) === focusedBugKey,
-          )
+          const index = results.findIndex((bug) => bugRecordKey(bug.enriched.raw) === focusedBugKey)
           const next = results[Math.min(index + 1, results.length - 1)] ?? results[0]
           const nextKey = bugRecordKey(next.enriched.raw)
           setFocusedBugKey(nextKey)
@@ -584,9 +579,7 @@ function ElectronApp() {
         case 'k': {
           if (results.length === 0) return
           e.preventDefault()
-          const index = results.findIndex(
-            (bug) => bugRecordKey(bug.enriched.raw) === focusedBugKey,
-          )
+          const index = results.findIndex((bug) => bugRecordKey(bug.enriched.raw) === focusedBugKey)
           const previous = results[Math.max(index - 1, 0)] ?? results[0]
           const previousKey = bugRecordKey(previous.enriched.raw)
           setFocusedBugKey(previousKey)
@@ -606,9 +599,7 @@ function ElectronApp() {
         case '4':
         case '5': {
           if (!focusedBugKey) return
-          const bug = results.find(
-            (item) => bugRecordKey(item.enriched.raw) === focusedBugKey,
-          )
+          const bug = results.find((item) => bugRecordKey(item.enriched.raw) === focusedBugKey)
           if (!bug) return
           const statusByKey: Record<string, BugStatus> = {
             '1': 'nuevo',
@@ -630,10 +621,7 @@ function ElectronApp() {
   // Primer arranque: mientras carga no parpadeamos nada; si falta onboarding, wizard.
   if (onboarded === null) {
     return (
-      <div
-        className="window-drag-surface relative h-screen"
-        style={{ background: col.canvas }}
-      />
+      <div className="window-drag-surface relative h-screen" style={{ background: col.canvas }} />
     )
   }
   if (!onboarded) {
@@ -708,12 +696,15 @@ function ElectronApp() {
       }
       statusSlot={
         <span
-          className={`badge ${ollamaAvailable === false ? 'badge-severity-critical' : 'badge-accent'}`}
+          className={`badge engine-status-badge ${ollamaAvailable === false ? 'badge-severity-critical' : 'badge-accent'}`}
           title="modelo local de análisis"
           role="status"
+          aria-label={ollamaAvailable === false ? 'Ollama no disponible' : 'Ollama local'}
         >
           <span className="dot" aria-hidden="true" />
-          {ollamaAvailable === false ? 'Ollama no disponible' : 'Ollama local'}
+          <span className="engine-status-label">
+            {ollamaAvailable === false ? 'Ollama no disponible' : 'Ollama local'}
+          </span>
         </span>
       }
       actions={
@@ -721,22 +712,38 @@ function ElectronApp() {
           <>
             <button
               type="button"
-              className="btn-secondary btn-lg"
+              className="btn-secondary btn-lg topbar-work-action"
               onClick={() => setShowManualForm(true)}
+              aria-label="Cargar bug manual"
+              title="Cargar bug manual"
             >
               <IconPlus size={14} className="button-icon button-icon-plus" />
-              Cargar bug manual
+              <span className="topbar-action-label">Cargar bug manual</span>
             </button>
-            <button type="button" className="btn-secondary btn-lg" onClick={handleExport}>
-              Exportar Excel
+            <button
+              type="button"
+              className="btn-secondary btn-lg topbar-work-action"
+              onClick={handleExport}
+              aria-label="Exportar Excel"
+              title="Exportar Excel"
+            >
+              <IconUpload size={14} className="button-icon" />
+              <span className="topbar-action-label">Exportar Excel</span>
             </button>
           </>
         ) : undefined
       }
       asideActions={
         showBugs ? (
-          <button type="button" className="btn-primary btn-lg" onClick={() => setRoute('upload')}>
-            Analizar bugs
+          <button
+            type="button"
+            className="btn-primary btn-lg topbar-work-action"
+            onClick={() => setRoute('upload')}
+            aria-label="Analizar bugs"
+            title="Analizar bugs"
+          >
+            <IconBug size={14} className="button-icon" />
+            <span className="topbar-action-label">Analizar bugs</span>
           </button>
         ) : undefined
       }

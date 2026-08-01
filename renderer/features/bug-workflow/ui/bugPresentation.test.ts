@@ -156,6 +156,21 @@ describe('screenPathOf y screenOf', () => {
     expect(screenPathOf(makeBug({ id: 'c', title: 'Titulo', affectedArea: '' }))).toBeNull()
   })
 
+  it('trata los placeholders del prompt como pantalla no informada', () => {
+    expect(
+      screenPathOf(
+        makeBug({
+          id: 'c',
+          title: 'Titulo',
+          affectedArea: "pantalla / módulo / ruta afectada (o 'No informado')",
+        }),
+      ),
+    ).toBeNull()
+    expect(screenPathOf(makeBug({ id: 'd', title: 'Titulo', affectedArea: 'No informado' }))).toBe(
+      null,
+    )
+  })
+
   it('como clave de agrupación cae al título para no juntar bugs distintos', () => {
     expect(screenOf(makeBug({ id: 'c', title: 'Titulo', affectedArea: '' }))).toBe('Titulo')
     expect(screenOf(makeBug({ id: 'd', title: '', affectedArea: '' }))).toBe('sin pantalla')

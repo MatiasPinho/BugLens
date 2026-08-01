@@ -15,7 +15,7 @@ import type {
 } from '../../../../src/shared/contracts'
 import { ActionModal, ConfirmActionModal } from '../../../components/ActionModal'
 import CollapsibleBlock from '../../../components/CollapsibleBlock'
-import { IconChevronLeft, IconMore, IconTrash } from '../../../components/icons'
+import { IconChevronLeft, IconComment, IconMore, IconTrash } from '../../../components/icons'
 import MenuButton, { MenuItem } from '../../../components/MenuButton'
 import { col } from '../../../theme'
 import {
@@ -58,6 +58,8 @@ interface Props {
   onSetStatus?: (status: BugStatus) => void
   onDelete?: () => void
   onAnalyzeExternalAgent?: (bug: AnalyzedBug) => Promise<ExternalAgentResult>
+  commentCount?: number
+  onShowComments?: () => void
 }
 
 export default function BugDetail({
@@ -67,6 +69,8 @@ export default function BugDetail({
   onSetStatus,
   onDelete,
   onAnalyzeExternalAgent,
+  commentCount = 0,
+  onShowComments,
 }: Props) {
   const { enriched, analysis } = bug
   const raw = enriched.raw
@@ -83,6 +87,13 @@ export default function BugDetail({
   const [externalAgentElapsedMs, setExternalAgentElapsedMs] = useState(0)
   const [externalAgentLastOutputAt, setExternalAgentLastOutputAt] = useState<number | null>(null)
   const [externalAgentConfirmOpen, setExternalAgentConfirmOpen] = useState(false)
+  const [externalAgentExpanded, setExternalAgentExpanded] = useState(() => {
+    const persistedResult = analysis.externalAgent
+    return Boolean(
+      persistedResult &&
+        (!persistedResult.ok || parseAgentAccessIssue(persistedResult.output || '')),
+    )
+  })
   const [resolvedSuggestionDismissed, setResolvedSuggestionDismissed] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const previousBugIdRef = React.useRef(raw.id)
@@ -97,7 +108,14 @@ export default function BugDetail({
     if (externalAgentRunning) return
     if (previousBugIdRef.current !== raw.id) {
       previousBugIdRef.current = raw.id
-      setExternalAgentResult(analysis.externalAgent ?? null)
+      const persistedResult = analysis.externalAgent ?? null
+      setExternalAgentResult(persistedResult)
+      setExternalAgentExpanded(
+        Boolean(
+          persistedResult &&
+            (!persistedResult.ok || parseAgentAccessIssue(persistedResult.output || '')),
+        ),
+      )
       setResolvedSuggestionDismissed(false)
       return
     }
@@ -131,6 +149,7 @@ export default function BugDetail({
     setExternalAgentStartedAt(startedAt)
     setExternalAgentElapsedMs(0)
     setExternalAgentLastOutputAt(null)
+    setExternalAgentExpanded(true)
     setResolvedSuggestionDismissed(false)
     try {
       setExternalAgentResult(await runExternalAgent(bug))
@@ -178,53 +197,71 @@ export default function BugDetail({
           </button>
         )}
         <div className="bug-detail-headline">
-          <div className="bug-detail-meta">
-            <span className="bug-row-number">
-              Fila {raw.rowIndex}
-              {project ? ` · ${project.name}` : ''}
-            </span>
-            <SeverityBadge severity={analysis.severity} />
-            {/* Solo lectura: cambiar el estado es del rail de propiedades. Dos
-                controles para lo mismo en la misma pantalla se contradicen. */}
-            <StatusBadge status={bug.status} />
-            <CategoryBadge>{analysis.category}</CategoryBadge>
-            {rewritten.problemCount > 1 && <ProblemCountBadge count={rewritten.problemCount} />}
-            {analysis.missingInformation.length > 0 && (
-              <MissingInfoBadge count={analysis.missingInformation.length} />
-            )}
+          <div className="bug-detail-header-row">
+            <div className="bug-detail-meta">
+              <span className="bug-row-number">
+                Fila {raw.rowIndex}
+                {project ? ` · ${project.name}` : ''}
+              </span>
+              <SeverityBadge severity={analysis.severity} />
+              {/* Solo lectura: cambiar el estado es del rail de propiedades. Dos
+                  controles para lo mismo en la misma pantalla se contradicen. */}
+              <StatusBadge status={bug.status} />
+              <CategoryBadge>{analysis.category}</CategoryBadge>
+              {rewritten.problemCount > 1 && <ProblemCountBadge count={rewritten.problemCount} />}
+              {analysis.missingInformation.length > 0 && (
+                <MissingInfoBadge count={analysis.missingInformation.length} />
+              )}
+            </div>
+
+            <div className="bug-detail-actions">
+              {onShowComments && (
+                <button
+                  type="button"
+                  className="btn-secondary bug-comments-jump flex-shrink-0"
+                  onClick={onShowComments}
+                  aria-label={`Ir a comentarios, ${commentCount} comentario${commentCount === 1 ? '' : 's'}`}
+                  title="Ir a comentarios"
+                >
+                  <IconComment size={12} />
+                  Comentarios
+                  <span className="count-chip" aria-hidden="true">
+                    {commentCount}
+                  </span>
+                </button>
+              )}
+              <CopyButton text={bugReportAsText(bug)} label="Copiar reporte" />
+              <button
+                type="button"
+                onClick={() => setExternalAgentConfirmOpen(true)}
+                className="btn-primary flex-shrink-0"
+                disabled={externalAgentRunning || !runExternalAgent}
+                title="analizar con el agente externo configurado"
+              >
+                {externalAgentRunning ? 'Analizando…' : 'Analizar con agente'}
+              </button>
+              {/* Borrar sale de la fila principal: es destructivo y de uso raro, no
+                  tiene por qué competir con la acción de trabajo. */}
+              {onDelete && (
+                <MenuButton trigger={<IconMore size={16} />} label="más acciones del bug">
+                  {(close) => (
+                    <MenuItem
+                      danger
+                      onClick={() => {
+                        close()
+                        setDeleteOpen(true)
+                      }}
+                    >
+                      <IconTrash size={12} />
+                      Borrar bug
+                    </MenuItem>
+                  )}
+                </MenuButton>
+              )}
+            </div>
           </div>
           <h2 className="bug-detail-title">{raw.title}</h2>
           <p className="bug-detail-summary">{analysis.summary}</p>
-        </div>
-        <div className="bug-detail-actions">
-          <CopyButton text={bugReportAsText(bug)} label="Copiar reporte" />
-          <button
-            type="button"
-            onClick={() => setExternalAgentConfirmOpen(true)}
-            className="btn-primary flex-shrink-0"
-            disabled={externalAgentRunning || !runExternalAgent}
-            title="analizar con el agente externo configurado"
-          >
-            {externalAgentRunning ? 'Analizando…' : 'Analizar con agente'}
-          </button>
-          {/* Borrar sale de la fila principal: es destructivo y de uso raro, no
-              tiene por qué competir con la acción de trabajo. */}
-          {onDelete && (
-            <MenuButton trigger={<IconMore size={16} />} label="más acciones del bug">
-              {(close) => (
-                <MenuItem
-                  danger
-                  onClick={() => {
-                    close()
-                    setDeleteOpen(true)
-                  }}
-                >
-                  <IconTrash size={12} />
-                  Borrar bug
-                </MenuItem>
-              )}
-            </MenuButton>
-          )}
         </div>
       </header>
 
@@ -270,17 +307,15 @@ export default function BugDetail({
         </SectionCard>
 
         {(externalAgentResult || externalAgentRunning) && (
-          // Mientras corre no se pliega: la salida en vivo es justamente lo que
-          // se está mirando.
-          <CollapsibleBlock label="el aporte del agente" disabled={externalAgentRunning}>
-            <ExternalAgentPanel
-              running={externalAgentRunning}
-              result={externalAgentResult}
-              elapsedMs={externalAgentElapsedMs}
-              statusText={externalAgentStatusText}
-              runningOutput={externalAgentRunningOutput}
-            />
-          </CollapsibleBlock>
+          <ExternalAgentPanel
+            running={externalAgentRunning}
+            result={externalAgentResult}
+            elapsedMs={externalAgentElapsedMs}
+            statusText={externalAgentStatusText}
+            runningOutput={externalAgentRunningOutput}
+            expanded={externalAgentRunning || externalAgentExpanded}
+            onToggle={() => setExternalAgentExpanded((value) => !value)}
+          />
         )}
 
         {previousExternalAgentRuns.length > 0 && (
@@ -361,13 +396,18 @@ function ExternalAgentPanel({
   elapsedMs,
   statusText,
   runningOutput,
+  expanded,
+  onToggle,
 }: {
   running: boolean
   result: ExternalAgentResult | null
   elapsedMs: number
   statusText: string
   runningOutput?: string
+  expanded: boolean
+  onToggle: () => void
 }) {
+  const contentId = React.useId()
   const ok = result?.ok
   const duration = running ? elapsedMs : (result?.durationMs ?? 0)
   const agentOutput = running
@@ -376,8 +416,22 @@ function ExternalAgentPanel({
   const accessIssue = parseAgentAccessIssue(agentOutput)
 
   return (
-    <div className="cloud-agent-panel">
-      <div className="cloud-agent-header">
+    <section className={`cloud-agent-panel ${expanded ? 'cloud-agent-panel-expanded' : ''}`}>
+      <button
+        type="button"
+        className="cloud-agent-header"
+        aria-controls={contentId}
+        aria-expanded={expanded}
+        aria-disabled={running}
+        aria-label={
+          running
+            ? 'Aporte del agente externo en curso'
+            : `${expanded ? 'Ocultar' : 'Mostrar'} aporte del agente externo`
+        }
+        onClick={() => {
+          if (!running) onToggle()
+        }}
+      >
         <div className="min-w-0">
           <div className="cloud-agent-kicker">
             <span className="cloud-agent-mark" aria-hidden="true" />
@@ -387,7 +441,7 @@ function ExternalAgentPanel({
             Revisión adicional hecha por el agente configurado sobre este bug.
           </p>
         </div>
-        <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
+        <div className="cloud-agent-header-status">
           <span
             className={`badge ${running ? 'badge-accent' : ok ? 'badge-solved' : 'badge-severity-critical'}`}
           >
@@ -396,10 +450,16 @@ function ExternalAgentPanel({
           <span className="mono text-xs" style={{ color: col.fgDim }}>
             {formatAgentDuration(duration)}
           </span>
+          {!running && (
+            <span className="cloud-agent-disclosure" aria-hidden="true">
+              {expanded ? 'Ocultar' : 'Ver aporte'}
+              <span className={`caret-down transition-transform ${expanded ? '' : '-rotate-90'}`} />
+            </span>
+          )}
         </div>
-      </div>
+      </button>
 
-      <div className="cloud-agent-body">
+      <div id={contentId} className="cloud-agent-body" hidden={!expanded}>
         {running && (
           <div className="text-xs" style={{ color: col.fgMuted }}>
             proceso activo · {statusText}
@@ -443,7 +503,7 @@ function ExternalAgentPanel({
           </div>
         )}
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -454,8 +514,14 @@ function ExternalAgentHistoryPanel({ items }: { items: ExternalAgentResult[] }) 
   const hiddenCount = Math.max(0, items.length - visibleItems.length)
 
   return (
-    <SectionCard title="Historial del agente" count={items.length}>
-      <div className="grid gap-3">
+    <details className="panel-card agent-history-panel group">
+      <summary className="agent-history-panel-summary">
+        <span className="-rotate-90 caret-down transition-transform group-open:rotate-0" />
+        <span className="section-card-title">Historial del agente</span>
+        <span className="count-chip">{items.length}</span>
+        <span className="agent-history-panel-hint">Consultar corridas anteriores</span>
+      </summary>
+      <div className="agent-history-panel-body">
         <div className="grid gap-2">
           {visibleItems.map((item, index) => (
             <details
@@ -488,11 +554,11 @@ function ExternalAgentHistoryPanel({ items }: { items: ExternalAgentResult[] }) 
             className="history-toggle"
             onClick={() => setExpanded((value) => !value)}
           >
-            {expanded ? 'mostrar menos' : `mostrar ${hiddenCount} anteriores`}
+            {expanded ? 'Mostrar menos' : `Mostrar ${hiddenCount} anteriores`}
           </button>
         )}
       </div>
-    </SectionCard>
+    </details>
   )
 }
 

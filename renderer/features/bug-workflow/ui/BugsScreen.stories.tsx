@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { useState } from 'react'
-import { makeBug } from '../../../components/_storyFixtures'
+import { makeBug, makeComment } from '../../../components/_storyFixtures'
+import AppTopbar from '../../../components/AppTopbar'
 import BugsScreen from './BugsScreen'
 
 const results = [
@@ -71,6 +72,53 @@ const results = [
   }),
 ]
 
+const longAgentBase = makeBug({
+  id: '48',
+  title: 'Hay que scrollear muchísimo para llegar a los comentarios',
+  summary:
+    'La conversación del equipo queda oculta debajo del reporte, el aporte del agente y su historial.',
+  status: 'en_progreso',
+  observed:
+    'Para comentar hay que recorrer todo el reporte reescrito y cada bloque generado por el agente externo.',
+  expected: 'El acceso a comentarios debería estar disponible desde el encabezado del bug.',
+  steps: ['Abrir un bug con análisis externo.', 'Intentar llegar al hilo de comentarios.'],
+})
+
+const longAgentBug = {
+  ...longAgentBase,
+  comments: [
+    makeComment({
+      id: 'comment-48',
+      body: 'El salto debería conservar el contexto y llevar el foco al hilo.',
+      authorName: 'Matias Pinho',
+    }),
+  ],
+  analysis: {
+    ...longAgentBase.analysis,
+    externalAgent: {
+      ok: true,
+      output: [
+        '## Resumen\nEl hilo queda después de varios bloques largos en la columna central.',
+        '## Evidencia\nEl reporte reescrito, el aporte del agente y el historial comparten el mismo scroll.',
+        '## Alcance revisado\nSe revisó la composición visual de la pantalla de Bugs y el orden de foco.',
+        '## Recomendación\nAgregar un acceso directo que desplace y enfoque la única sección de comentarios.',
+      ].join('\n\n'),
+      command: 'codex exec',
+      durationMs: 115000,
+      createdAt: '2026-07-31T15:17:00.000Z',
+    },
+    externalAgentHistory: [
+      {
+        ok: true,
+        output: 'Revisión anterior del mismo recorrido.',
+        command: 'codex exec',
+        durationMs: 84000,
+        createdAt: '2026-07-30T14:15:00.000Z',
+      },
+    ],
+  },
+}
+
 const meta = {
   title: 'buglens/BugsScreen',
   component: BugsScreen,
@@ -82,9 +130,10 @@ type Story = StoryObj<typeof BugsScreen>
 function Interactive() {
   const [focusedKey, setFocusedKey] = useState<string | null>(null)
   return (
-    <div style={{ height: '100vh' }}>
+    <div className="app-shell">
       <BugsScreen
         results={results}
+        topbar={<AppTopbar breadcrumb={['Bugs']} />}
         focusedKey={focusedKey}
         onFocus={setFocusedKey}
         onSetStatus={() => {}}
@@ -96,10 +145,22 @@ function Interactive() {
 export const ListaConPreview: Story = { render: () => <Interactive /> }
 export const Tarjetas: Story = { render: () => <Interactive /> }
 
+export const ConAporteExtenso: Story = {
+  render: () => (
+    <div className="app-shell">
+      <BugsScreen
+        results={[longAgentBug]}
+        topbar={<AppTopbar breadcrumb={['Bugs', longAgentBug.enriched.raw.title]} />}
+        onSetStatus={() => {}}
+      />
+    </div>
+  ),
+}
+
 export const SinResultados: Story = {
   render: () => (
-    <div style={{ height: '100vh' }}>
-      <BugsScreen results={[]} />
+    <div className="app-shell">
+      <BugsScreen results={[]} topbar={<AppTopbar breadcrumb={['Bugs']} />} />
     </div>
   ),
 }

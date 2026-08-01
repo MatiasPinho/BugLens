@@ -78,10 +78,10 @@ export default function Onboarding({ onDone }: Props) {
   const isLast = step === STEPS.length - 1
 
   return (
-    <div className="onboarding-page window-drag-surface flex h-full items-center justify-center p-10">
-      <div className="onboarding-shell grid w-full max-w-[38.75rem] gap-5">
+    <div className="onboarding-page window-drag-surface flex h-full items-center justify-center">
+      <div className="onboarding-shell grid w-full gap-5">
         <div className="onboarding-intro flex flex-col items-center gap-2 text-center">
-          <span className="app-brand-mark" style={{ width: '2.5rem', height: '2.5rem' }}>
+          <span className="app-brand-mark onboarding-brand">
             <BugLensMark compact style={{ width: 20 }} />
           </span>
           <span className="font-bold text-3xl" style={{ letterSpacing: '-0.02em' }}>
@@ -92,26 +92,38 @@ export default function Onboarding({ onDone }: Props) {
           </p>
         </div>
 
-        <ol className="stepper" aria-label="progreso del wizard">
-          {STEPS.map((label, index) => {
-            const done = index < step
-            const active = index === step
-            return (
-              <li key={label} className="contents">
-                <span
-                  className={`stepper-item ${index <= step ? 'stepper-item-active' : ''}`}
-                  aria-current={active ? 'step' : undefined}
-                >
-                  <span className="stepper-bullet">
-                    {done ? <IconCheck size={12} /> : index + 1}
+        <div className="onboarding-progress">
+          <ol className="stepper" aria-label="progreso del wizard">
+            {STEPS.map((label, index) => {
+              const done = index < step
+              const active = index === step
+              return (
+                <li key={label} className="contents">
+                  <span
+                    className={`stepper-item ${index <= step ? 'stepper-item-active' : ''}`}
+                    aria-current={active ? 'step' : undefined}
+                  >
+                    <span className="stepper-bullet">
+                      {done ? <IconCheck size={12} /> : index + 1}
+                    </span>
+                    {label}
                   </span>
-                  {label}
-                </span>
-                {index < STEPS.length - 1 && <span aria-hidden="true" className="stepper-line" />}
-              </li>
-            )
-          })}
-        </ol>
+                  {index < STEPS.length - 1 && <span aria-hidden="true" className="stepper-line" />}
+                </li>
+              )
+            })}
+          </ol>
+          <span
+            className="onboarding-progress-track"
+            role="progressbar"
+            aria-label="configuración inicial completada"
+            aria-valuemin={0}
+            aria-valuemax={STEPS.length}
+            aria-valuenow={step + 1}
+          >
+            <span style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
+          </span>
+        </div>
 
         <div key={step} className="onboarding-card card grid animate-fade-in gap-4">
           {step === 0 && (

@@ -5,7 +5,8 @@
 // de bugs.
 
 import { initialsOf } from '../../../components/avatarTone'
-import { IconCheck, IconPlus } from '../../../components/icons'
+import EmptyState from '../../../components/EmptyState'
+import { IconCheck, IconChevronRight, IconFolder, IconPlus } from '../../../components/icons'
 import { col } from '../../../theme'
 import type { ProjectOption } from './ProjectSwitcher'
 
@@ -46,46 +47,65 @@ export default function ProjectsScreen({
         </button>
       </div>
 
-      <div
-        className="grid gap-3"
-        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(18rem, 1fr))' }}
-      >
-        {projects.map((project) => {
-          const isActive = project.id === activeProjectId
-          return (
-            <button
-              key={project.id}
-              type="button"
-              onClick={() => onSelect(project.id)}
-              disabled={busy || isActive}
-              aria-current={isActive}
-              className={`choice-card ${isActive ? 'choice-card-selected' : ''} flex-col gap-2`}
-              style={isActive ? { cursor: 'default' } : undefined}
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="project-mark">{initialsOf(project.name)}</span>
-                <div className="grid min-w-0 gap-0.5">
-                  <span className="truncate font-semibold text-md">{project.name}</span>
-                  <span className="mono truncate text-2xs" style={{ color: col.fgDim }}>
-                    {project.slug}
-                  </span>
+      {projects.length === 0 ? (
+        <div className="projects-empty card">
+          <EmptyState
+            title="Todavía no hay proyectos"
+            description="Creá el primer espacio para organizar bugs, estados y comentarios del equipo."
+            motif={<IconFolder size={28} />}
+            action={
+              <button type="button" className="btn-primary btn-lg" onClick={onCreate}>
+                <IconPlus size={14} />
+                Crear proyecto
+              </button>
+            }
+          />
+        </div>
+      ) : (
+        <div className="projects-grid">
+          {projects.map((project) => {
+            const isActive = project.id === activeProjectId
+            return (
+              <button
+                key={project.id}
+                type="button"
+                onClick={() => onSelect(project.id)}
+                disabled={busy || isActive}
+                aria-current={isActive}
+                aria-label={`${project.name}${isActive ? ', proyecto activo' : ', cambiar a este proyecto'}`}
+                className={`project-card ${isActive ? 'project-card-active' : ''}`}
+              >
+                <div className="project-card-head">
+                  <span className="project-mark">{initialsOf(project.name)}</span>
+                  <div className="grid min-w-0 gap-0.5">
+                    <span className="truncate font-semibold text-md">{project.name}</span>
+                    <span className="mono truncate text-2xs" style={{ color: col.fgDim }}>
+                      {project.slug}
+                    </span>
+                  </div>
+                  {isActive && (
+                    <span className="badge badge-accent ml-auto">
+                      <IconCheck size={11} />
+                      Activo
+                    </span>
+                  )}
                 </div>
-                {isActive && (
-                  <span className="badge badge-accent ml-auto">
-                    <IconCheck size={11} />
-                    Activo
+                <span className="project-card-divider" aria-hidden="true" />
+                <span className="project-card-footer">
+                  <span>
+                    {isActive && activeProjectBugCount !== undefined
+                      ? `${activeProjectBugCount} bug${activeProjectBugCount === 1 ? '' : 's'} cargados`
+                      : isActive
+                        ? 'Proyecto activo'
+                        : 'Cambiar a este proyecto'}
                   </span>
-                )}
-              </div>
-              {isActive && activeProjectBugCount !== undefined && (
-                <span className="text-xs" style={{ color: col.fgMuted }}>
-                  {activeProjectBugCount} bug{activeProjectBugCount === 1 ? '' : 's'} cargados
+                  {!isActive && <IconChevronRight size={12} />}
                 </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

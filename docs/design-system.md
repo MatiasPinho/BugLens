@@ -10,8 +10,7 @@ dependencia de BugLens ni una fuente de tokens o componentes.
 
 ## Principios
 
-- **Claro y aireado:** canvas gris muy claro, superficies blancas, bordes suaves y
-  sombras mínimas.
+- **Claro y aireado:** base blanca continua, bordes suaves y sombras mínimas.
 - **Consola editorial de QA:** la interfaz combina la precisión de una herramienta
   operativa con una jerarquía visual cuidada; el contenido y el estado del bug dominan,
   no la decoración.
@@ -48,19 +47,19 @@ deben hardcodear colores: usan `col`, `alpha`, clases semánticas o `var(--c-*)`
 
 Valores de referencia:
 
-- Canvas `#e0e4ec`, chrome `#eff2f7`, superficie `#ffffff`, anidado `#f6f8fb`.
+- Canvas, chrome y superficie `#ffffff`; anidado `#f6f8fb`.
 - Bordes de controles `#c5cdda`, tarjetas `#cfd6e1` y divisores internos `#e4e9f0`.
 - Acento `#2563eb`, hover `#1d4ed8`, tint `#eff6ff`.
 - Texto principal `#101828`, cuerpo `#475467`, secundario `#545e72`.
 
-**Cuatro niveles de profundidad, y el blanco es del contenido.** El canvas es el fondo; el
-chrome (gris) es la navegación — rail, topbar y columna de lista; el blanco queda reservado
-para el reporte y sus paneles; y `subtle` separa los bloques anidados. Los bordes sostienen
-esa jerarquía sin sumar sombras ni ensuciar la interfaz.
+**Una base blanca continua.** Canvas, navegación —rail, topbar y columna de lista— y
+contenido comparten el blanco. Los bordes, el espaciado y la forma separan esas áreas;
+`subtle` queda reservado para bloques anidados y estados funcionales, no para crear pisos
+grises en la aplicación.
 
-`fg-dim` es el gris más claro permitido para texto: mantiene 4.5:1 (WCAG AA) sobre `chrome`,
-que es la superficie más oscura donde hay texto — no usarlo sobre `canvas`. `fg-faint` y
-`fg-disabled` quedan para decoración y estados inactivos, nunca para texto informativo.
+`fg-dim` es el gris más claro permitido para texto: mantiene 4.5:1 (WCAG AA) sobre la base
+blanca. `fg-faint` y `fg-disabled` quedan para decoración y estados inactivos, nunca para
+texto informativo.
 
 Los badges semánticos conservan estas asociaciones:
 
@@ -159,7 +158,9 @@ El shell de escritorio se compone de:
   acciones de trabajo, el equipo y la identidad del usuario. Empieza a la derecha de la
   lista. Todo el contexto global vive acá, no en la navegación. En Electron también hace
   de barra de título: el área libre arrastra la ventana y reserva a la derecha los controles
-  nativos. No se muestra un segundo título gris ni el menú “File / Edit / View”.
+  nativos. Cuando el shell no deja ancho suficiente, las acciones conservan su icono,
+  `aria-label` y `title`, y ocultan sólo el rótulo visible. No se muestra un segundo título
+  gris ni el menú “File / Edit / View”.
 - **Área de contenido** sobre el canvas plano. No hay banda de encabezado de pantalla:
   el texto más grande es el título del bug que se está leyendo, en la columna central.
 
@@ -171,6 +172,7 @@ El shell de escritorio se compone de:
 | Carga manual | Formulario modal de un bug | `ManualBugForm.tsx`, `ActionModal.tsx` |
 | Carga por archivo | Vacío, dropzone y archivo seleccionado | `UploadBugsScreen.tsx`, `FileUpload.tsx`, `EmptyState.tsx` |
 | Análisis en curso | Fases, progreso y log | `AnalysisProgressScreen.tsx`, `ProgressLog.tsx`, `Loading.tsx` |
+| Proyectos | Selector, proyecto activo y estado vacío | `ProjectsScreen.tsx`, `ProjectSwitcher.tsx`, `NewProjectModal.tsx` |
 | Configuración | Índice, equipo, modelo, rendimiento, Docs, agente y caché | `Settings.tsx`, `PerformanceModePicker.tsx` |
 | Acceso al equipo | Identidad del producto e inicio de sesión | `TeamLogin.tsx` |
 | Primer arranque | Wizard de rendimiento, modelo y Google Docs | `Onboarding.tsx` |
@@ -183,6 +185,14 @@ mismo lenguaje para la gestión de proyectos.
 La fila seleccionada usa un **gris azulado** (`--c-selected`) más una **barra de acento a la
 izquierda**, que es el indicador principal. Un fondo con tint de acento competía con el
 contenido de la propia fila y el título tenía que teñirse de azul para sobrevivir.
+
+### Reporte como documento de trabajo
+
+La reescritura se lee como una secuencia: **01 Qué pasa**, **02 Qué debería pasar** y
+**03 Pasos para reproducir**. Los números son decorativos y la semántica sigue en los
+títulos; el eje vertical de los pasos refuerza el orden sin convertir el reporte en un
+wizard. El rail derecho agrupa seguimiento y contexto para evitar una lista plana de
+propiedades inconexas.
 
 ### Acciones secundarias y destructivas
 
@@ -203,9 +213,10 @@ en un log propio deja la causa fuera del alcance de la app.
 
 ### Bloques largos
 
-`CollapsibleBlock` recorta el contenido y ofrece "Ver más". Se usa en el reporte reescrito
-y en el aporte del agente externo para que los comentarios queden al alcance sin atravesar
-varias pantallas de reporte.
+`CollapsibleBlock` recorta el reporte reescrito y ofrece "Ver más" para que los comentarios
+queden al alcance sin atravesar varias pantallas. El aporte externo usa una divulgación propia:
+una corrida persistida y exitosa arranca plegada, mientras que el progreso en vivo y los errores
+quedan abiertos. Así el análisis secundario no compite con el reporte de QA.
 
 Tres reglas:
 
@@ -216,12 +227,16 @@ Tres reglas:
   bloque.
 - **Lo recortado queda `inert`.** Si no, sus botones seguirían siendo alcanzables con Tab
   y se llegaría a un control invisible.
+- **El historial no ocupa la lectura principal.** Sus corridas quedan detrás de un resumen
+  compacto y se consultan bajo demanda.
 
 ## Patrones de interacción
 
 - **Bugs:** las tres columnas comparten el estado de filtros y el bug elegido. Si un
   filtro deja afuera al bug enfocado, se muestra el primero visible: la columna central
-  nunca queda mostrando un reporte que la lista ya no ofrece.
+  nunca queda mostrando un reporte que la lista ya no ofrece. El encabezado ofrece un
+  acceso directo a comentarios: desplaza el mismo hilo y mueve allí el foco, sin duplicar
+  el composer ni separar la conversación del reporte.
 - **Un control por cosa:** el estado se **cambia** en el rail de propiedades y se
   **muestra** como badge en la columna central. Las acciones destructivas siempre pasan
   por el modal compartido.
@@ -241,9 +256,9 @@ Tres reglas:
 - El orden de foco sigue el orden visual; tabs y selectores respetan sus patrones ARIA.
 - `prefers-reduced-motion` neutraliza animaciones no esenciales.
 - El texto informativo mantiene como mínimo contraste WCAG AA.
-- El producto es desktop-first. Las tres columnas se apilan de a una: por debajo de
-  1180 px se oculta el rail de propiedades (contexto) y por debajo de 860 px también la
-  lista (navegación). El reporte del bug nunca se va.
+- El producto es desktop-first. Por debajo de 1180 px el rail de propiedades pasa a ser
+  un panel superpuesto, accesible desde la barra compacta del reporte; por debajo de 860 px
+  también se oculta la lista (navegación). El reporte y sus acciones nunca se van.
 
 ## Contrato de implementación
 
@@ -253,7 +268,8 @@ Tres reglas:
 4. Los badges de estado y severidad se construyen con las clases semánticas existentes.
 5. `renderer/components/DesignSystem.stories.tsx` es la documentación visual viva
    (badges, controles, superficies, identidad y código en prosa).
-   `renderer/components/AppShell.stories.tsx` valida el shell completo en contexto.
+   `renderer/components/AppShell.stories.tsx` valida el shell completo en contexto. Las
+   pantallas de carga y proyectos mantienen historias propias para sus estados principales.
 6. Los componentes nuevos no introducen una paleta, fuente o shell alternativos.
 7. Una modificación de tokens debe verificarse en las historias de badges, controles,
    superficies y en la pantalla de Bugs completa.
