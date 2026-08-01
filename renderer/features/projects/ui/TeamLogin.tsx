@@ -1,4 +1,4 @@
-import { BugUnderLensMark } from '../../../components/decor/BugMotifs'
+import { BugLensMark } from '../../../components/decor/BugMotifs'
 import { IconCheck, IconFolder } from '../../../components/icons'
 import { LoadingInline } from '../../../components/Loading'
 import { col } from '../../../theme'
@@ -28,7 +28,7 @@ export default function TeamLogin({ status, loading, onLogin }: Props) {
           <div className="team-login-identity">
             <div className="grid gap-3.5">
               <span className="app-brand-mark" style={{ width: '2.75rem', height: '2.75rem' }}>
-                <BugUnderLensMark className="motif-sway" style={{ width: 24 }} />
+                <BugLensMark compact style={{ width: 24 }} />
               </span>
               <div className="grid gap-1.5">
                 <span className="font-bold text-3xl" style={{ letterSpacing: '-0.02em' }}>

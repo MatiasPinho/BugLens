@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">BugLens</title>
+  <desc id="description">Una lente que encuadra y ordena las líneas de un reporte.</desc>
+  <defs>
+    <linearGradient id="background" x1="0.75" y1="0" x2="0.25" y2="1">
+      <stop offset="0" stop-color="#3b82f6" />
+      <stop offset="1" stop-color="#1d4ed8" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#background)" />
+  <g
+    fill="none"
+    stroke="#fff"
+    stroke-width="2.2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    transform="translate(107.5 107.5) scale(9.28125)"
+  >
+    <circle cx="13.4" cy="13.4" r="9.3" />
+    <path d="M20.2 20.2 L27.3 27.3" stroke-width="3" />
+    <path d="M8.6 10.2 H18.2" />
+    <path d="M8.6 13.6 H15" stroke="#bfdbfe" />
+    <path d="M8.6 17 H18.2" />
+  </g>
+</svg>

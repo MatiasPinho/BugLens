@@ -1,10 +1,9 @@
 /**
  * BugMotifs.tsx
  *
- * Motivos decorativos temáticos (bichos / bugs) para complementar la UI. Son
- * line-art a un trazo (`currentColor`), pensados para usarse como marca de
- * agua / ornamento. Son DECORATIVOS: `aria-hidden`, sin texto alt; el color y la
- * opacidad los pone quien los usa (vía `style`/`color`).
+ * Marca de producto y motivos decorativos temáticos para complementar la UI.
+ * Son line-art a un trazo (`currentColor`) y `aria-hidden`: el nombre BugLens
+ * lo aporta el contenedor cuando la marca forma parte del chrome.
  *
  * On-brand BugLens: nada de imágenes externas ni color hardcodeado — solo trazo
  * que hereda el color del contenedor.
@@ -15,6 +14,43 @@ import type { CSSProperties } from 'react'
 interface MarkProps {
   className?: string
   style?: CSSProperties
+}
+
+interface BugLensMarkProps extends MarkProps {
+  /** Simplifica el dibujo para conservar legibilidad en tamaños de hasta 24 px. */
+  compact?: boolean
+}
+
+/**
+ * Marca principal de BugLens: una lente que ordena las líneas de un reporte.
+ * La variante compacta elimina detalle, pero conserva la misma silueta.
+ */
+export function BugLensMark({ className, compact = false, style }: BugLensMarkProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 32 32"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={compact ? 2.9 : 2.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      style={style}
+    >
+      <circle cx={compact ? 13 : 13.4} cy={compact ? 13 : 13.4} r={compact ? 9.4 : 9.3} />
+      <path
+        d={compact ? 'M19.9 19.9 L27.4 27.4' : 'M20.2 20.2 L27.3 27.3'}
+        strokeWidth={compact ? 3.6 : 3}
+      />
+      <path d={compact ? 'M8.4 10.4 H17.6' : 'M8.6 10.2 H18.2'} />
+      <path
+        d={compact ? 'M8.4 15.6 H14.4' : 'M8.6 13.6 H15'}
+        opacity={0.72}
+      />
+      {!compact && <path d="M8.6 17 H18.2" />}
+    </svg>
+  )
 }
 
 // Escarabajo de frente, line-art geométrico. Hereda el color por `currentColor`.

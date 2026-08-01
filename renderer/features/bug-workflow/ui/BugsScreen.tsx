@@ -9,6 +9,7 @@
 
 import type React from 'react'
 import { useMemo, useState } from 'react'
+import { bugRecordKey } from '../../../../src/features/bug-workflow/domain/bugStatusKey'
 import type {
   AnalyzedBug,
   BugCategory,
@@ -46,8 +47,8 @@ interface Props {
   onVoteComment?: (commentId: string, value: CommentVote) => void
   onDelete?: (bug: AnalyzedBug) => void
   onAnalyzeExternalAgent?: (bug: AnalyzedBug) => Promise<ExternalAgentResult>
-  focusedId?: string | null
-  onFocus?: (id: string) => void
+  focusedKey?: string | null
+  onFocus?: (key: string) => void
   searchInputRef?: React.MutableRefObject<HTMLInputElement | null>
 }
 
@@ -64,7 +65,7 @@ export default function BugsScreen({
   onVoteComment,
   onDelete,
   onAnalyzeExternalAgent,
-  focusedId,
+  focusedKey,
   onFocus,
   searchInputRef,
 }: Props) {
@@ -92,7 +93,9 @@ export default function BugsScreen({
 
   // El bug abierto sale de lo filtrado: si el filtro lo deja afuera, se abre el
   // primero de la lista en vez de mostrar un reporte que ya no está a la vista.
-  const selected = filtered.find((bug) => bug.enriched.raw.id === focusedId) ?? filtered[0] ?? null
+  const selected =
+    filtered.find((bug) => bugRecordKey(bug.enriched.raw) === focusedKey) ?? filtered[0] ?? null
+  const selectedKey = selected ? bugRecordKey(selected.enriched.raw) : null
 
   const changeLifecycle = (tab: LifecycleTab) => {
     setLifecycle(tab)
@@ -118,8 +121,8 @@ export default function BugsScreen({
         filters={filters}
         categories={categories}
         severities={severities}
-        selectedId={selected?.enriched.raw.id ?? null}
-        onSelect={(id) => onFocus?.(id)}
+        selectedKey={selectedKey}
+        onSelect={(key) => onFocus?.(key)}
         onLifecycleChange={changeLifecycle}
         onSearchChange={setSearch}
         onSeverityChange={setSeverity}
@@ -139,7 +142,7 @@ export default function BugsScreen({
                 {/* key por bug: cambiar de bug reinicia el estado interno del
                   detalle (agente externo, borradores) en vez de arrastrarlo. */}
                 <BugDetail
-                  key={selected.enriched.raw.id}
+                  key={selectedKey}
                   bug={selected}
                   project={project}
                   onSetStatus={onSetStatus ? (next) => onSetStatus(selected, next) : undefined}
@@ -148,7 +151,7 @@ export default function BugsScreen({
                 />
 
                 <BugComments
-                  key={`comments-${selected.enriched.raw.id}`}
+                  key={`comments-${selectedKey}`}
                   bug={selected}
                   comments={selected.comments ?? []}
                   onAddComment={

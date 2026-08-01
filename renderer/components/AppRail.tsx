@@ -10,7 +10,7 @@
  */
 
 import type React from 'react'
-import { BugUnderLensMark } from './decor/BugMotifs'
+import { BugLensMark } from './decor/BugMotifs'
 
 export interface AppRailItem<T extends string> {
   key: T
@@ -38,8 +38,13 @@ export default function AppRail<T extends string>({
 }: Props<T>) {
   return (
     <nav className="app-rail" aria-label="navegación principal">
-      <span className="app-brand-mark app-rail-brand" title="BugLens">
-        <BugUnderLensMark style={{ width: 18 }} />
+      <span
+        className="app-brand-mark app-rail-brand"
+        role="img"
+        aria-label="BugLens"
+        title="BugLens"
+      >
+        <BugLensMark compact style={{ width: 20 }} />
       </span>
 
       <div className="app-rail-group">

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BugUnderLensMark } from '../../../components/decor/BugMotifs'
+import { BugLensMark } from '../../../components/decor/BugMotifs'
 import { IconCheck } from '../../../components/icons'
 import { col } from '../../../theme'
 import { DEFAULT_OLLAMA_TEXT_MODEL, DEFAULT_OLLAMA_VISION_MODEL } from './llmOptions'
@@ -82,7 +82,7 @@ export default function Onboarding({ onDone }: Props) {
       <div className="onboarding-shell grid w-full max-w-[38.75rem] gap-5">
         <div className="onboarding-intro flex flex-col items-center gap-2 text-center">
           <span className="app-brand-mark" style={{ width: '2.5rem', height: '2.5rem' }}>
-            <BugUnderLensMark className="motif-sway" style={{ width: 21 }} />
+            <BugLensMark compact style={{ width: 20 }} />
           </span>
           <span className="font-bold text-3xl" style={{ letterSpacing: '-0.02em' }}>
             Bienvenido a BugLens

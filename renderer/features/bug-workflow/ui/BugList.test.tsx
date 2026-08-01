@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { bugRecordKey } from '../../../../src/features/bug-workflow/domain/bugStatusKey'
 import { makeBug } from '../../../components/_storyFixtures'
 import BugList from './BugList'
 import type { BugFilters } from './bugPresentation'
@@ -62,11 +63,11 @@ describe('BugList', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Export vacío/ }))
 
-    expect(props.onSelect).toHaveBeenCalledWith('bug-2')
+    expect(props.onSelect).toHaveBeenCalledWith(bugRecordKey(bugs[1].enriched.raw))
   })
 
   it('marca el seleccionado para lectores de pantalla', () => {
-    renderList({ selectedId: 'bug-2' })
+    renderList({ selectedKey: bugRecordKey(bugs[1].enriched.raw) })
 
     expect(screen.getByRole('button', { name: /Export vacío/ })).toHaveAttribute(
       'aria-current',

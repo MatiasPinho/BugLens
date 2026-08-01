@@ -127,6 +127,21 @@ línea con caja propia, y `.code-block` el bloque multilínea.
 - La grilla de spacing sigue la escala de Tailwind basada en 4 px.
 - Los iconos usan 8, 12, 16, 20, 24 o 28 px.
 
+### Marca de producto
+
+La identidad principal es `BugLensMark`: una lente que contiene líneas de reporte
+ordenadas. La silueta une las dos acciones centrales del producto —leer un bug y
+convertirlo en información clara— sin recurrir al ícono genérico de un insecto.
+
+- Sobre el cuadrado azul de marca se usa en blanco y sin animación.
+- Hasta 24 px se usa la variante `compact`, con menos líneas y mayor peso de trazo.
+- `build/icon.svg` es la fuente maestra para los íconos del sistema operativo;
+  `build/icon.ico` y `build/icons/` contienen las variantes rasterizadas.
+- Windows usa el mismo `.ico` como recurso del ejecutable y como ícono nativo de la
+  ventana, junto con el `AppUserModelID` de BugLens para no agruparse como Electron.
+- `BeetleMark` y `BugUnderLensMark` quedan como motivos ilustrativos secundarios para
+  vacíos y fondos. No reemplazan la marca en el rail, el acceso ni el primer arranque.
+
 ## Shell y navegación
 
 El shell de escritorio se compone de:

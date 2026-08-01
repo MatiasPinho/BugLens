@@ -41,10 +41,10 @@ export const Completo: Story = {
     ),
     actions: (
       <>
-        <button type="button" className="btn-secondary">
+        <button type="button" className="btn-secondary btn-lg">
           Cargar bug manual
         </button>
-        <button type="button" className="btn-primary">
+        <button type="button" className="btn-primary btn-lg">
           Analizar bugs
         </button>
       </>

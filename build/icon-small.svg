@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">BugLens compacto</title>
+  <desc id="description">Versión compacta de una lente que encuadra líneas de reporte.</desc>
+  <defs>
+    <linearGradient id="background" x1="0.75" y1="0" x2="0.25" y2="1">
+      <stop offset="0" stop-color="#3b82f6" />
+      <stop offset="1" stop-color="#1d4ed8" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#background)" />
+  <g
+    fill="none"
+    stroke="#fff"
+    stroke-width="2.9"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    transform="translate(107.5 107.5) scale(9.28125)"
+  >
+    <circle cx="13" cy="13" r="9.4" />
+    <path d="M19.9 19.9 L27.4 27.4" stroke-width="3.6" />
+    <path d="M8.4 10.4 H17.6" />
+    <path d="M8.4 15.6 H14.4" stroke="#bfdbfe" />
+  </g>
+</svg>

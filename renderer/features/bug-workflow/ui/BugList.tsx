@@ -10,6 +10,7 @@
  */
 
 import type React from 'react'
+import { bugRecordKey } from '../../../../src/features/bug-workflow/domain/bugStatusKey'
 import type {
   AnalyzedBug,
   BugCategory,
@@ -40,8 +41,8 @@ interface Props {
   filters: BugFilters
   categories: BugCategory[]
   severities: Severity[]
-  selectedId?: string | null
-  onSelect: (id: string) => void
+  selectedKey?: string | null
+  onSelect: (key: string) => void
   onLifecycleChange: (tab: LifecycleTab) => void
   onSearchChange: (value: string) => void
   onSeverityChange: (value: Severity | 'all') => void
@@ -59,7 +60,7 @@ export default function BugList({
   filters,
   categories,
   severities,
-  selectedId,
+  selectedKey,
   onSelect,
   onLifecycleChange,
   onSearchChange,
@@ -149,15 +150,15 @@ export default function BugList({
           como "3 de 17". */}
       <ul className="bug-list-items" aria-label="lista de bugs">
         {bugs.map((bug) => {
-          const id = bug.enriched.raw.id
+          const key = bugRecordKey(bug.enriched.raw)
           const screen = screenPathOf(bug)
-          const selected = id === selectedId
+          const selected = key === selectedKey
           return (
-            <li key={id}>
+            <li key={key}>
               <button
                 type="button"
                 aria-current={selected ? 'true' : undefined}
-                onClick={() => onSelect(id)}
+                onClick={() => onSelect(key)}
                 className={`bug-list-item ${selected ? 'bug-list-item-active' : ''} ${
                   isQuietStatus(bug.status) ? 'bug-list-item-quiet' : ''
                 }`}
