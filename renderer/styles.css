@@ -56,16 +56,15 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 :root {
   /* ── Superficies ───────────────────────────────────────────────────────── */
-  /* Tres niveles de profundidad, no uno: el canvas es el fondo, el chrome es la
-     navegación y el blanco queda reservado para el contenido. Antes todo vivía
-     entre 241 y 255 y los paneles no se despegaban del fondo. */
-  --c-canvas: 234 236 242; /* fondo detrás de los paneles de contenido */
-  --c-chrome: 243 245 249; /* navegación: rail, topbar y columna de lista */
+  /* Cuatro niveles de profundidad: canvas, chrome, contenido blanco y bloques
+     anidados. La separación la refuerzan bordes estructurales, no sombras. */
+  --c-canvas: 224 228 236; /* fondo detrás de los paneles de contenido */
+  --c-chrome: 239 242 247; /* navegación: rail, topbar y columna de lista */
   --c-surface: 255 255 255; /* contenido: el reporte y sus paneles */
-  --c-subtle: 249 250 252; /* bloques anidados dentro del blanco */
-  --c-sunken: 236 238 244; /* hover de fila */
-  --c-selected: 228 233 242; /* fila seleccionada: gris azulado, no tint de acento */
-  --c-chip: 240 241 245; /* números de paso, avatares apagados */
+  --c-subtle: 246 248 251; /* bloques anidados dentro del blanco */
+  --c-sunken: 228 232 240; /* hover de fila */
+  --c-selected: 218 226 239; /* fila seleccionada: gris azulado, no tint de acento */
+  --c-chip: 234 237 243; /* números de paso, avatares apagados */
 
   /* ── Acento (azul) ─────────────────────────────────────────────────────── */
   --c-accent: 37 99 235;
@@ -89,11 +88,11 @@
   --c-fg-disabled: 172 179 195;
 
   /* ── Bordes (de más marcado a más tenue) ───────────────────────────────── */
-  --c-border-strong: 198 203 215; /* punteados, radios sin marcar */
-  --c-border: 216 220 229; /* controles: inputs, botones, selects */
-  --c-border-card: 224 228 237; /* tarjetas de contenido */
-  --c-border-soft: 229 233 241; /* divisores del chrome (rail, topbar) */
-  --c-border-faint: 236 239 245; /* divisores internos de tarjeta */
+  --c-border-strong: 176 186 202; /* punteados, radios sin marcar */
+  --c-border: 197 205 218; /* controles: inputs, botones, selects */
+  --c-border-card: 207 214 225; /* tarjetas de contenido */
+  --c-border-soft: 218 224 234; /* divisores del chrome (rail, topbar) */
+  --c-border-faint: 228 233 240; /* divisores internos de tarjeta */
 
   /* ── Neutro (severidad baja, estado cerrado, categorías) ───────────────── */
   --c-neutral-bg: 249 250 251;
@@ -471,7 +470,10 @@
      final evita los controles nativos de la ventana sin mover la línea de grilla. */
   .app-topbar-aside {
     padding-right: calc(
-      0.75rem + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)
+      0.75rem +
+      100vw -
+      env(titlebar-area-x, 0px) -
+      env(titlebar-area-width, 100vw)
     );
   }
 
@@ -1666,7 +1668,7 @@
     min-width: 0;
     flex-direction: column;
     gap: 0.875rem;
-    padding: 0 1.5rem 1.25rem;
+    padding: 1rem 1.5rem 1.25rem;
   }
 
   /* Este SÍ es de dos columnas: "Qué pasa" y "Qué debería pasar" se comparan. */
@@ -3641,7 +3643,10 @@
 
     .app-topbar-aside {
       padding-right: calc(
-        0.25rem + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)
+        0.25rem +
+        100vw -
+        env(titlebar-area-x, 0px) -
+        env(titlebar-area-width, 100vw)
       );
     }
 

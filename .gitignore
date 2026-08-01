@@ -25,6 +25,8 @@ index/
 *.log
 test-*.mjs
 setup-ollama-*.sh
+__pycache__/
+*.py[cod]
 
 # OS
 .DS_Store

@@ -48,14 +48,15 @@ deben hardcodear colores: usan `col`, `alpha`, clases semánticas o `var(--c-*)`
 
 Valores de referencia:
 
-- Canvas `#eaecf2`, chrome `#f3f5f9`, superficie `#ffffff`, anidado `#f9fafc`.
+- Canvas `#e0e4ec`, chrome `#eff2f7`, superficie `#ffffff`, anidado `#f6f8fb`.
+- Bordes de controles `#c5cdda`, tarjetas `#cfd6e1` y divisores internos `#e4e9f0`.
 - Acento `#2563eb`, hover `#1d4ed8`, tint `#eff6ff`.
 - Texto principal `#101828`, cuerpo `#475467`, secundario `#545e72`.
 
-**Tres niveles de profundidad, y el blanco es del contenido.** El canvas es el fondo; el
+**Cuatro niveles de profundidad, y el blanco es del contenido.** El canvas es el fondo; el
 chrome (gris) es la navegación — rail, topbar y columna de lista; el blanco queda reservado
-para el reporte y sus paneles. Así lo que se está leyendo es lo único blanco de la pantalla.
-Antes las cinco superficies vivían entre 241 y 255 y nada se despegaba de nada.
+para el reporte y sus paneles; y `subtle` separa los bloques anidados. Los bordes sostienen
+esa jerarquía sin sumar sombras ni ensuciar la interfaz.
 
 `fg-dim` es el gris más claro permitido para texto: mantiene 4.5:1 (WCAG AA) sobre `chrome`,
 que es la superficie más oscura donde hay texto — no usarlo sobre `canvas`. `fg-faint` y
