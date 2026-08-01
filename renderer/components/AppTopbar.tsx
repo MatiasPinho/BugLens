@@ -28,7 +28,10 @@ interface Props {
   projectSlot?: React.ReactNode
   /** Estado del motor de análisis u otros indicadores globales. */
   statusSlot?: React.ReactNode
+  /** Acciones que cierran la columna central, antes del rail de propiedades. */
   actions?: React.ReactNode
+  /** Acciones que viven sobre el rail de propiedades, antes de la cuenta. */
+  asideActions?: React.ReactNode
   /** Miembros del proyecto activo, para los avatares del equipo. */
   members?: TeamMember[]
   user?: TopbarUser
@@ -40,38 +43,45 @@ export default function AppTopbar({
   projectSlot,
   statusSlot,
   actions,
+  asideActions,
   members = [],
   user,
   onSignOut,
 }: Props) {
   return (
     <header className="app-topbar">
-      {projectSlot}
+      <div className="app-topbar-main">
+        {projectSlot}
 
-      <nav className="app-breadcrumb" aria-label="ubicación">
-        <ol className="app-breadcrumb-list">
-          {breadcrumb.map((crumb, index) => {
-            const isCurrent = index === breadcrumb.length - 1
-            return (
-              <li key={crumb} className="app-breadcrumb-item">
-                {index > 0 && (
-                  <IconChevronRight size={12} className="app-breadcrumb-sep" aria-hidden="true" />
-                )}
-                <span
-                  className={isCurrent ? 'app-breadcrumb-current' : 'app-breadcrumb-crumb'}
-                  aria-current={isCurrent ? 'page' : undefined}
-                >
-                  {crumb}
-                </span>
-              </li>
-            )
-          })}
-        </ol>
-      </nav>
+        <nav className="app-breadcrumb" aria-label="ubicación">
+          <ol className="app-breadcrumb-list">
+            {breadcrumb.map((crumb, index) => {
+              const isCurrent = index === breadcrumb.length - 1
+              return (
+                <li key={crumb} className="app-breadcrumb-item">
+                  {index > 0 && (
+                    <IconChevronRight size={12} className="app-breadcrumb-sep" aria-hidden="true" />
+                  )}
+                  <span
+                    className={isCurrent ? 'app-breadcrumb-current' : 'app-breadcrumb-crumb'}
+                    aria-current={isCurrent ? 'page' : undefined}
+                  >
+                    {crumb}
+                  </span>
+                </li>
+              )
+            })}
+          </ol>
+        </nav>
 
-      <div className="app-topbar-end">
-        {statusSlot}
-        {actions}
+        <div className="app-topbar-end">
+          {statusSlot}
+          {actions}
+        </div>
+      </div>
+
+      <div className="app-topbar-aside">
+        {asideActions}
 
         {/* Identidad y equipo detrás del avatar: en el topbar competían con las
             acciones de trabajo y ocupaban un cuarto del ancho. */}

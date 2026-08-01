@@ -63,12 +63,14 @@ describe('AppTopbar', () => {
         projectSlot={<span>selector de proyecto</span>}
         statusSlot={<span>Ollama local</span>}
         actions={<button type="button">ayuda</button>}
+        asideActions={<button type="button">analizar</button>}
       />,
     )
 
     expect(screen.getByText('selector de proyecto')).toBeInTheDocument()
     expect(screen.getByText('Ollama local')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'ayuda' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'analizar' })).toBeInTheDocument()
   })
 
   it('no renderiza bloque de usuario ni cierre de sesión si no hay sesión', () => {

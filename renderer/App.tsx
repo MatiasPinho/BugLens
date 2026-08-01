@@ -730,10 +730,14 @@ function ElectronApp() {
             <button type="button" className="btn-secondary btn-lg" onClick={handleExport}>
               Exportar Excel
             </button>
-            <button type="button" className="btn-primary btn-lg" onClick={() => setRoute('upload')}>
-              Analizar bugs
-            </button>
           </>
+        ) : undefined
+      }
+      asideActions={
+        showBugs ? (
+          <button type="button" className="btn-primary btn-lg" onClick={() => setRoute('upload')}>
+            Analizar bugs
+          </button>
         ) : undefined
       }
       members={projectMembers}

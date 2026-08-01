@@ -437,16 +437,12 @@
   .app-topbar {
     position: relative;
     z-index: 20;
-    display: flex;
+    display: grid;
     min-height: var(--window-titlebar-h);
     flex-shrink: 0;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.375rem
-      calc(
-        1.75rem + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)
-      )
-      0.375rem 1.75rem;
+    grid-template-columns: minmax(0, 1fr) var(--properties-w);
+    gap: 0.75rem;
+    padding: 0.375rem 1rem;
     border-bottom: 1px solid rgb(var(--c-border-soft));
     background: rgb(var(--c-chrome));
     -webkit-app-region: drag;
@@ -454,8 +450,29 @@
 
   /* Los controles viven dentro de una zona arrastrable, pero siguen siendo
      interactivos. El hueco flexible del topbar mueve la ventana. */
-  .app-topbar > * {
+  .app-topbar-main > *,
+  .app-topbar-aside > * {
     -webkit-app-region: no-drag;
+  }
+
+  .app-topbar-main,
+  .app-topbar-aside {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .app-topbar-main {
+    gap: 1rem;
+  }
+
+  /* La columna derecha comparte el ancho del rail de propiedades. Su reserva
+     final evita los controles nativos de la ventana sin mover la línea de grilla. */
+  .app-topbar-aside {
+    padding-right: calc(
+      0.75rem + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)
+    );
   }
 
   /* Login, onboarding y el primer frame de carga no tienen AppTopbar. En esas
@@ -2972,7 +2989,7 @@
     flex: 1;
     grid-template-columns: minmax(0, 1fr) var(--properties-w);
     gap: 0.75rem;
-    padding: 1.25rem 1rem 1rem;
+    padding: 2rem 1rem 1rem;
   }
 
   .bugs-center,
@@ -3580,6 +3597,10 @@
       grid-template-columns: minmax(0, 1fr);
     }
 
+    .app-topbar {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
     .bug-properties {
       display: none;
     }
@@ -3618,11 +3639,10 @@
       max-width: 10rem;
     }
 
-    .app-topbar {
+    .app-topbar-aside {
       padding-right: calc(
-        1.25rem + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)
+        0.25rem + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)
       );
-      padding-left: 1.25rem;
     }
 
     .kpi-grid {

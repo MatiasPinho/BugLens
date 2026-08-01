@@ -44,10 +44,12 @@ export const Completo: Story = {
         <button type="button" className="btn-secondary btn-lg">
           Cargar bug manual
         </button>
-        <button type="button" className="btn-primary btn-lg">
-          Analizar bugs
-        </button>
       </>
+    ),
+    asideActions: (
+      <button type="button" className="btn-primary btn-lg">
+        Analizar bugs
+      </button>
     ),
     members: [
       { id: 'perfil-1', displayName: 'Matias Pinho' },
