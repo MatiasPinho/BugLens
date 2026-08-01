@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import type { ManualBugFields } from '../src/features/analyze-bugs/application/manualBugBuilder'
+import { bugRecordKey } from '../src/features/bug-workflow/domain/bugStatusKey'
 import type {
   AnalyzedBug,
   BugComment,
@@ -97,14 +98,15 @@ function ElectronApp() {
   const [requestLoading, setRequestLoading] = useState<{ title: string; detail?: string } | null>(
     null,
   )
-  const [focusedBugId, setFocusedBugId] = useState<string | null>(null)
-  const [detailBugId, setDetailBugId] = useState<string | null>(null)
+  const [focusedBugKey, setFocusedBugKey] = useState<string | null>(null)
+  const [detailBugKey, setDetailBugKey] = useState<string | null>(null)
   const [showHelp, setShowHelp] = useState(false)
   const [projectMembers, setProjectMembers] = useState<TeamMember[]>([])
   const searchInputRef = React.useRef<HTMLInputElement | null>(null)
   const remoteReloadTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const activeProjectId = teamStatus?.project?.id ?? null
-  const detailBug = results.find((bug) => bug.enriched.raw.id === detailBugId) ?? null
+  const detailBug =
+    results.find((bug) => bugRecordKey(bug.enriched.raw) === detailBugKey) ?? null
 
   const addLog = useCallback((level: LogLine['level'], message: string, timestamp?: string) => {
     setLogs((prev) => [
@@ -137,7 +139,8 @@ function ElectronApp() {
       if (ev.type !== 'bug-result') return
       const e = ev as BugResultEvent
       setResults((prev) => {
-        const exists = prev.some((r) => r.enriched.raw.id === e.result.enriched.raw.id)
+        const resultKey = bugRecordKey(e.result.enriched.raw)
+        const exists = prev.some((bug) => bugRecordKey(bug.enriched.raw) === resultKey)
         return exists ? prev : [...prev, e.result]
       })
       setPhase('analyzing')
@@ -221,7 +224,7 @@ function ElectronApp() {
     const status = await window.electronAPI.getSupabaseStatus()
     setTeamStatus(status)
     setResults([])
-    setDetailBugId(null)
+    setDetailBugKey(null)
     addLog('info', 'sesión del equipo cerrada')
   }, [addLog])
 
@@ -237,8 +240,8 @@ function ElectronApp() {
         const status = await window.electronAPI.selectSupabaseProject(projectId)
         setTeamStatus(status)
         setResults([])
-        setDetailBugId(null)
-        setFocusedBugId(null)
+        setDetailBugKey(null)
+        setFocusedBugKey(null)
         if (status.project) addLog('info', `proyecto activo: ${status.project.name}`)
         else addLog('error', `error seleccionando proyecto: ${status.error ?? 'sin detalle'}`)
       } finally {
@@ -257,8 +260,8 @@ function ElectronApp() {
         const status = await window.electronAPI.createSupabaseProject(name, slug)
         setTeamStatus(status)
         setResults([])
-        setDetailBugId(null)
-        setFocusedBugId(null)
+        setDetailBugKey(null)
+        setFocusedBugKey(null)
         if (status.project) addLog('info', `proyecto creado: ${status.project.name}`)
         else addLog('error', `error creando proyecto: ${status.error ?? 'sin detalle'}`)
       } finally {
@@ -386,13 +389,19 @@ function ElectronApp() {
   // Cambiar el estado de un bug: update optimista en la UI + persistir en Supabase.
   const handleSetStatus = useCallback(
     async (bug: AnalyzedBug, status: BugStatus) => {
-      const id = bug.enriched.raw.id
-      setResults((prev) => prev.map((r) => (r.enriched.raw.id === id ? { ...r, status } : r)))
+      const key = bugRecordKey(bug.enriched.raw)
+      setResults((prev) =>
+        prev.map((item) =>
+          bugRecordKey(item.enriched.raw) === key ? { ...item, status } : item,
+        ),
+      )
       const result = await window.electronAPI.setBugStatus(bug, status)
       if (!result.ok) {
         addLog('error', `error guardando estado: ${result.error}`)
         setResults((prev) =>
-          prev.map((r) => (r.enriched.raw.id === id ? { ...r, status: bug.status } : r)),
+          prev.map((item) =>
+            bugRecordKey(item.enriched.raw) === key ? { ...item, status: bug.status } : item,
+          ),
         )
       }
     },
@@ -402,11 +411,11 @@ function ElectronApp() {
   // Borrar un bug: soft-delete remoto en Supabase + update optimista del listado.
   const handleDeleteBug = useCallback(
     async (bug: AnalyzedBug) => {
-      const id = bug.enriched.raw.id
+      const key = bugRecordKey(bug.enriched.raw)
       const previousResults = results
-      setResults((prev) => prev.filter((r) => r.enriched.raw.id !== id))
-      setDetailBugId((curr) => (curr === id ? null : curr))
-      setFocusedBugId((curr) => (curr === id ? null : curr))
+      setResults((prev) => prev.filter((item) => bugRecordKey(item.enriched.raw) !== key))
+      setDetailBugKey((current) => (current === key ? null : current))
+      setFocusedBugKey((current) => (current === key ? null : current))
 
       const result = await window.electronAPI.deleteBug(bug)
       if (result.ok) addLog('info', `bug borrado: ${bug.enriched.raw.title}`)
@@ -423,7 +432,7 @@ function ElectronApp() {
       const result = await window.electronAPI.analyzeWithExternalAgent(bug)
       setResults((prev) =>
         prev.map((item) =>
-          item.enriched.raw.id === bug.enriched.raw.id
+          bugRecordKey(item.enriched.raw) === bugRecordKey(bug.enriched.raw)
             ? {
                 ...item,
                 analysis: {
@@ -455,7 +464,7 @@ function ElectronApp() {
       const savedComment = result.comment
       setResults((prev) =>
         prev.map((item) =>
-          item.enriched.raw.id === bug.enriched.raw.id
+          bugRecordKey(item.enriched.raw) === bugRecordKey(bug.enriched.raw)
             ? { ...item, comments: [savedComment, ...(item.comments ?? [])] }
             : item,
         ),
@@ -489,7 +498,9 @@ function ElectronApp() {
       }
       setResults((prev) =>
         prev.map((item) =>
-          item.enriched.raw.id === bug.enriched.raw.id ? { ...item, dueDate } : item,
+          bugRecordKey(item.enriched.raw) === bugRecordKey(bug.enriched.raw)
+            ? { ...item, dueDate }
+            : item,
         ),
       )
     },
@@ -552,8 +563,8 @@ function ElectronApp() {
             setShowHelp(false)
             break
           }
-          if (detailBugId) {
-            setDetailBugId(null)
+          if (detailBugKey) {
+            setDetailBugKey(null)
             break
           }
           if (isTyping) (target as HTMLInputElement).blur()
@@ -561,25 +572,31 @@ function ElectronApp() {
         case 'j': {
           if (results.length === 0) return
           e.preventDefault()
-          const index = results.findIndex((r) => r.enriched.raw.id === focusedBugId)
+          const index = results.findIndex(
+            (bug) => bugRecordKey(bug.enriched.raw) === focusedBugKey,
+          )
           const next = results[Math.min(index + 1, results.length - 1)] ?? results[0]
-          setFocusedBugId(next.enriched.raw.id)
-          if (detailBugId) setDetailBugId(next.enriched.raw.id)
+          const nextKey = bugRecordKey(next.enriched.raw)
+          setFocusedBugKey(nextKey)
+          if (detailBugKey) setDetailBugKey(nextKey)
           break
         }
         case 'k': {
           if (results.length === 0) return
           e.preventDefault()
-          const index = results.findIndex((r) => r.enriched.raw.id === focusedBugId)
+          const index = results.findIndex(
+            (bug) => bugRecordKey(bug.enriched.raw) === focusedBugKey,
+          )
           const previous = results[Math.max(index - 1, 0)] ?? results[0]
-          setFocusedBugId(previous.enriched.raw.id)
-          if (detailBugId) setDetailBugId(previous.enriched.raw.id)
+          const previousKey = bugRecordKey(previous.enriched.raw)
+          setFocusedBugKey(previousKey)
+          if (detailBugKey) setDetailBugKey(previousKey)
           break
         }
         case 'Enter': {
-          if (!focusedBugId) return
+          if (!focusedBugKey) return
           e.preventDefault()
-          setDetailBugId((curr) => (curr === focusedBugId ? null : focusedBugId))
+          setDetailBugKey((current) => (current === focusedBugKey ? null : focusedBugKey))
           break
         }
         // 1-5: marcar estado del bug enfocado, sin abrirlo.
@@ -588,8 +605,10 @@ function ElectronApp() {
         case '3':
         case '4':
         case '5': {
-          if (!focusedBugId) return
-          const bug = results.find((r) => r.enriched.raw.id === focusedBugId)
+          if (!focusedBugKey) return
+          const bug = results.find(
+            (item) => bugRecordKey(item.enriched.raw) === focusedBugKey,
+          )
           if (!bug) return
           const statusByKey: Record<string, BugStatus> = {
             '1': 'nuevo',
@@ -606,7 +625,7 @@ function ElectronApp() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [route, results, focusedBugId, detailBugId, showHelp, handleSetStatus])
+  }, [route, results, focusedBugKey, detailBugKey, showHelp, handleSetStatus])
 
   // Primer arranque: mientras carga no parpadeamos nada; si falta onboarding, wizard.
   if (onboarded === null) {
@@ -700,14 +719,18 @@ function ElectronApp() {
       actions={
         showBugs ? (
           <>
-            <button type="button" className="btn-secondary" onClick={() => setShowManualForm(true)}>
+            <button
+              type="button"
+              className="btn-secondary btn-lg"
+              onClick={() => setShowManualForm(true)}
+            >
               <IconPlus size={14} className="button-icon button-icon-plus" />
               Cargar bug manual
             </button>
-            <button type="button" className="btn-secondary" onClick={handleExport}>
+            <button type="button" className="btn-secondary btn-lg" onClick={handleExport}>
               Exportar Excel
             </button>
-            <button type="button" className="btn-primary" onClick={() => setRoute('upload')}>
+            <button type="button" className="btn-primary btn-lg" onClick={() => setRoute('upload')}>
               Analizar bugs
             </button>
           </>
@@ -731,7 +754,7 @@ function ElectronApp() {
         active={route}
         onSelect={(next) => {
           setRoute(next)
-          setDetailBugId(null)
+          setDetailBugKey(null)
         }}
         actions={
           <button
@@ -762,8 +785,8 @@ function ElectronApp() {
           agent={agentInfo}
           members={projectMembers}
           searchInputRef={searchInputRef}
-          focusedId={focusedBugId}
-          onFocus={setFocusedBugId}
+          focusedKey={focusedBugKey}
+          onFocus={setFocusedBugKey}
           onSetStatus={(bug, status) => void handleSetStatus(bug, status)}
           onSetAssignees={(bug, userIds) => void handleSetAssignees(bug, userIds)}
           onSetDueDate={(bug, dueDate) => void handleSetDueDate(bug, dueDate)}

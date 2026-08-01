@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { useState } from 'react'
+import { bugRecordKey } from '../../../../src/features/bug-workflow/domain/bugStatusKey'
 import { makeBug } from '../../../components/_storyFixtures'
 import BugList from './BugList'
 import type { BugFilters, LifecycleTab } from './bugPresentation'
@@ -30,7 +31,7 @@ const meta = {
 export default meta
 
 function Lista({ filtro = {} }: { filtro?: Partial<BugFilters> }) {
-  const [selectedId, setSelectedId] = useState<string | null>('1')
+  const [selectedKey, setSelectedKey] = useState<string | null>(bugRecordKey(bugs[0].enriched.raw))
   const [lifecycle, setLifecycle] = useState<LifecycleTab>('todos')
   const filters: BugFilters = {
     lifecycle,
@@ -51,8 +52,8 @@ function Lista({ filtro = {} }: { filtro?: Partial<BugFilters> }) {
         filters={filters}
         categories={['frontend', 'backend']}
         severities={['critical', 'high', 'medium', 'low']}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
+        selectedKey={selectedKey}
+        onSelect={setSelectedKey}
         onLifecycleChange={setLifecycle}
         onSearchChange={() => {}}
         onSeverityChange={() => {}}

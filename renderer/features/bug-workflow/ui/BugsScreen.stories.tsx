@@ -80,13 +80,13 @@ export default meta
 type Story = StoryObj<typeof BugsScreen>
 
 function Interactive() {
-  const [focusedId, setFocusedId] = useState<string | null>(null)
+  const [focusedKey, setFocusedKey] = useState<string | null>(null)
   return (
     <div style={{ height: '100vh' }}>
       <BugsScreen
         results={results}
-        focusedId={focusedId}
-        onFocus={setFocusedId}
+        focusedKey={focusedKey}
+        onFocus={setFocusedKey}
         onSetStatus={() => {}}
       />
     </div>

@@ -1,6 +1,6 @@
 import * as path from 'node:path'
 import * as dotenv from 'dotenv'
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell } from 'electron'
 
 // Load .env from project root (dev) or app resources (prod)
 const envPath = app.isPackaged
@@ -136,6 +136,14 @@ function makeSupabaseTeamClient() {
 
 let mainWindow: BrowserWindow | null = null
 
+function getAppIconPath(): string {
+  const iconFilename = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
+
+  return app.isPackaged
+    ? path.join(process.resourcesPath, iconFilename)
+    : path.join(__dirname, '..', '..', 'build', iconFilename)
+}
+
 interface RendererWindowChrome {
   color: string
   symbolColor: string
@@ -147,6 +155,12 @@ interface RendererWindowChrome {
 // como ésta, el render por software es más que suficiente y evita el crash.
 if (process.platform === 'linux') {
   app.disableHardwareAcceleration()
+}
+
+app.setName('BugLens')
+if (process.platform === 'win32') {
+  // Evita que Windows agrupe la ventana bajo la identidad genérica de Electron.
+  app.setAppUserModelId('com.buganalyzer.app')
 }
 
 async function showWindowWithRendererChrome(window: BrowserWindow): Promise<void> {
@@ -185,6 +199,11 @@ async function showWindowWithRendererChrome(window: BrowserWindow): Promise<void
 }
 
 function createWindow(): void {
+  const appIcon = nativeImage.createFromPath(getAppIconPath())
+  if (appIcon.isEmpty()) {
+    console.warn(`No se pudo cargar el ícono de la aplicación: ${getAppIconPath()}`)
+  }
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -194,6 +213,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
     titleBarOverlay: true,
+    icon: appIcon,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -201,6 +221,12 @@ function createWindow(): void {
     },
     title: 'BugLens',
   })
+
+  if (process.platform !== 'darwin') {
+    // `setIcon` fuerza también el ícono nativo de la ventana en desarrollo,
+    // donde el proceso anfitrión sigue siendo electron.exe.
+    mainWindow.setIcon(appIcon)
+  }
 
   const windowToShow = mainWindow
   windowToShow.once('ready-to-show', () => {

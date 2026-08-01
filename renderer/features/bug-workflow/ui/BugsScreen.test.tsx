@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { bugRecordKey } from '../../../../src/features/bug-workflow/domain/bugStatusKey'
 import type { AnalyzedBug, BugStatus } from '../../../../src/shared/contracts'
 import BugsScreen from './BugsScreen'
 
@@ -199,38 +200,41 @@ describe('BugsScreen — tres columnas', () => {
 
   it('elegir otro bug de la lista avisa al padre', async () => {
     const onFocus = vi.fn()
+    const selectedBug = makeBug({ id: 'bug-0007', title: 'Export vacío' })
     renderScreen(
       [
-        makeBug({ id: 'bug-1', title: 'Login roto' }),
-        makeBug({ id: 'bug-2', title: 'Export vacío' }),
+        makeBug({ id: 'bug-0007', title: 'Login roto' }),
+        selectedBug,
       ],
       { onFocus },
     )
 
     await userEvent.click(screen.getByRole('button', { name: /Export vacío/ }))
 
-    expect(onFocus).toHaveBeenCalledWith('bug-2')
+    expect(onFocus).toHaveBeenCalledWith(bugRecordKey(selectedBug.enriched.raw))
   })
 
   it('el bug enfocado es el que se muestra', () => {
+    const selectedBug = makeBug({ id: 'bug-2', title: 'Export vacío' })
     renderScreen(
       [
         makeBug({ id: 'bug-1', title: 'Login roto' }),
-        makeBug({ id: 'bug-2', title: 'Export vacío' }),
+        selectedBug,
       ],
-      { focusedId: 'bug-2' },
+      { focusedKey: bugRecordKey(selectedBug.enriched.raw) },
     )
 
     expect(screen.getByRole('heading', { name: 'Export vacío' })).toBeInTheDocument()
   })
 
   it('si el filtro deja afuera al bug enfocado, muestra el primero visible', async () => {
+    const selectedBug = makeBug({ id: 'bug-2', title: 'Export vacío' })
     renderScreen(
       [
         makeBug({ id: 'bug-1', title: 'Login roto' }),
-        makeBug({ id: 'bug-2', title: 'Export vacío' }),
+        selectedBug,
       ],
-      { focusedId: 'bug-2' },
+      { focusedKey: bugRecordKey(selectedBug.enriched.raw) },
     )
 
     await userEvent.type(screen.getByLabelText('buscar bugs'), 'Login')

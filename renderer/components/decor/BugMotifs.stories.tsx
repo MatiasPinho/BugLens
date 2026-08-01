@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { col } from '../../theme'
-import { BeetleMark, BugUnderLensMark } from './BugMotifs'
+import { BeetleMark, BugLensMark, BugUnderLensMark } from './BugMotifs'
 
 // Galería de motivos decorativos (bichos / bugs) para complementar la UI.
 // Line-art a un trazo (currentColor). Heredan color del contenedor; acá se
@@ -30,6 +30,16 @@ export const Galeria: Story = {
       className="grid min-h-screen grid-cols-2 gap-5 p-8 md:grid-cols-3"
       style={{ background: col.canvas }}
     >
+      <Frame label="marca BugLens · principal">
+        <span className="app-brand-mark" style={{ width: 96, height: 96 }}>
+          <BugLensMark style={{ width: 60 }} />
+        </span>
+      </Frame>
+      <Frame label="marca BugLens · compacta">
+        <span className="app-brand-mark" style={{ width: 40, height: 40 }}>
+          <BugLensMark compact style={{ width: 24 }} />
+        </span>
+      </Frame>
       <Frame label="escarabajo · acento">
         <BeetleMark style={{ width: 120, color: col.accent }} />
       </Frame>
@@ -39,10 +49,10 @@ export const Galeria: Story = {
       <Frame label="escarabajo · watermark">
         <BeetleMark style={{ width: 120, color: col.fgDim, opacity: 0.18 }} />
       </Frame>
-      <Frame label="lupa + bicho · acento">
+      <Frame label="motivo lupa + bicho · acento">
         <BugUnderLensMark style={{ width: 120, color: col.accent }} />
       </Frame>
-      <Frame label="lupa + bicho · texto">
+      <Frame label="motivo lupa + bicho · texto">
         <BugUnderLensMark style={{ width: 120, color: col.fgBody }} />
       </Frame>
     </div>

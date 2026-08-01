@@ -2336,11 +2336,11 @@
     position: relative;
   }
 
-  /* Vive en el topbar: alto de control estándar y ancho al contenido, no al 100%. */
+  /* Vive en el topbar: comparte altura con el buscador y las acciones principales. */
   .project-select {
     display: flex;
     max-width: 15rem;
-    height: var(--ctl-h-md);
+    height: var(--ctl-h-lg);
     align-items: center;
     gap: 0.5rem;
     padding: 0 0.5rem;
@@ -2972,7 +2972,7 @@
     flex: 1;
     grid-template-columns: minmax(0, 1fr) var(--properties-w);
     gap: 0.75rem;
-    padding: 0.75rem 1rem 1rem;
+    padding: 1.25rem 1rem 1rem;
   }
 
   .bugs-center,
@@ -2994,7 +2994,7 @@
     top: 0;
     min-width: 0;
     gap: 0.5rem;
-    padding: 0.75rem;
+    padding: 0.375rem 0.75rem 0.75rem;
     border-bottom: 1px solid rgb(var(--c-border-soft));
     background: rgb(var(--c-chrome));
   }
