@@ -1623,6 +1623,9 @@
     min-width: 0;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
   }
 
   .kpi {
@@ -1635,6 +1638,32 @@
     border: 1px solid rgb(var(--c-border-soft));
     border-radius: var(--radius-sm);
     background: rgb(var(--c-subtle));
+    font-family: inherit;
+    text-align: left;
+  }
+
+  .kpi-interactive {
+    cursor: pointer;
+    transition:
+      border-color 150ms ease,
+      box-shadow 150ms ease,
+      transform 150ms ease;
+  }
+
+  .kpi-interactive:hover:not(:disabled) {
+    border-color: rgb(var(--c-accent-line));
+    transform: translateY(-1px);
+  }
+
+  .kpi-interactive:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .kpi-selected {
+    box-shadow:
+      inset 0 0 0 1px rgb(var(--c-accent) / 0.45),
+      var(--shadow-card);
   }
 
   /* Minúscula y sin letter-spacing: en mayúscula "SOLUCIONADOS" no entra en
@@ -3858,7 +3887,7 @@
     color: rgb(var(--c-fg-body));
   }
 
-  .comment-empty-mark {
+  .comment-conversation-mark {
     display: inline-flex;
     width: var(--ctl-h-lg);
     height: var(--ctl-h-lg);
@@ -3882,6 +3911,21 @@
 
   .comment-replies {
     margin-top: 0.75rem;
+  }
+
+  .comment-item-indented {
+    position: relative;
+    margin-left: 1.25rem;
+  }
+
+  .comment-item-indented::before {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -0.625rem;
+    width: 1px;
+    background: rgb(var(--c-border-faint));
+    content: "";
   }
 
   .comment-body {
@@ -3973,12 +4017,89 @@
     margin-top: 0.25rem;
   }
 
+  .comment-composer-trigger {
+    display: flex;
+    width: 100%;
+    min-height: var(--ctl-h-lg);
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+    padding: 0.5rem 0.625rem;
+    border: 1px solid rgb(var(--c-border-card));
+    border-radius: var(--radius-lg);
+    background: rgb(var(--c-surface));
+    color: rgb(var(--c-fg-muted));
+    font-family: inherit;
+    font-size: var(--text-sm);
+    text-align: left;
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      background 0.15s,
+      color 0.15s;
+  }
+
+  .comment-composer-trigger > svg {
+    flex-shrink: 0;
+    color: rgb(var(--c-accent));
+  }
+
+  .comment-composer-trigger:hover {
+    border-color: rgb(var(--c-accent-line));
+    background: rgb(var(--c-accent-soft) / 0.42);
+    color: rgb(var(--c-fg-body));
+  }
+
+  .comment-composer-trigger-action {
+    flex-shrink: 0;
+    margin-left: auto;
+    color: rgb(var(--c-accent));
+    font-size: var(--text-xs);
+    font-weight: 600;
+  }
+
+  .comment-composer-featured {
+    gap: 0.75rem;
+    margin-top: 0;
+    padding: 0.75rem;
+    border: 1px solid rgb(var(--c-border-card));
+    border-radius: var(--radius-xl);
+    background: rgb(var(--c-subtle) / 0.64);
+  }
+
+  .comment-composer-intro {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .comment-composer-copy {
+    display: grid;
+    min-width: 0;
+    gap: 0.125rem;
+  }
+
+  .comment-composer-title {
+    color: rgb(var(--c-fg));
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .comment-composer-description {
+    color: rgb(var(--c-fg-dim));
+    font-size: var(--text-xs);
+  }
+
   .comment-input {
     min-height: 4.5rem;
     padding: 0.5rem 0.625rem;
     font-family: inherit;
     line-height: 1.5;
     resize: vertical;
+  }
+
+  .comment-composer-featured .comment-input {
+    background: rgb(var(--c-surface));
   }
 
   .comment-composer-actions {
@@ -4173,6 +4294,16 @@
       display: none;
     }
 
+    .comment-composer-trigger {
+      padding-top: 0.75rem;
+      padding-bottom: 0.75rem;
+    }
+
+    .comment-actions .btn-mini,
+    .vote-button {
+      min-height: var(--ctl-h-lg);
+    }
+
     .page-heading {
       flex-wrap: wrap;
     }
@@ -4243,6 +4374,21 @@
 
     .team-login-identity {
       min-height: 10rem;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .comment-item-indented {
+      margin-left: 0.75rem;
+    }
+
+    .comment-item-indented::before {
+      left: -0.375rem;
+    }
+
+    .comment-head {
+      display: grid;
+      gap: 0.125rem;
     }
   }
 }

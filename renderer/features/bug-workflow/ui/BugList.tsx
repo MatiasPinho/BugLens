@@ -22,6 +22,7 @@ import { LifecycleTabs, SeverityBadge, StatusBadge } from './BugAtoms'
 import { BugKpiGrid } from './BugKpiGrid'
 import {
   type BugFilters,
+  type BugKpiFilter,
   type BugKpis,
   hasActiveFilters,
   isQuietStatus,
@@ -48,6 +49,7 @@ interface Props {
   onSeverityChange: (value: Severity | 'all') => void
   onCategoryChange: (value: BugCategory | 'all') => void
   onStatusChange: (value: BugStatus | 'all') => void
+  onKpiSelect: (filter: BugKpiFilter) => void
   onClearFilters: () => void
   searchInputRef?: React.MutableRefObject<HTMLInputElement | null>
 }
@@ -67,6 +69,7 @@ export default function BugList({
   onSeverityChange,
   onCategoryChange,
   onStatusChange,
+  onKpiSelect,
   onClearFilters,
   searchInputRef,
 }: Props) {
@@ -143,7 +146,7 @@ export default function BugList({
           )}
         </div>
 
-        <BugKpiGrid {...kpis} />
+        <BugKpiGrid {...kpis} selected={filters.quickFilter} onSelect={onKpiSelect} />
       </div>
 
       <div className="bug-list-section-head">

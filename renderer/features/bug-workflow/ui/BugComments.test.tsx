@@ -39,17 +39,37 @@ describe('BugComments', () => {
     expect(screen.getByText('2')).toBeInTheDocument()
   })
 
-  it('avisa cuando no hay comentarios', () => {
+  it('prioriza el hilo existente y expande el compositor al pedirlo', async () => {
+    render(<BugComments bug={bug} comments={hilo} onAddComment={vi.fn()} />)
+
+    expect(screen.queryByLabelText('Escribí un comentario')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Escribir un comentario' }))
+    expect(screen.getByLabelText('Escribí un comentario')).toHaveFocus()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    expect(screen.queryByLabelText('Escribí un comentario')).not.toBeInTheDocument()
+  })
+
+  it('integra el estado vacío en el compositor cuando se puede comentar', () => {
+    render(<BugComments bug={bug} comments={[]} onAddComment={vi.fn()} />)
+
+    expect(screen.getByText('Iniciá la conversación')).toBeInTheDocument()
+    expect(screen.getByLabelText('Escribí un comentario')).toBeInTheDocument()
+    expect(screen.queryByText('Todavía no hay comentarios.')).not.toBeInTheDocument()
+  })
+
+  it('muestra un vacío informativo cuando no se puede comentar', () => {
     render(<BugComments bug={bug} comments={[]} />)
 
-    expect(screen.getByText('Nadie comentó todavía.')).toBeInTheDocument()
+    expect(screen.getByText('Todavía no hay comentarios.')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
   })
 
   it('envía un comentario raíz sin padre', async () => {
     const onAddComment = vi.fn().mockResolvedValue(undefined)
     render(<BugComments bug={bug} comments={[]} onAddComment={onAddComment} />)
 
-    await userEvent.type(screen.getByLabelText('Escribí un comentario…'), 'una nota')
+    await userEvent.type(screen.getByLabelText('Escribí un comentario'), 'una nota')
     await userEvent.click(screen.getByRole('button', { name: 'Enviar' }))
 
     expect(onAddComment).toHaveBeenCalledWith('una nota', null)
@@ -60,7 +80,7 @@ describe('BugComments', () => {
     render(<BugComments bug={bug} comments={hilo} onAddComment={onAddComment} />)
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Responder' })[0])
-    await userEvent.type(screen.getByLabelText(/Respondiendo a Lucía Gómez/), 'listo')
+    await userEvent.type(screen.getByLabelText(/Respuesta para Lucía Gómez/), 'listo')
     await userEvent.click(screen.getByRole('button', { name: 'Enviar' }))
 
     expect(onAddComment).toHaveBeenCalledWith('listo', 'c1')
@@ -71,7 +91,7 @@ describe('BugComments', () => {
     render(<BugComments bug={bug} comments={[]} onAddComment={onAddComment} />)
 
     expect(screen.getByRole('button', { name: 'Enviar' })).toBeDisabled()
-    await userEvent.type(screen.getByLabelText('Escribí un comentario…'), '   ')
+    await userEvent.type(screen.getByLabelText('Escribí un comentario'), '   ')
     expect(screen.getByRole('button', { name: 'Enviar' })).toBeDisabled()
     expect(onAddComment).not.toHaveBeenCalled()
   })
@@ -80,13 +100,57 @@ describe('BugComments', () => {
     const onAddComment = vi.fn().mockRejectedValue(new Error('No tenés permisos.'))
     render(<BugComments bug={bug} comments={[]} onAddComment={onAddComment} />)
 
-    const campo = screen.getByLabelText('Escribí un comentario…')
+    const campo = screen.getByLabelText('Escribí un comentario')
     await userEvent.type(campo, 'una nota')
     await userEvent.click(screen.getByRole('button', { name: 'Enviar' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No tenés permisos.')
     // Si se limpiara, el usuario perdería lo que escribió por un error del servidor.
     expect(campo).toHaveValue('una nota')
+  })
+
+  it('descarta el borrador al cambiar de bug', async () => {
+    const onAddComment = vi.fn().mockResolvedValue(undefined)
+    const { rerender } = render(<BugComments bug={bug} comments={[]} onAddComment={onAddComment} />)
+
+    await userEvent.type(screen.getByLabelText('Escribí un comentario'), 'nota del login')
+    rerender(
+      <BugComments
+        bug={makeBug({ id: 'b', title: 'Checkout roto' })}
+        comments={[]}
+        onAddComment={onAddComment}
+      />,
+    )
+
+    expect(screen.getByLabelText('Escribí un comentario')).toHaveValue('')
+  })
+
+  it('conserva el borrador raíz mientras se responde dentro del hilo', async () => {
+    render(<BugComments bug={bug} comments={hilo} onAddComment={vi.fn()} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Escribir un comentario' }))
+    const rootComposer = screen.getByLabelText('Escribí un comentario')
+    await userEvent.type(rootComposer, 'nota general')
+    await userEvent.click(screen.getAllByRole('button', { name: 'Responder' })[0])
+    expect(rootComposer).not.toBeVisible()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    expect(rootComposer).toBeVisible()
+    expect(rootComposer).toHaveValue('nota general')
+  })
+
+  it('limita la sangría visual después del tercer nivel', () => {
+    const comments = Array.from({ length: 5 }, (_, index) =>
+      makeComment({
+        id: `depth-${index}`,
+        parentId: index === 0 ? null : `depth-${index - 1}`,
+        body: `Nivel ${index + 1}`,
+      }),
+    )
+    render(<BugComments bug={bug} comments={comments} />)
+
+    expect(screen.getByText('Nivel 4').closest('li')).toHaveClass('comment-item-indented')
+    expect(screen.getByText('Nivel 5').closest('li')).not.toHaveClass('comment-item-indented')
   })
 
   it('votar avisa con el comentario y el valor', async () => {
@@ -117,7 +181,7 @@ describe('BugComments', () => {
   it('permite ocultar y volver a mostrar las respuestas', async () => {
     render(<BugComments bug={bug} comments={hilo} />)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Ocultar respuestas' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Ocultar 1 respuesta' }))
     expect(screen.queryByText('Lo miro esta tarde.')).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: /Mostrar 1 respuesta/ }))

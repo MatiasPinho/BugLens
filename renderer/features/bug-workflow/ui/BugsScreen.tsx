@@ -28,6 +28,7 @@ import BugList from './BugList'
 import BugPropertiesRail from './BugPropertiesRail'
 import {
   type BugFilters,
+  type BugKpiFilter,
   bugKpis,
   filterBugs,
   type LifecycleTab,
@@ -75,12 +76,13 @@ export default function BugsScreen({
   const [severity, setSeverity] = useState<Severity | 'all'>('all')
   const [status, setStatus] = useState<BugStatus | 'all'>('all')
   const [search, setSearch] = useState('')
+  const [quickFilter, setQuickFilter] = useState<BugKpiFilter | null>('active')
   const [propertiesOpen, setPropertiesOpen] = useState(false)
   const commentsRef = useRef<HTMLElement | null>(null)
 
   const filters: BugFilters = useMemo(
-    () => ({ lifecycle, category, severity, status, search }),
-    [lifecycle, category, severity, status, search],
+    () => ({ lifecycle, category, severity, status, search, quickFilter }),
+    [lifecycle, category, severity, status, search, quickFilter],
   )
   const counts = useMemo(() => lifecycleCounts(results), [results])
   const kpis = useMemo(() => bugKpis(results), [results])
@@ -113,6 +115,7 @@ export default function BugsScreen({
     setPropertiesOpen(false)
     setLifecycle(tab)
     setStatus('all')
+    setQuickFilter(tab === 'activos' ? 'active' : null)
   }
 
   const clearFilters = () => {
@@ -121,6 +124,17 @@ export default function BugsScreen({
     setCategory('all')
     setSeverity('all')
     setStatus('all')
+    setQuickFilter(lifecycle === 'activos' ? 'active' : null)
+  }
+
+  const selectKpi = (filter: BugKpiFilter) => {
+    setPropertiesOpen(false)
+    setSearch('')
+    setCategory('all')
+    setSeverity(filter === 'critical' ? 'critical' : 'all')
+    setStatus(filter === 'solved' ? 'solucionado' : 'all')
+    setLifecycle(filter === 'active' ? 'activos' : filter === 'solved' ? 'historicos' : 'todos')
+    setQuickFilter(filter)
   }
 
   const showComments = () => {
@@ -150,19 +164,24 @@ export default function BugsScreen({
         onSearchChange={(value) => {
           setPropertiesOpen(false)
           setSearch(value)
+          setQuickFilter(null)
         }}
         onSeverityChange={(value) => {
           setPropertiesOpen(false)
           setSeverity(value)
+          setQuickFilter(null)
         }}
         onCategoryChange={(value) => {
           setPropertiesOpen(false)
           setCategory(value)
+          setQuickFilter(null)
         }}
         onStatusChange={(value) => {
           setPropertiesOpen(false)
           setStatus(value)
+          setQuickFilter(null)
         }}
+        onKpiSelect={selectKpi}
         onClearFilters={clearFilters}
         searchInputRef={searchInputRef}
       />

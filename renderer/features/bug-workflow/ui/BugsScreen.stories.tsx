@@ -119,6 +119,11 @@ const longAgentBug = {
   },
 }
 
+const emptyConversationBug = {
+  ...longAgentBug,
+  comments: [],
+}
+
 const meta = {
   title: 'buglens/BugsScreen',
   component: BugsScreen,
@@ -152,6 +157,24 @@ export const ConAporteExtenso: Story = {
         results={[longAgentBug]}
         topbar={<AppTopbar breadcrumb={['Bugs', longAgentBug.enriched.raw.title]} />}
         onSetStatus={() => {}}
+        onAddComment={async (_bug, body, parentId) =>
+          makeComment({ id: 'story-comment', body, parentId })
+        }
+      />
+    </div>
+  ),
+}
+
+export const ConversacionVacia: Story = {
+  render: () => (
+    <div className="app-shell">
+      <BugsScreen
+        results={[emptyConversationBug]}
+        topbar={<AppTopbar breadcrumb={['Bugs', emptyConversationBug.enriched.raw.title]} />}
+        onSetStatus={() => {}}
+        onAddComment={async (_bug, body, parentId) =>
+          makeComment({ id: 'story-comment', body, parentId })
+        }
       />
     </div>
   ),

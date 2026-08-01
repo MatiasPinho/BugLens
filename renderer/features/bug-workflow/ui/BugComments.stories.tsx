@@ -25,6 +25,14 @@ type Story = StoryObj<typeof BugComments>
 
 export const Vacio: Story = { args: { comments: [] } }
 
+export const VacioSoloLectura: Story = {
+  args: {
+    comments: [],
+    onAddComment: undefined,
+    onVote: undefined,
+  },
+}
+
 export const ConHilo: Story = {
   args: {
     comments: [

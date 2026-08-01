@@ -17,6 +17,7 @@ const filtrosVacios: BugFilters = {
   severity: 'all',
   status: 'all',
   search: '',
+  quickFilter: 'active',
 }
 
 function renderList(over: Partial<React.ComponentProps<typeof BugList>> = {}) {
@@ -34,6 +35,7 @@ function renderList(over: Partial<React.ComponentProps<typeof BugList>> = {}) {
     onSeverityChange: vi.fn(),
     onCategoryChange: vi.fn(),
     onStatusChange: vi.fn(),
+    onKpiSelect: vi.fn(),
     onClearFilters: vi.fn(),
     ...over,
   }
@@ -127,5 +129,21 @@ describe('BugList', () => {
     // "Activos" también es el nombre de una pestaña: se acota al KPI.
     expect(screen.getByText('Activos', { selector: '.kpi-label' })).toBeInTheDocument()
     expect(screen.getByText('Críticos', { selector: '.kpi-label' })).toBeInTheDocument()
+  })
+
+  it('convierte los KPI en atajos accesibles y comunica el seleccionado', async () => {
+    const props = renderList()
+    const activeShortcut = screen.getByRole('button', { name: 'Filtrar por activos, 1 bug' })
+
+    expect(activeShortcut).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(screen.getByRole('button', { name: 'Filtrar por críticos, 1 bug' }))
+
+    expect(props.onKpiSelect).toHaveBeenCalledWith('critical')
+  })
+
+  it('desactiva los atajos que no tienen resultados', () => {
+    renderList()
+
+    expect(screen.getByRole('button', { name: 'Filtrar por falta info, 0 bugs' })).toBeDisabled()
   })
 })

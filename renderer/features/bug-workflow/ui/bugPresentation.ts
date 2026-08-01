@@ -187,12 +187,15 @@ export function groupByScreen(bugs: AnalyzedBug[]): ScreenGroup[] {
 
 // ─── Filtros ─────────────────────────────────────────────────────────────────
 
+export type BugKpiFilter = 'active' | 'critical' | 'missingInfo' | 'solved'
+
 export interface BugFilters {
   lifecycle: LifecycleTab
   category: BugCategory | 'all'
   severity: Severity | 'all'
   status: BugStatus | 'all'
   search: string
+  quickFilter: BugKpiFilter | null
 }
 
 export function hasActiveFilters(filters: BugFilters): boolean {
@@ -200,7 +203,8 @@ export function hasActiveFilters(filters: BugFilters): boolean {
     filters.search ||
       filters.category !== 'all' ||
       filters.severity !== 'all' ||
-      filters.status !== 'all',
+      filters.status !== 'all' ||
+      filters.quickFilter === 'missingInfo',
   )
 }
 
@@ -223,6 +227,9 @@ export function filterBugs(results: AnalyzedBug[], filters: BugFilters): Analyze
       if (filters.category !== 'all' && bug.analysis.category !== filters.category) return false
       if (filters.severity !== 'all' && bug.analysis.severity !== filters.severity) return false
       if (filters.status !== 'all' && bug.status !== filters.status) return false
+      if (filters.quickFilter === 'missingInfo' && bug.analysis.missingInformation.length === 0) {
+        return false
+      }
       if (filters.search) return matchesSearch(bug, filters.search)
       return true
     })

@@ -236,6 +236,58 @@ describe('BugsScreen — tres columnas', () => {
     expect(screen.getByText('Críticos', { selector: '.kpi-label' })).toBeInTheDocument()
   })
 
+  it('el atajo de críticos incluye activos e históricos y refleja sus filtros', async () => {
+    renderScreen([
+      makeBug({ id: 'a', title: 'Activo medio' }),
+      makeBug({ id: 'b', title: 'Activo crítico', severity: 'critical' }),
+      makeBug({ id: 'c', title: 'Crítico resuelto', severity: 'critical', status: 'solucionado' }),
+    ])
+
+    const shortcut = screen.getByRole('button', { name: 'Filtrar por críticos, 2 bugs' })
+    await userEvent.click(shortcut)
+
+    expect(inList().queryByText('Activo medio')).not.toBeInTheDocument()
+    expect(inList().getByText('Activo crítico')).toBeInTheDocument()
+    expect(inList().getByText('Crítico resuelto')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Todos/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByLabelText('filtrar por severidad')).toHaveValue('critical')
+    expect(shortcut).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('el atajo de falta de información se puede limpiar sin perder la vista global', async () => {
+    renderScreen([
+      makeBug({ id: 'a', title: 'Reporte completo' }),
+      makeBug({ id: 'b', title: 'Reporte incompleto', missingInformation: ['la pantalla'] }),
+    ])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Filtrar por falta info, 1 bug' }))
+
+    expect(inList().queryByText('Reporte completo')).not.toBeInTheDocument()
+    expect(inList().getByText('Reporte incompleto')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Limpiar' }))
+
+    expect(screen.getByRole('tab', { name: /Todos/ })).toHaveAttribute('aria-selected', 'true')
+    expect(inList().getByText('Reporte completo')).toBeInTheDocument()
+    expect(inList().getByText('Reporte incompleto')).toBeInTheDocument()
+  })
+
+  it('el atajo de solucionados abre el histórico ya refinado', async () => {
+    renderScreen([
+      makeBug({ id: 'a', title: 'Bug activo' }),
+      makeBug({ id: 'b', title: 'Bug solucionado', status: 'solucionado' }),
+      makeBug({ id: 'c', title: 'Bug cerrado', status: 'cerrado' }),
+    ])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Filtrar por solucionados, 1 bug' }))
+
+    expect(inList().getByText('Bug solucionado')).toBeInTheDocument()
+    expect(inList().queryByText('Bug activo')).not.toBeInTheDocument()
+    expect(inList().queryByText('Bug cerrado')).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Históricos/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByLabelText('filtrar por estado')).toHaveValue('solucionado')
+  })
+
   it('muestra el rail de propiedades del bug elegido', () => {
     renderScreen([makeBug({ id: 'bug-1', title: 'Login roto' })])
 
