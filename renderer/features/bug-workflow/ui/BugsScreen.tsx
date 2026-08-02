@@ -8,7 +8,7 @@
 // renderizan.
 
 import type React from 'react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { bugRecordKey } from '../../../../src/features/bug-workflow/domain/bugStatusKey'
 import type {
   AnalyzedBug,
@@ -21,12 +21,14 @@ import type {
   TeamMember,
 } from '../../../../src/shared/contracts'
 import EmptyState from '../../../components/EmptyState'
+import { IconBug, IconSettings } from '../../../components/icons'
 import BugComments from './BugComments'
 import BugDetail, { type BugDetailAgentInfo, type BugDetailProject } from './BugDetail'
 import BugList from './BugList'
 import BugPropertiesRail from './BugPropertiesRail'
 import {
   type BugFilters,
+  type BugKpiFilter,
   bugKpis,
   filterBugs,
   type LifecycleTab,
@@ -74,10 +76,17 @@ export default function BugsScreen({
   const [severity, setSeverity] = useState<Severity | 'all'>('all')
   const [status, setStatus] = useState<BugStatus | 'all'>('all')
   const [search, setSearch] = useState('')
+  const [quickFilter, setQuickFilter] = useState<BugKpiFilter | null>('active')
+  const [propertiesOpen, setPropertiesOpen] = useState(false)
+  const [bugListOpen, setBugListOpen] = useState(false)
+  const commentsRef = useRef<HTMLElement | null>(null)
+  const internalSearchInputRef = useRef<HTMLInputElement | null>(null)
+  const bugListTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const activeSearchInputRef = searchInputRef ?? internalSearchInputRef
 
   const filters: BugFilters = useMemo(
-    () => ({ lifecycle, category, severity, status, search }),
-    [lifecycle, category, severity, status, search],
+    () => ({ lifecycle, category, severity, status, search, quickFilter }),
+    [lifecycle, category, severity, status, search, quickFilter],
   )
   const counts = useMemo(() => lifecycleCounts(results), [results])
   const kpis = useMemo(() => bugKpis(results), [results])
@@ -97,16 +106,61 @@ export default function BugsScreen({
     filtered.find((bug) => bugRecordKey(bug.enriched.raw) === focusedKey) ?? filtered[0] ?? null
   const selectedKey = selected ? bugRecordKey(selected.enriched.raw) : null
 
+  useEffect(() => {
+    if (!propertiesOpen && !bugListOpen) return undefined
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setPropertiesOpen(false)
+      if (bugListOpen) {
+        setBugListOpen(false)
+        window.setTimeout(() => bugListTriggerRef.current?.focus(), 0)
+      }
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [bugListOpen, propertiesOpen])
+
+  useEffect(() => {
+    if (!bugListOpen) return undefined
+    const focusTimer = window.setTimeout(() => activeSearchInputRef.current?.focus(), 0)
+    return () => window.clearTimeout(focusTimer)
+  }, [activeSearchInputRef, bugListOpen])
+
+  const closeBugList = () => {
+    setBugListOpen(false)
+    window.setTimeout(() => bugListTriggerRef.current?.focus(), 0)
+  }
+
   const changeLifecycle = (tab: LifecycleTab) => {
+    setPropertiesOpen(false)
     setLifecycle(tab)
     setStatus('all')
+    setQuickFilter(tab === 'activos' ? 'active' : null)
   }
 
   const clearFilters = () => {
+    setPropertiesOpen(false)
     setSearch('')
     setCategory('all')
     setSeverity('all')
     setStatus('all')
+    setQuickFilter(lifecycle === 'activos' ? 'active' : null)
+  }
+
+  const selectKpi = (filter: BugKpiFilter) => {
+    setPropertiesOpen(false)
+    setSearch('')
+    setCategory('all')
+    setSeverity(filter === 'critical' ? 'critical' : 'all')
+    setStatus(filter === 'solved' ? 'solucionado' : 'all')
+    setLifecycle(filter === 'active' ? 'activos' : filter === 'solved' ? 'historicos' : 'todos')
+    setQuickFilter(filter)
+  }
+
+  const showComments = () => {
+    setPropertiesOpen(false)
+    commentsRef.current?.scrollIntoView({ block: 'start' })
+    commentsRef.current?.focus({ preventScroll: true })
   }
 
   return (
@@ -122,15 +176,48 @@ export default function BugsScreen({
         categories={categories}
         severities={severities}
         selectedKey={selectedKey}
-        onSelect={(key) => onFocus?.(key)}
+        onSelect={(key) => {
+          setPropertiesOpen(false)
+          if (bugListOpen) closeBugList()
+          onFocus?.(key)
+        }}
         onLifecycleChange={changeLifecycle}
-        onSearchChange={setSearch}
-        onSeverityChange={setSeverity}
-        onCategoryChange={setCategory}
-        onStatusChange={setStatus}
+        onSearchChange={(value) => {
+          setPropertiesOpen(false)
+          setSearch(value)
+          setQuickFilter(null)
+        }}
+        onSeverityChange={(value) => {
+          setPropertiesOpen(false)
+          setSeverity(value)
+          setQuickFilter(null)
+        }}
+        onCategoryChange={(value) => {
+          setPropertiesOpen(false)
+          setCategory(value)
+          setQuickFilter(null)
+        }}
+        onStatusChange={(value) => {
+          setPropertiesOpen(false)
+          setStatus(value)
+          setQuickFilter(null)
+        }}
+        onKpiSelect={selectKpi}
         onClearFilters={clearFilters}
-        searchInputRef={searchInputRef}
+        searchInputRef={activeSearchInputRef}
+        overlayOpen={bugListOpen}
+        onClose={closeBugList}
       />
+
+      {bugListOpen && (
+        <button
+          type="button"
+          className="bug-list-overlay-scrim"
+          onClick={closeBugList}
+          aria-label="Cerrar lista de bugs"
+          tabIndex={-1}
+        />
+      )}
 
       <div className="app-content">
         {topbar}
@@ -139,6 +226,42 @@ export default function BugsScreen({
           {selected ? (
             <>
               <div className="bugs-center">
+                <div className="bugs-compact-toolbar">
+                  <button
+                    ref={bugListTriggerRef}
+                    type="button"
+                    className="btn-secondary btn-mini bugs-list-trigger"
+                    aria-controls="bug-list-panel"
+                    aria-expanded={bugListOpen}
+                    onClick={() => {
+                      setPropertiesOpen(false)
+                      setBugListOpen(true)
+                    }}
+                  >
+                    <IconBug size={12} />
+                    Bugs
+                    <span className="bugs-list-trigger-count">{filtered.length}</span>
+                  </button>
+                  <span className="bugs-compact-toolbar-hint truncate text-xs">
+                    Gestioná estado, responsables y fecha
+                  </span>
+                  <span className="bugs-compact-position text-xs" aria-live="polite">
+                    {filtered.findIndex((bug) => bugRecordKey(bug.enriched.raw) === selectedKey) +
+                      1}
+                    {' de '}
+                    {filtered.length}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-mini"
+                    aria-controls="bug-properties-panel"
+                    aria-expanded={propertiesOpen}
+                    onClick={() => setPropertiesOpen(true)}
+                  >
+                    <IconSettings size={12} />
+                    Propiedades
+                  </button>
+                </div>
                 {/* key por bug: cambiar de bug reinicia el estado interno del
                   detalle (agente externo, borradores) en vez de arrastrarlo. */}
                 <BugDetail
@@ -148,9 +271,12 @@ export default function BugsScreen({
                   onSetStatus={onSetStatus ? (next) => onSetStatus(selected, next) : undefined}
                   onDelete={onDelete ? () => onDelete(selected) : undefined}
                   onAnalyzeExternalAgent={onAnalyzeExternalAgent}
+                  commentCount={selected.comments?.length ?? 0}
+                  onShowComments={showComments}
                 />
 
                 <BugComments
+                  ref={commentsRef}
                   key={`comments-${selectedKey}`}
                   bug={selected}
                   comments={selected.comments ?? []}
@@ -169,6 +295,8 @@ export default function BugsScreen({
                 bug={selected}
                 agent={agent}
                 members={members}
+                overlayOpen={propertiesOpen}
+                onClose={propertiesOpen ? () => setPropertiesOpen(false) : undefined}
                 onSetStatus={onSetStatus ? (next) => onSetStatus(selected, next) : undefined}
                 onSetAssignees={
                   onSetAssignees ? (userIds) => onSetAssignees(selected, userIds) : undefined

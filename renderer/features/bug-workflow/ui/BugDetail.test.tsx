@@ -226,6 +226,69 @@ describe('BugDetail — agente externo', () => {
     expect(onAnalyzeExternalAgent).not.toHaveBeenCalled()
   })
 
+  it('mantiene plegado un aporte persistido hasta que el usuario decide consultarlo', async () => {
+    const bug = makeBug({ id: 'a', title: 'Activo nuevo' })
+    bug.analysis.externalAgent = {
+      ok: true,
+      output: 'Resultado guardado y extenso del agente',
+      command: 'opencode run',
+      durationMs: 3000,
+    }
+
+    render(<BugDetail bug={bug} onAnalyzeExternalAgent={vi.fn()} />)
+
+    const toggle = screen.getByRole('button', { name: 'Mostrar aporte del agente externo' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByText('Resultado guardado y extenso del agente')).not.toBeVisible()
+
+    await userEvent.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('Resultado guardado y extenso del agente')).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'Ocultar aporte del agente externo' }),
+    ).toBeInTheDocument()
+  })
+
+  it('mantiene el historial del agente compacto hasta que se consulta', async () => {
+    const bug = makeBug({ id: 'a', title: 'Activo nuevo' })
+    bug.analysis.externalAgent = {
+      ok: true,
+      output: 'Resultado actual',
+      command: 'opencode run',
+      durationMs: 3000,
+      createdAt: '2026-07-31T15:23:00.000Z',
+    }
+    bug.analysis.externalAgentHistory = [
+      {
+        ok: true,
+        output: 'Resultado anterior',
+        command: 'opencode run',
+        durationMs: 2500,
+        createdAt: '2026-07-30T15:23:00.000Z',
+      },
+    ]
+
+    render(<BugDetail bug={bug} onAnalyzeExternalAgent={vi.fn()} />)
+
+    const historyLabel = screen.getByText('Historial del agente')
+    const historyPanel = historyLabel.closest('details')
+    expect(historyPanel).not.toHaveAttribute('open')
+
+    await userEvent.click(historyLabel)
+
+    expect(historyPanel).toHaveAttribute('open')
+    const previousResult = screen.getByText('Resultado anterior')
+    const previousRun = previousResult.closest('details')
+    const previousRunSummary = previousRun?.querySelector('summary')
+    expect(previousResult).not.toBeVisible()
+    expect(previousRunSummary).not.toBeNull()
+
+    await userEvent.click(previousRunSummary as HTMLElement)
+
+    expect(previousResult).toBeVisible()
+  })
+
   it('muestra un error claro cuando el agente no puede acceder al repositorio', () => {
     const bug = makeBug({ id: 'a', title: 'Activo nuevo' })
     bug.analysis.externalAgent = {
@@ -241,6 +304,9 @@ describe('BugDetail — agente externo', () => {
     expect(screen.getByText('el agente no pudo acceder al repositorio')).toBeInTheDocument()
     expect(screen.getByText(/No llegó a hacer un análisis útil de código/)).toBeInTheDocument()
     expect(screen.queryByText(/git branch/)).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Ocultar aporte del agente externo' }),
+    ).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('muestra los archivos a revisar como referencias legibles', () => {

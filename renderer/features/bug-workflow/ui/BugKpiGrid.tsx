@@ -1,35 +1,82 @@
 // BugKpiGrid.tsx
 //
-// Resumen numérico de la pantalla de Bugs. Vivía dentro de BugSplitView; al
-// pasar la pantalla a tres columnas quedó como pieza propia, encima de las
-// columnas y compartida por toda la pantalla.
+// Resumen numérico y atajos de triage de la lista de bugs.
+
+import type { BugKpiFilter, BugKpis } from './bugPresentation'
+
+const KPI_OPTIONS: Array<{
+  key: BugKpiFilter
+  label: string
+  tone: string
+}> = [
+  { key: 'active', label: 'Activos', tone: '' },
+  { key: 'critical', label: 'Críticos', tone: 'kpi-critical' },
+  { key: 'missingInfo', label: 'Falta info', tone: 'kpi-warn' },
+  { key: 'solved', label: 'Solucionados', tone: 'kpi-solved' },
+]
 
 export function BugKpiGrid({
   active,
   critical,
   missingInfo,
   solved,
-}: {
-  active: number
-  critical: number
-  missingInfo: number
-  solved: number
+  selected,
+  onSelect,
+}: BugKpis & {
+  selected?: BugKpiFilter | null
+  onSelect?: (filter: BugKpiFilter) => void
 }) {
+  const values: Record<BugKpiFilter, number> = { active, critical, missingInfo, solved }
+
   return (
-    <div className="kpi-grid">
-      <Kpi label="Activos" value={active} />
-      <Kpi label="Críticos" value={critical} tone="kpi-critical" />
-      <Kpi label="Falta info" value={missingInfo} tone="kpi-warn" />
-      <Kpi label="Solucionados" value={solved} tone="kpi-solved" />
-    </div>
+    <fieldset className="kpi-grid">
+      <legend className="sr-only">Atajos de triage</legend>
+      {KPI_OPTIONS.map((option) => (
+        <Kpi
+          key={option.key}
+          label={option.label}
+          value={values[option.key]}
+          tone={option.tone}
+          selected={selected === option.key}
+          onSelect={onSelect ? () => onSelect(option.key) : undefined}
+        />
+      ))}
+    </fieldset>
   )
 }
 
-function Kpi({ label, value, tone = '' }: { label: string; value: number; tone?: string }) {
-  return (
-    <div className={`kpi ${tone}`}>
+function Kpi({
+  label,
+  value,
+  tone,
+  selected,
+  onSelect,
+}: {
+  label: string
+  value: number
+  tone: string
+  selected: boolean
+  onSelect?: () => void
+}) {
+  const content = (
+    <>
       <span className="kpi-label">{label}</span>
       <span className="kpi-value">{value}</span>
-    </div>
+    </>
+  )
+
+  if (!onSelect) return <div className={`kpi ${tone}`}>{content}</div>
+
+  return (
+    <button
+      type="button"
+      className={`kpi kpi-interactive ${tone} ${selected ? 'kpi-selected' : ''}`}
+      aria-label={`Filtrar por ${label.toLowerCase()}, ${value} bug${value === 1 ? '' : 's'}`}
+      aria-pressed={selected}
+      disabled={value === 0}
+      onClick={onSelect}
+    >
+      {content}
+    </button>
   )
 }

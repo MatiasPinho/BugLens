@@ -63,6 +63,7 @@ const baseFilters = {
   severity: 'all' as const,
   status: 'all' as const,
   search: '',
+  quickFilter: null,
 }
 
 describe('ciclo de vida', () => {
@@ -128,10 +129,22 @@ describe('filterBugs', () => {
     expect(filterBugs(results, { ...baseFilters, search: 'inexistente' })).toHaveLength(0)
   })
 
+  it('el atajo de falta de información deja solo reportes incompletos', () => {
+    const incomplete = makeBug({ id: 'd', title: 'Sin contexto', missing: ['la pantalla'] })
+    const filtered = filterBugs([...results, incomplete], {
+      ...baseFilters,
+      quickFilter: 'missingInfo',
+    })
+
+    expect(filtered.map((bug) => bug.enriched.raw.id)).toEqual(['d'])
+  })
+
   it('detecta si hay filtros aplicados (la pestaña no cuenta)', () => {
     expect(hasActiveFilters({ ...baseFilters, lifecycle: 'historicos' })).toBe(false)
     expect(hasActiveFilters({ ...baseFilters, search: 'x' })).toBe(true)
     expect(hasActiveFilters({ ...baseFilters, severity: 'critical' })).toBe(true)
+    expect(hasActiveFilters({ ...baseFilters, quickFilter: 'missingInfo' })).toBe(true)
+    expect(hasActiveFilters({ ...baseFilters, quickFilter: 'active' })).toBe(false)
   })
 })
 
@@ -154,6 +167,21 @@ describe('screenPathOf y screenOf', () => {
 
   it('sin URL ni área informada no inventa una pantalla', () => {
     expect(screenPathOf(makeBug({ id: 'c', title: 'Titulo', affectedArea: '' }))).toBeNull()
+  })
+
+  it('trata los placeholders del prompt como pantalla no informada', () => {
+    expect(
+      screenPathOf(
+        makeBug({
+          id: 'c',
+          title: 'Titulo',
+          affectedArea: "pantalla / módulo / ruta afectada (o 'No informado')",
+        }),
+      ),
+    ).toBeNull()
+    expect(screenPathOf(makeBug({ id: 'd', title: 'Titulo', affectedArea: 'No informado' }))).toBe(
+      null,
+    )
   })
 
   it('como clave de agrupación cae al título para no juntar bugs distintos', () => {

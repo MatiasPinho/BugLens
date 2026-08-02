@@ -7,9 +7,10 @@
  * que devuelve el servidor. Acá solo se renderiza y se disparan los callbacks.
  */
 
-import { useMemo, useState } from 'react'
+import { forwardRef, useEffect, useMemo, useState } from 'react'
 import type { AnalyzedBug, BugComment, CommentVote } from '../../../../src/shared/contracts'
 import { avatarToneClass, initialsOf } from '../../../components/avatarTone'
+import { IconComment } from '../../../components/icons'
 import { col } from '../../../theme'
 import { buildCommentThread, type CommentNode, countThread } from './bugActivity'
 import { formatTimelineDate } from './bugPresentation'
@@ -24,39 +25,55 @@ interface Props {
   onVote?: (commentId: string, value: CommentVote) => void
 }
 
-export default function BugComments({ bug, comments, onAddComment, onVote }: Props) {
+const BugComments = forwardRef<HTMLElement, Props>(function BugComments(
+  { bug, comments, onAddComment, onVote },
+  ref,
+) {
   const thread = useMemo(() => buildCommentThread(comments), [comments])
   const total = countThread(thread)
   const [replyTo, setReplyTo] = useState<string | null>(null)
 
   return (
-    <section className="bug-comments" aria-label="comentarios">
+    <section ref={ref} className="bug-comments" aria-label="comentarios" tabIndex={-1}>
       <header className="bug-comments-head">
         <h3 className="section-card-title">
+          <IconComment size={16} />
           Comentarios
           {total > 0 && <span className="count-chip">{total}</span>}
         </h3>
+        <span className="bug-comments-context">Conversación del equipo</span>
       </header>
 
-      {onAddComment && replyTo === null && (
-        <CommentComposer
-          bugId={bug.enriched.raw.id}
-          placeholder="Escribí un comentario…"
-          onSubmit={(body) => onAddComment(body, null)}
-        />
+      {onAddComment && (
+        <div hidden={replyTo !== null}>
+          <RootCommentComposer
+            key={`root-${bug.enriched.raw.id}`}
+            hasComments={total > 0}
+            onSubmit={(body) => onAddComment(body, null)}
+          />
+        </div>
       )}
 
       {thread.length === 0 ? (
-        <p className="text-sm" style={{ color: col.fgDim }}>
-          Nadie comentó todavía.
-        </p>
+        !onAddComment && (
+          <div className="comment-empty">
+            <span className="comment-conversation-mark" aria-hidden="true">
+              <IconComment size={20} />
+            </span>
+            <div className="grid gap-0.5">
+              <p className="font-semibold text-sm">Todavía no hay comentarios.</p>
+              <p className="text-xs" style={{ color: col.fgDim }}>
+                La conversación aparecerá acá cuando el equipo agregue contexto.
+              </p>
+            </div>
+          </div>
+        )
       ) : (
         <ol className="comment-thread">
           {thread.map((node) => (
             <CommentBranch
               key={node.id}
               node={node}
-              bugId={bug.enriched.raw.id}
               replyTo={replyTo}
               onReplyTo={setReplyTo}
               onAddComment={onAddComment}
@@ -67,18 +84,68 @@ export default function BugComments({ bug, comments, onAddComment, onVote }: Pro
       )}
     </section>
   )
+})
+
+export default BugComments
+
+function RootCommentComposer({
+  hasComments,
+  onSubmit,
+}: {
+  hasComments: boolean
+  onSubmit: (body: string) => Promise<void>
+}) {
+  const [expanded, setExpanded] = useState(!hasComments)
+
+  useEffect(() => {
+    if (hasComments) setExpanded(false)
+  }, [hasComments])
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        className="comment-composer-trigger"
+        aria-label="Escribir un comentario"
+        onClick={() => setExpanded(true)}
+      >
+        <IconComment size={16} />
+        <span>Sumá contexto, una decisión o un avance…</span>
+        <span className="comment-composer-trigger-action">Escribir</span>
+      </button>
+    )
+  }
+
+  return (
+    <CommentComposer
+      label="Escribí un comentario"
+      placeholder="Sumá contexto, una decisión o un avance…"
+      intro={
+        hasComments
+          ? undefined
+          : {
+              title: 'Iniciá la conversación',
+              description: 'Dejá un registro útil para quien retome este bug.',
+            }
+      }
+      autoFocus={hasComments}
+      onCancel={hasComments ? () => setExpanded(false) : undefined}
+      onSubmit={async (body) => {
+        await onSubmit(body)
+        if (hasComments) setExpanded(false)
+      }}
+    />
+  )
 }
 
 function CommentBranch({
   node,
-  bugId,
   replyTo,
   onReplyTo,
   onAddComment,
   onVote,
 }: {
   node: CommentNode
-  bugId: string
   replyTo: string | null
   onReplyTo: (id: string | null) => void
   onAddComment?: (body: string, parentId: string | null) => Promise<void>
@@ -90,10 +157,11 @@ function CommentBranch({
 
   return (
     <li
-      className="comment-item"
-      style={{
-        marginLeft: node.depth > 0 ? `${Math.min(node.depth, MAX_INDENT_DEPTH) * 1.25}rem` : 0,
-      }}
+      className={
+        node.depth > 0 && node.depth <= MAX_INDENT_DEPTH
+          ? 'comment-item comment-item-indented'
+          : 'comment-item'
+      }
     >
       <div className="comment-body">
         <span
@@ -153,14 +221,14 @@ function CommentBranch({
               >
                 {collapsed
                   ? `Mostrar ${replyCount} respuesta${replyCount === 1 ? '' : 's'}`
-                  : 'Ocultar respuestas'}
+                  : `Ocultar ${replyCount} respuesta${replyCount === 1 ? '' : 's'}`}
               </button>
             )}
           </div>
 
           {replyTo === node.id && onAddComment && (
             <CommentComposer
-              bugId={bugId}
+              label={`Respuesta para ${author}`}
               placeholder={`Respondiendo a ${author}…`}
               autoFocus
               onCancel={() => onReplyTo(null)}
@@ -179,7 +247,6 @@ function CommentBranch({
             <CommentBranch
               key={reply.id}
               node={reply}
-              bugId={bugId}
               replyTo={replyTo}
               onReplyTo={onReplyTo}
               onAddComment={onAddComment}
@@ -220,14 +287,19 @@ function VoteButton({
 }
 
 function CommentComposer({
-  bugId,
+  label,
   placeholder,
+  intro,
   autoFocus = false,
   onSubmit,
   onCancel,
 }: {
-  bugId: string
+  label: string
   placeholder: string
+  intro?: {
+    title: string
+    description: string
+  }
   autoFocus?: boolean
   onSubmit: (body: string) => Promise<void>
   onCancel?: () => void
@@ -252,16 +324,25 @@ function CommentComposer({
   }
 
   return (
-    <div className="comment-composer">
+    <div className={intro ? 'comment-composer comment-composer-featured' : 'comment-composer'}>
+      {intro && (
+        <div className="comment-composer-intro">
+          <span className="comment-conversation-mark" aria-hidden="true">
+            <IconComment size={20} />
+          </span>
+          <div className="comment-composer-copy">
+            <p className="comment-composer-title">{intro.title}</p>
+            <p className="comment-composer-description">{intro.description}</p>
+          </div>
+        </div>
+      )}
+
       <textarea
-        // `key` por bug: cambiar de bug tiene que limpiar el borrador, no
-        // arrastrarlo al reporte siguiente.
-        key={bugId}
         className="input comment-input"
         rows={3}
         value={body}
         placeholder={placeholder}
-        aria-label={placeholder}
+        aria-label={label}
         // El foco va al campo que el usuario acaba de abrir al tocar "Responder".
         // biome-ignore lint/a11y/noAutofocus: es respuesta a una acción explícita
         autoFocus={autoFocus}

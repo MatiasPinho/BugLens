@@ -17,13 +17,17 @@ import type {
   BugStatus,
   Severity,
 } from '../../../../src/shared/contracts'
-import { IconSearch } from '../../../components/icons'
+import { avatarToneClass, initialsOf } from '../../../components/avatarTone'
+import { IconSearch, IconX } from '../../../components/icons'
 import { LifecycleTabs, SeverityBadge, StatusBadge } from './BugAtoms'
 import { BugKpiGrid } from './BugKpiGrid'
+import { formatCompactDueDate, formatDueDate, showsOverdueWarning } from './bugActivity'
 import {
   type BugFilters,
+  type BugKpiFilter,
   type BugKpis,
   hasActiveFilters,
+  isActiveStatus,
   isQuietStatus,
   type LifecycleTab,
   screenPathOf,
@@ -48,8 +52,11 @@ interface Props {
   onSeverityChange: (value: Severity | 'all') => void
   onCategoryChange: (value: BugCategory | 'all') => void
   onStatusChange: (value: BugStatus | 'all') => void
+  onKpiSelect: (filter: BugKpiFilter) => void
   onClearFilters: () => void
   searchInputRef?: React.MutableRefObject<HTMLInputElement | null>
+  overlayOpen?: boolean
+  onClose?: () => void
 }
 
 export default function BugList({
@@ -67,12 +74,42 @@ export default function BugList({
   onSeverityChange,
   onCategoryChange,
   onStatusChange,
+  onKpiSelect,
   onClearFilters,
   searchInputRef,
+  overlayOpen = false,
+  onClose,
 }: Props) {
+  const resultLabel =
+    bugs.length === totalCount
+      ? `${totalCount} bug${totalCount === 1 ? '' : 's'}`
+      : `${bugs.length} de ${totalCount} bugs coinciden`
+
   return (
-    <div className="bug-list-column">
+    <aside
+      id="bug-list-panel"
+      className={`bug-list-column ${overlayOpen ? 'bug-list-overlay-open' : ''}`}
+      aria-label="Explorar bugs"
+    >
       <div className="bug-list-head">
+        {onClose && (
+          <div className="bug-list-mobile-head">
+            <span>
+              <strong>Explorar bugs</strong>
+              <span>{resultLabel}</span>
+            </span>
+            <button
+              type="button"
+              className="btn-icon btn-icon-sm"
+              onClick={onClose}
+              title="Cerrar lista de bugs"
+              aria-label="Cerrar lista de bugs"
+            >
+              <IconX size={12} />
+            </button>
+          </div>
+        )}
+
         <div className="search-box">
           <IconSearch size={16} className="button-icon" />
           <input
@@ -138,12 +175,17 @@ export default function BugList({
           )}
         </div>
 
-        <BugKpiGrid {...kpis} />
+        <BugKpiGrid {...kpis} selected={filters.quickFilter} onSelect={onKpiSelect} />
       </div>
 
-      <span className="kicker-xs bug-list-kicker">
-        {filters.lifecycle === 'historicos' ? 'Histórico' : 'Bugs'}
-      </span>
+      <div className="bug-list-section-head">
+        <span className="kicker-xs">
+          {filters.lifecycle === 'historicos' ? 'Histórico' : 'Bugs'}
+        </span>
+        <span className="bug-list-result-count" role="status" aria-live="polite">
+          {resultLabel}
+        </span>
+      </div>
 
       {/* `listbox` y no una lista de botones: elegir acá selecciona un elemento
           de un conjunto, y así las flechas del lector de pantalla lo anuncian
@@ -162,6 +204,7 @@ export default function BugList({
                 className={`bug-list-item ${selected ? 'bug-list-item-active' : ''} ${
                   isQuietStatus(bug.status) ? 'bug-list-item-quiet' : ''
                 }`}
+                title={bug.enriched.raw.title}
               >
                 <span className="bug-list-item-title">{bug.enriched.raw.title}</span>
                 {/* Severidad y estado van como badges con texto, no como un punto
@@ -171,18 +214,68 @@ export default function BugList({
                   <SeverityBadge severity={bug.analysis.severity} />
                   <StatusBadge status={bug.status} />
                 </span>
-                <span className="bug-list-item-meta">{screen ?? 'Sin pantalla informada'}</span>
+                <span className="bug-list-item-meta-row">
+                  <span className="bug-list-item-meta">{screen ?? 'Sin pantalla informada'}</span>
+                  {isActiveStatus(bug.status) && <BugListFollowUp bug={bug} />}
+                </span>
               </button>
             </li>
           )
         })}
       </ul>
 
-      <span className="sr-only" aria-live="polite" aria-atomic="true">
-        {bugs.length === totalCount
-          ? `${totalCount} bug${totalCount === 1 ? '' : 's'}`
-          : `${bugs.length} de ${totalCount} bugs coinciden`}
-      </span>
-    </div>
+      {bugs.length === 0 && (
+        <div className="bug-list-empty">
+          <span className="font-semibold text-sm">Sin resultados</span>
+          <span className="text-xs">Probá con menos filtros o con otro texto.</span>
+          {hasActiveFilters(filters) && (
+            <button type="button" onClick={onClearFilters} className="btn-secondary btn-mini">
+              Limpiar filtros
+            </button>
+          )}
+        </div>
+      )}
+    </aside>
+  )
+}
+
+function BugListFollowUp({ bug }: { bug: AnalyzedBug }) {
+  const assignees = bug.assignees ?? []
+  const assigneeNames = assignees.map(
+    (member) => member.displayName ?? member.email ?? 'Sin nombre',
+  )
+  const overdue = showsOverdueWarning(bug.dueDate, bug.status)
+
+  return (
+    <span className="bug-list-item-follow-up">
+      {bug.dueDate && (
+        <time
+          className={overdue ? 'bug-list-due-date bug-list-due-date-overdue' : 'bug-list-due-date'}
+          dateTime={bug.dueDate}
+          title={`Fecha límite: ${formatDueDate(bug.dueDate)}`}
+        >
+          {overdue ? 'Venció' : 'Vence'} {formatCompactDueDate(bug.dueDate)}
+        </time>
+      )}
+
+      {assignees.length > 0 ? (
+        <span className="bug-list-assignees" title={assigneeNames.join(', ')}>
+          <span className="sr-only">Responsables: {assigneeNames.join(', ')}</span>
+          <span
+            className={`avatar avatar-sm h-4 w-4 ${avatarToneClass(assignees[0].id)}`}
+            aria-hidden="true"
+          >
+            {initialsOf(assigneeNames[0])}
+          </span>
+          {assignees.length > 1 && (
+            <span className="bug-list-assignee-more" aria-hidden="true">
+              +{assignees.length - 1}
+            </span>
+          )}
+        </span>
+      ) : (
+        <span className="bug-list-unassigned">Sin asignar</span>
+      )}
+    </span>
   )
 }

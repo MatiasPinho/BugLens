@@ -26,6 +26,7 @@ interface Props {
   onSetAssignees?: (userIds: string[]) => void
   onSetDueDate?: (dueDate: string | null) => void
   onClose?: () => void
+  overlayOpen?: boolean
 }
 
 export default function BugPropertiesRail({
@@ -36,12 +37,17 @@ export default function BugPropertiesRail({
   onSetAssignees,
   onSetDueDate,
   onClose,
+  overlayOpen = false,
 }: Props) {
   const assignees = bug.assignees ?? []
   const overdue = showsOverdueWarning(bug.dueDate, bug.status)
 
   return (
-    <aside className="bug-properties" aria-label="propiedades del bug">
+    <aside
+      id="bug-properties-panel"
+      className={`bug-properties ${overlayOpen ? 'bug-properties-overlay-open' : ''}`}
+      aria-label="propiedades del bug"
+    >
       <div className="bug-properties-head">
         <h3 className="bug-properties-title">Propiedades</h3>
         {onClose && (
@@ -58,66 +64,80 @@ export default function BugPropertiesRail({
       </div>
 
       <div className="bug-properties-body">
-        <AssigneeField assignees={assignees} members={members} onChange={onSetAssignees} />
+        <section className="bug-properties-group" aria-labelledby="bug-follow-up-title">
+          <h4 id="bug-follow-up-title" className="bug-properties-group-title">
+            Seguimiento
+          </h4>
+          <div className="bug-properties-group-content">
+            <AssigneeField assignees={assignees} members={members} onChange={onSetAssignees} />
 
-        <DueDateField dueDate={bug.dueDate ?? null} overdue={overdue} onChange={onSetDueDate} />
+            <DueDateField dueDate={bug.dueDate ?? null} overdue={overdue} onChange={onSetDueDate} />
 
-        <Field label="Categoría">
-          <CategoryBadge>{bug.analysis.category}</CategoryBadge>
-        </Field>
-
-        {onSetStatus ? (
-          <Field label="Estado">
-            <StatusSelect status={bug.status} onChange={onSetStatus} />
-          </Field>
-        ) : null}
-
-        <div className="bug-properties-meta">
-          <MetaRow label="Reportado por">
-            {bug.reportedBy ? (
-              <MemberChip member={bug.reportedBy} />
-            ) : (
-              <span className="text-xs" style={{ color: col.fgDim }}>
-                Sin autor registrado
-              </span>
-            )}
-          </MetaRow>
-
-          <MetaRow label="Severidad">
-            <SeverityBadge severity={bug.analysis.severity} />
-          </MetaRow>
-
-          <SeverityMeter severity={bug.analysis.severity} />
-
-          <MetaRow label="Pantalla">
-            <ContextValue
-              value={screenPathOf(bug)}
-              // `screenPathOf` devuelve null cuando el reporte no informó
-              // ninguna: se dice, no se inventa.
-              fallback="Sin pantalla informada"
-            />
-          </MetaRow>
-
-          <MetaRow label="Ambiente">
-            <ContextValue
-              value={
-                bug.analysis.rewritten.environment === 'No informado'
-                  ? null
-                  : bug.analysis.rewritten.environment
-              }
-              fallback="No informado"
-            />
-          </MetaRow>
-
-          <MetaRow label="Tipo">
-            <ContextValue value={bug.analysis.bugType || null} fallback="No informado" />
-          </MetaRow>
-
-          <div className="bug-properties-confidence">
-            <span className="bug-properties-meta-label">Confianza del análisis</span>
-            <ConfidenceBar value={bug.analysis.confidence} showLabel={false} />
+            {onSetStatus ? (
+              <Field label="Estado">
+                <StatusSelect status={bug.status} onChange={onSetStatus} />
+              </Field>
+            ) : null}
           </div>
-        </div>
+        </section>
+
+        <section className="bug-properties-group" aria-labelledby="bug-context-title">
+          <h4 id="bug-context-title" className="bug-properties-group-title">
+            Contexto
+          </h4>
+          <div className="bug-properties-group-content">
+            <Field label="Categoría">
+              <CategoryBadge>{bug.analysis.category}</CategoryBadge>
+            </Field>
+
+            <div className="bug-properties-meta">
+              <MetaRow label="Reportado por">
+                {bug.reportedBy ? (
+                  <MemberChip member={bug.reportedBy} />
+                ) : (
+                  <span className="text-xs" style={{ color: col.fgDim }}>
+                    Sin autor registrado
+                  </span>
+                )}
+              </MetaRow>
+
+              <MetaRow label="Severidad">
+                <SeverityBadge severity={bug.analysis.severity} />
+              </MetaRow>
+
+              <SeverityMeter severity={bug.analysis.severity} />
+
+              <MetaRow label="Pantalla">
+                <ContextValue
+                  value={screenPathOf(bug)}
+                  // `screenPathOf` devuelve null cuando el reporte no informó
+                  // ninguna: se dice, no se inventa.
+                  fallback="Sin pantalla informada"
+                />
+              </MetaRow>
+
+              <MetaRow label="Ambiente">
+                <ContextValue
+                  value={
+                    bug.analysis.rewritten.environment === 'No informado'
+                      ? null
+                      : bug.analysis.rewritten.environment
+                  }
+                  fallback="No informado"
+                />
+              </MetaRow>
+
+              <MetaRow label="Tipo">
+                <ContextValue value={bug.analysis.bugType || null} fallback="No informado" />
+              </MetaRow>
+
+              <div className="bug-properties-confidence">
+                <span className="bug-properties-meta-label">Confianza del análisis</span>
+                <ConfidenceBar value={bug.analysis.confidence} showLabel={false} />
+              </div>
+            </div>
+          </div>
+        </section>
 
         {bug.analysis.missingInformation.length > 0 && (
           <section className="warn-card">

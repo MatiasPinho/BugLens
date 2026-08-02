@@ -17,6 +17,7 @@ const filtrosVacios: BugFilters = {
   severity: 'all',
   status: 'all',
   search: '',
+  quickFilter: 'active',
 }
 
 function renderList(over: Partial<React.ComponentProps<typeof BugList>> = {}) {
@@ -34,6 +35,7 @@ function renderList(over: Partial<React.ComponentProps<typeof BugList>> = {}) {
     onSeverityChange: vi.fn(),
     onCategoryChange: vi.fn(),
     onStatusChange: vi.fn(),
+    onKpiSelect: vi.fn(),
     onClearFilters: vi.fn(),
     ...over,
   }
@@ -85,6 +87,44 @@ describe('BugList', () => {
     expect(screen.getByText('Sin pantalla informada')).toBeInTheDocument()
   })
 
+  it('muestra responsables y fecha límite de los bugs activos sin sumar otra fila', () => {
+    const conSeguimiento = {
+      ...makeBug({ id: 'bug-3', title: 'Checkout bloqueado' }),
+      assignees: [
+        { id: 'perfil-1', displayName: 'Matias Pinho' },
+        { id: 'perfil-2', displayName: 'Lucía Gómez' },
+      ],
+      dueDate: '2099-12-31',
+    }
+    renderList({ bugs: [conSeguimiento], totalCount: 1 })
+
+    expect(screen.getByText('Responsables: Matias Pinho, Lucía Gómez')).toHaveClass('sr-only')
+    expect(screen.getByText('Vence 31 dic')).toBeInTheDocument()
+    expect(screen.getByText('+1')).toBeInTheDocument()
+  })
+
+  it('señala con texto una fecha vencida y los bugs activos sin responsable', () => {
+    const vencido = {
+      ...makeBug({ id: 'bug-3', title: 'Checkout bloqueado' }),
+      dueDate: '2000-01-01',
+    }
+    renderList({ bugs: [vencido], totalCount: 1 })
+
+    expect(screen.getByText('Venció 01 ene')).toHaveClass('bug-list-due-date-overdue')
+    expect(screen.getByText('Sin asignar')).toBeInTheDocument()
+  })
+
+  it('no carga seguimiento operativo en bugs históricos', () => {
+    const historico = {
+      ...makeBug({ id: 'bug-3', title: 'Checkout corregido', status: 'solucionado' }),
+      dueDate: '2000-01-01',
+    }
+    renderList({ bugs: [historico], totalCount: 1 })
+
+    expect(screen.queryByText(/Venció|Vence/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Sin asignar')).not.toBeInTheDocument()
+  })
+
   it('buscar avisa el texto tipeado', async () => {
     const props = renderList()
 
@@ -127,5 +167,21 @@ describe('BugList', () => {
     // "Activos" también es el nombre de una pestaña: se acota al KPI.
     expect(screen.getByText('Activos', { selector: '.kpi-label' })).toBeInTheDocument()
     expect(screen.getByText('Críticos', { selector: '.kpi-label' })).toBeInTheDocument()
+  })
+
+  it('convierte los KPI en atajos accesibles y comunica el seleccionado', async () => {
+    const props = renderList()
+    const activeShortcut = screen.getByRole('button', { name: 'Filtrar por activos, 1 bug' })
+
+    expect(activeShortcut).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(screen.getByRole('button', { name: 'Filtrar por críticos, 1 bug' }))
+
+    expect(props.onKpiSelect).toHaveBeenCalledWith('critical')
+  })
+
+  it('desactiva los atajos que no tienen resultados', () => {
+    renderList()
+
+    expect(screen.getByRole('button', { name: 'Filtrar por falta info, 0 bugs' })).toBeDisabled()
   })
 })
