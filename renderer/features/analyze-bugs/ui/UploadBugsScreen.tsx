@@ -4,7 +4,7 @@
 // mano. Explica en tres pasos qué va a hacer BugLens antes de arrancar.
 
 import FileUpload from '../../../components/FileUpload'
-import { IconPlus } from '../../../components/icons'
+import { IconPlus, IconSettings, IconWarning } from '../../../components/icons'
 import { col } from '../../../theme'
 
 interface Props {
@@ -12,6 +12,8 @@ interface Props {
   onFileSelected: (path: string) => void
   onManualBug: () => void
   onAnalyze: () => void
+  engineAvailability?: boolean | null
+  onOpenSettings?: () => void
   disabled?: boolean
 }
 
@@ -36,8 +38,16 @@ export default function UploadBugsScreen({
   onFileSelected,
   onManualBug,
   onAnalyze,
+  engineAvailability = true,
+  onOpenSettings,
   disabled = false,
 }: Props) {
+  const enginePending = engineAvailability !== true
+  const analyzeDisabled = disabled || !excelPath || enginePending
+  const analysisDescription = enginePending
+    ? 'upload-engine-state upload-reassurance'
+    : 'upload-reassurance'
+
   return (
     <div className="screen-scroll upload-screen">
       <div className="page-heading">
@@ -62,6 +72,46 @@ export default function UploadBugsScreen({
             </p>
           </div>
 
+          {enginePending && (
+            <div
+              id="upload-engine-state"
+              className={`upload-engine-state ${
+                engineAvailability === false ? 'upload-engine-state-unavailable' : ''
+              }`}
+              role={engineAvailability === false ? 'alert' : 'status'}
+            >
+              <span className="upload-engine-state-icon" aria-hidden="true">
+                {engineAvailability === false ? (
+                  <IconWarning size={16} />
+                ) : (
+                  <span className="dot" />
+                )}
+              </span>
+              <span className="upload-engine-state-copy">
+                <strong>
+                  {engineAvailability === false
+                    ? 'Ollama no está disponible'
+                    : 'Comprobando el modelo local'}
+                </strong>
+                <span>
+                  {engineAvailability === false
+                    ? 'Podés dejar el Excel listo, pero conectalo antes de iniciar el análisis.'
+                    : 'Podés elegir el Excel mientras validamos Ollama.'}
+                </span>
+              </span>
+              {engineAvailability === false && onOpenSettings && (
+                <button
+                  type="button"
+                  className="btn-secondary btn-mini upload-engine-state-action"
+                  onClick={onOpenSettings}
+                >
+                  <IconSettings size={12} />
+                  Abrir configuración
+                </button>
+              )}
+            </div>
+          )}
+
           <FileUpload excelPath={excelPath} onFileSelected={onFileSelected} disabled={disabled} />
 
           <div className="upload-actions">
@@ -69,7 +119,8 @@ export default function UploadBugsScreen({
               type="button"
               className="btn-secondary btn-lg"
               onClick={onManualBug}
-              disabled={disabled}
+              disabled={disabled || enginePending}
+              title={enginePending ? 'El bug manual necesita Ollama disponible' : undefined}
             >
               <IconPlus size={12} className="button-icon button-icon-plus" />
               Cargar bug manual
@@ -78,16 +129,25 @@ export default function UploadBugsScreen({
               type="button"
               className="btn-primary btn-lg"
               onClick={onAnalyze}
-              disabled={disabled || !excelPath}
+              disabled={analyzeDisabled}
+              aria-describedby={analysisDescription}
             >
               Analizar bugs
             </button>
           </div>
 
-          <p className="upload-reassurance" role="status">
-            {excelPath
-              ? 'Archivo listo. Los estados existentes se conservan al reimportar.'
-              : 'Elegí un archivo para habilitar el análisis, o cargá un bug manual.'}
+          <p id="upload-reassurance" className="upload-reassurance" role="status">
+            {excelPath && engineAvailability === false
+              ? 'Archivo listo. Falta conectar Ollama para iniciar el análisis.'
+              : excelPath && engineAvailability === null
+                ? 'Archivo listo. Estamos comprobando Ollama.'
+                : excelPath
+                  ? 'Archivo listo. Los estados existentes se conservan al reimportar.'
+                  : engineAvailability === false
+                    ? 'Elegí un archivo mientras conectás Ollama; el bug manual necesita el modelo.'
+                    : engineAvailability === null
+                      ? 'Podés elegir un archivo mientras comprobamos Ollama.'
+                      : 'Elegí un archivo para habilitar el análisis, o cargá un bug manual.'}
           </p>
         </section>
 

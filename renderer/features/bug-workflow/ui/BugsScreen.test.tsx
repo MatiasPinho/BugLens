@@ -320,4 +320,36 @@ describe('BugsScreen — tres columnas', () => {
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByRole('button', { name: 'cerrar propiedades' })).not.toBeInTheDocument()
   })
+
+  it('abre la lista compacta, enfoca la búsqueda y permite cambiar de bug', async () => {
+    const onFocus = vi.fn()
+    const selectedBug = makeBug({ id: 'bug-2', title: 'Export vacío' })
+    renderScreen([makeBug({ id: 'bug-1', title: 'Login roto' }), selectedBug], { onFocus })
+
+    const trigger = screen.getByRole('button', { name: /Bugs/ })
+    await userEvent.click(trigger)
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('complementary', { name: 'Explorar bugs' })).toHaveClass(
+      'bug-list-overlay-open',
+    )
+    expect(await screen.findByLabelText('buscar bugs')).toHaveFocus()
+
+    await userEvent.click(screen.getByRole('button', { name: /Export vacío/ }))
+
+    expect(onFocus).toHaveBeenCalledWith(bugRecordKey(selectedBug.enriched.raw))
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(trigger).toHaveFocus()
+  })
+
+  it('cierra la lista compacta con Escape y devuelve el foco al acceso', async () => {
+    renderScreen([makeBug({ id: 'bug-1', title: 'Login roto' })])
+
+    const trigger = screen.getByRole('button', { name: /Bugs/ })
+    await userEvent.click(trigger)
+    await userEvent.keyboard('{Escape}')
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(trigger).toHaveFocus()
+  })
 })

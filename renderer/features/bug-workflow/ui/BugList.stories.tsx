@@ -5,20 +5,33 @@ import { makeBug } from '../../../components/_storyFixtures'
 import BugList from './BugList'
 import { type BugFilters, type BugKpiFilter, filterBugs } from './bugPresentation'
 
+const matias = { id: 'perfil-1', displayName: 'Matias Pinho' }
+const lucia = { id: 'perfil-2', displayName: 'Lucía Gómez' }
+
 const bugs = [
-  makeBug({
-    id: '1',
-    title: 'Login queda cargando con credenciales válidas',
-    severity: 'critical',
-    screen: '/auth/login',
-  }),
-  makeBug({
-    id: '2',
-    title: 'El contador de progreso retrocede si el reloj del sistema viaja al año 2042',
-    status: 'en_progreso',
-    screen: 'analizador de bugs',
-  }),
-  makeBug({ id: '3', title: 'Se pierden acentos en CSV', severity: 'high' }),
+  {
+    ...makeBug({
+      id: '1',
+      title: 'Login queda cargando con credenciales válidas',
+      severity: 'critical',
+      screen: '/auth/login',
+    }),
+    assignees: [matias, lucia],
+    dueDate: '2026-07-31',
+  },
+  {
+    ...makeBug({
+      id: '2',
+      title: 'El contador de progreso retrocede si el reloj del sistema viaja al año 2042',
+      status: 'en_progreso',
+      screen: 'analizador de bugs',
+    }),
+    dueDate: '2026-08-08',
+  },
+  {
+    ...makeBug({ id: '3', title: 'Se pierden acentos en CSV', severity: 'high' }),
+    assignees: [lucia],
+  },
   makeBug({ id: '4', title: 'Export vacío al filtrar', status: 'solucionado' }),
   makeBug({ id: '5', title: 'Modal no cierra con Esc', status: 'cerrado', severity: 'low' }),
 ]

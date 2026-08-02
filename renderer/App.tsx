@@ -15,6 +15,7 @@ import type {
 } from '../src/shared/contracts'
 import AppRail, { type AppRailItem } from './components/AppRail'
 import AppTopbar from './components/AppTopbar'
+import EngineStatusButton from './components/EngineStatusButton'
 import {
   IconBug,
   IconFolder,
@@ -680,6 +681,11 @@ function ElectronApp() {
 
   const showBugs = phase !== 'analyzing' && route === 'bugs' && results.length > 0
 
+  const openSettings = () => {
+    setRoute('settings')
+    setDetailBugKey(null)
+  }
+
   // Las acciones de trabajo viven en el topbar: ya no hay banda de encabezado
   // que cruce la pantalla.
   const topbar = (
@@ -695,17 +701,7 @@ function ElectronApp() {
         />
       }
       statusSlot={
-        <span
-          className={`badge engine-status-badge ${ollamaAvailable === false ? 'badge-severity-critical' : 'badge-accent'}`}
-          title="modelo local de análisis"
-          role="status"
-          aria-label={ollamaAvailable === false ? 'Ollama no disponible' : 'Ollama local'}
-        >
-          <span className="dot" aria-hidden="true" />
-          <span className="engine-status-label">
-            {ollamaAvailable === false ? 'Ollama no disponible' : 'Ollama local'}
-          </span>
-        </span>
+        <EngineStatusButton availability={ollamaAvailable} onOpenSettings={openSettings} />
       }
       actions={
         showBugs ? (
@@ -714,8 +710,17 @@ function ElectronApp() {
               type="button"
               className="btn-secondary btn-lg topbar-work-action"
               onClick={() => setShowManualForm(true)}
-              aria-label="Cargar bug manual"
-              title="Cargar bug manual"
+              disabled={ollamaAvailable !== true}
+              aria-label={
+                ollamaAvailable === true
+                  ? 'Cargar bug manual'
+                  : 'Cargar bug manual. Ollama no está disponible'
+              }
+              title={
+                ollamaAvailable === true
+                  ? 'Cargar bug manual'
+                  : 'Conectá Ollama para analizar un bug manual'
+              }
             >
               <IconPlus size={14} className="button-icon button-icon-plus" />
               <span className="topbar-action-label">Cargar bug manual</span>
@@ -841,6 +846,8 @@ function ElectronApp() {
                 onFileSelected={setExcelPath}
                 onManualBug={() => setShowManualForm(true)}
                 onAnalyze={() => void handleAnalyze()}
+                engineAvailability={ollamaAvailable}
+                onOpenSettings={openSettings}
               />
             ) : (
               <UploadBugsScreen
@@ -848,6 +855,8 @@ function ElectronApp() {
                 onFileSelected={setExcelPath}
                 onManualBug={() => setShowManualForm(true)}
                 onAnalyze={() => void handleAnalyze()}
+                engineAvailability={ollamaAvailable}
+                onOpenSettings={openSettings}
               />
             )}
           </main>

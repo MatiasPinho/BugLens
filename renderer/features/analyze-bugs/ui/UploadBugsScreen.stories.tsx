@@ -10,6 +10,8 @@ const meta = {
     onFileSelected: () => {},
     onManualBug: () => {},
     onAnalyze: () => {},
+    engineAvailability: true,
+    onOpenSettings: () => {},
   },
   decorators: [
     (Story) => (
@@ -27,4 +29,12 @@ export const SinArchivo: Story = {}
 
 export const ArchivoListo: Story = {
   args: { excelPath: 'C:\\QA\\regresion-checkout.xlsx' },
+}
+
+export const OllamaNoDisponible: Story = {
+  args: { excelPath: 'C:\\QA\\regresion-checkout.xlsx', engineAvailability: false },
+}
+
+export const ComprobandoOllama: Story = {
+  args: { excelPath: 'C:\\QA\\regresion-checkout.xlsx', engineAvailability: null },
 }

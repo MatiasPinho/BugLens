@@ -21,7 +21,7 @@ import type {
   TeamMember,
 } from '../../../../src/shared/contracts'
 import EmptyState from '../../../components/EmptyState'
-import { IconSettings } from '../../../components/icons'
+import { IconBug, IconSettings } from '../../../components/icons'
 import BugComments from './BugComments'
 import BugDetail, { type BugDetailAgentInfo, type BugDetailProject } from './BugDetail'
 import BugList from './BugList'
@@ -78,7 +78,11 @@ export default function BugsScreen({
   const [search, setSearch] = useState('')
   const [quickFilter, setQuickFilter] = useState<BugKpiFilter | null>('active')
   const [propertiesOpen, setPropertiesOpen] = useState(false)
+  const [bugListOpen, setBugListOpen] = useState(false)
   const commentsRef = useRef<HTMLElement | null>(null)
+  const internalSearchInputRef = useRef<HTMLInputElement | null>(null)
+  const bugListTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const activeSearchInputRef = searchInputRef ?? internalSearchInputRef
 
   const filters: BugFilters = useMemo(
     () => ({ lifecycle, category, severity, status, search, quickFilter }),
@@ -103,13 +107,29 @@ export default function BugsScreen({
   const selectedKey = selected ? bugRecordKey(selected.enriched.raw) : null
 
   useEffect(() => {
-    if (!propertiesOpen) return undefined
+    if (!propertiesOpen && !bugListOpen) return undefined
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPropertiesOpen(false)
+      if (event.key !== 'Escape') return
+      setPropertiesOpen(false)
+      if (bugListOpen) {
+        setBugListOpen(false)
+        window.setTimeout(() => bugListTriggerRef.current?.focus(), 0)
+      }
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [propertiesOpen])
+  }, [bugListOpen, propertiesOpen])
+
+  useEffect(() => {
+    if (!bugListOpen) return undefined
+    const focusTimer = window.setTimeout(() => activeSearchInputRef.current?.focus(), 0)
+    return () => window.clearTimeout(focusTimer)
+  }, [activeSearchInputRef, bugListOpen])
+
+  const closeBugList = () => {
+    setBugListOpen(false)
+    window.setTimeout(() => bugListTriggerRef.current?.focus(), 0)
+  }
 
   const changeLifecycle = (tab: LifecycleTab) => {
     setPropertiesOpen(false)
@@ -158,6 +178,7 @@ export default function BugsScreen({
         selectedKey={selectedKey}
         onSelect={(key) => {
           setPropertiesOpen(false)
+          if (bugListOpen) closeBugList()
           onFocus?.(key)
         }}
         onLifecycleChange={changeLifecycle}
@@ -183,8 +204,20 @@ export default function BugsScreen({
         }}
         onKpiSelect={selectKpi}
         onClearFilters={clearFilters}
-        searchInputRef={searchInputRef}
+        searchInputRef={activeSearchInputRef}
+        overlayOpen={bugListOpen}
+        onClose={closeBugList}
       />
+
+      {bugListOpen && (
+        <button
+          type="button"
+          className="bug-list-overlay-scrim"
+          onClick={closeBugList}
+          aria-label="Cerrar lista de bugs"
+          tabIndex={-1}
+        />
+      )}
 
       <div className="app-content">
         {topbar}
@@ -194,7 +227,30 @@ export default function BugsScreen({
             <>
               <div className="bugs-center">
                 <div className="bugs-compact-toolbar">
-                  <span className="truncate text-xs">Gestioná estado, responsables y fecha</span>
+                  <button
+                    ref={bugListTriggerRef}
+                    type="button"
+                    className="btn-secondary btn-mini bugs-list-trigger"
+                    aria-controls="bug-list-panel"
+                    aria-expanded={bugListOpen}
+                    onClick={() => {
+                      setPropertiesOpen(false)
+                      setBugListOpen(true)
+                    }}
+                  >
+                    <IconBug size={12} />
+                    Bugs
+                    <span className="bugs-list-trigger-count">{filtered.length}</span>
+                  </button>
+                  <span className="bugs-compact-toolbar-hint truncate text-xs">
+                    Gestioná estado, responsables y fecha
+                  </span>
+                  <span className="bugs-compact-position text-xs" aria-live="polite">
+                    {filtered.findIndex((bug) => bugRecordKey(bug.enriched.raw) === selectedKey) +
+                      1}
+                    {' de '}
+                    {filtered.length}
+                  </span>
                   <button
                     type="button"
                     className="btn-secondary btn-mini"

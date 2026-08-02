@@ -4,6 +4,7 @@ import ProjectSwitcher from '../features/projects/ui/ProjectSwitcher'
 import { makeBug } from './_storyFixtures'
 import AppRail, { type AppRailItem } from './AppRail'
 import AppTopbar from './AppTopbar'
+import EngineStatusButton from './EngineStatusButton'
 import { IconBug, IconFolder, IconPlus, IconSettings, IconUpload } from './icons'
 
 type PreviewRoute = 'bugs' | 'upload' | 'projects' | 'settings'
@@ -76,16 +77,7 @@ function AppShellPreview() {
           onCreate={() => {}}
         />
       }
-      statusSlot={
-        <span
-          className="badge badge-accent engine-status-badge"
-          role="status"
-          aria-label="Ollama local"
-        >
-          <span className="dot" aria-hidden="true" />
-          <span className="engine-status-label">Ollama local</span>
-        </span>
-      }
+      statusSlot={<EngineStatusButton availability={true} onOpenSettings={() => {}} />}
       actions={
         <>
           <button

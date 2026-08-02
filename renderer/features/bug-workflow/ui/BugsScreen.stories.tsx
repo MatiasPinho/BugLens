@@ -4,40 +4,53 @@ import { makeBug, makeComment } from '../../../components/_storyFixtures'
 import AppTopbar from '../../../components/AppTopbar'
 import BugsScreen from './BugsScreen'
 
+const matias = { id: 'perfil-1', displayName: 'Matias Pinho' }
+const lucia = { id: 'perfil-2', displayName: 'Lucía Gómez' }
+
 const results = [
-  makeBug({
-    id: '12',
-    title: 'Login queda cargando con credenciales válidas',
-    summary:
-      'Al enviar credenciales válidas queda el spinner infinito y nunca navega al dashboard ni muestra el error.',
-    severity: 'critical',
-    status: 'en_progreso',
-    screen: '/auth/login',
-    reporter: 'Lucía Gómez',
-    environment: 'prod',
-    confidence: 0.88,
-    missing: ['el mensaje exacto de la consola', 'si pasa también en Chrome'],
-  }),
-  makeBug({
-    id: '30',
-    title: 'El link de recuperar contraseña vence antes de tiempo',
-    summary: 'Caduca a los 2 minutos en lugar de 30.',
-    screen: '/auth/login',
-    reporter: 'Lucía Gómez',
-    confidence: 0.71,
-  }),
-  makeBug({
-    id: '8',
-    title: 'El formulario de armas acepta valores inválidos',
-    summary:
-      'Organismo registrante acepta menos de 5 caracteres, el número de serie permite más de 20 y el error no se muestra.',
-    severity: 'high',
-    category: 'backend',
-    screen: '/registro/armas',
-    reporter: 'Juan Pérez',
-    confidence: 0.74,
-    observed: '1. mínimo no validado\n2. máximo no validado\n3. error no visible',
-  }),
+  {
+    ...makeBug({
+      id: '12',
+      title: 'Login queda cargando con credenciales válidas',
+      summary:
+        'Al enviar credenciales válidas queda el spinner infinito y nunca navega al dashboard ni muestra el error.',
+      severity: 'critical',
+      status: 'en_progreso',
+      screen: '/auth/login',
+      reporter: 'Lucía Gómez',
+      environment: 'prod',
+      confidence: 0.88,
+      missing: ['el mensaje exacto de la consola', 'si pasa también en Chrome'],
+    }),
+    assignees: [matias],
+    dueDate: '2026-07-31',
+  },
+  {
+    ...makeBug({
+      id: '30',
+      title: 'El link de recuperar contraseña vence antes de tiempo',
+      summary: 'Caduca a los 2 minutos en lugar de 30.',
+      screen: '/auth/login',
+      reporter: 'Lucía Gómez',
+      confidence: 0.71,
+    }),
+    dueDate: '2026-08-08',
+  },
+  {
+    ...makeBug({
+      id: '8',
+      title: 'El formulario de armas acepta valores inválidos',
+      summary:
+        'Organismo registrante acepta menos de 5 caracteres, el número de serie permite más de 20 y el error no se muestra.',
+      severity: 'high',
+      category: 'backend',
+      screen: '/registro/armas',
+      reporter: 'Juan Pérez',
+      confidence: 0.74,
+      observed: '1. mínimo no validado\n2. máximo no validado\n3. error no visible',
+    }),
+    assignees: [lucia, matias],
+  },
   makeBug({
     id: '21',
     title: 'El total del reporte mensual no coincide con la base',
@@ -149,6 +162,12 @@ function Interactive() {
 
 export const ListaConPreview: Story = { render: () => <Interactive /> }
 export const Tarjetas: Story = { render: () => <Interactive /> }
+export const NavegacionCompacta: Story = {
+  render: () => <Interactive />,
+  parameters: {
+    viewport: { defaultViewport: 'mobile2' },
+  },
+}
 
 export const ConAporteExtenso: Story = {
   render: () => (

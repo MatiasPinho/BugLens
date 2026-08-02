@@ -122,11 +122,8 @@ export function describeActivity(entry: BugActivityEntry): string {
  * como UTC y en Argentina mostraría el 11.
  */
 export function formatDueDate(value: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  if (!match) return value
-  const [, year, month, day] = match
-  const date = new Date(Number(year), Number(month) - 1, Number(day))
-  if (Number.isNaN(date.getTime())) return value
+  const date = localDateFromDueDate(value)
+  if (!date) return value
   return new Intl.DateTimeFormat('es-AR', {
     day: '2-digit',
     month: 'short',
@@ -134,13 +131,31 @@ export function formatDueDate(value: string): string {
   }).format(date)
 }
 
+/** Versión breve para superficies densas como la lista lateral. */
+export function formatCompactDueDate(value: string): string {
+  const date = localDateFromDueDate(value)
+  if (!date) return value
+  return new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: 'short',
+  })
+    .format(date)
+    .replaceAll('-', ' ')
+}
+
+function localDateFromDueDate(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return null
+  const [, year, month, day] = match
+  const date = new Date(Number(year), Number(month) - 1, Number(day))
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
 /** `true` si la fecha límite ya pasó, comparando por día y no por instante. */
 export function isOverdue(dueDate: string | null | undefined, today = new Date()): boolean {
   if (!dueDate) return false
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dueDate)
-  if (!match) return false
-  const [, year, month, day] = match
-  const due = new Date(Number(year), Number(month) - 1, Number(day))
+  const due = localDateFromDueDate(dueDate)
+  if (!due) return false
   const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
   return due.getTime() < startOfToday.getTime()
 }
